@@ -16,5 +16,7 @@ export function useI18n() {
     href,
     dir: computed(() => localeStore.dir),
     locale: computed(() => localeStore.locale),
+    // Creating inspections is Hebrew-only until the English inspection flow is complete.
+    canCreateInspection: computed(() => localeStore.locale !== "en"),
   };
 }

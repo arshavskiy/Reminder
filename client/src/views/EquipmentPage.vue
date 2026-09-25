@@ -196,12 +196,12 @@
                     <div class="hist__dot hist__dot--photo" />
                     <div class="hist__body">
                       <div class="hist__title-row">
-                        <strong>תמונת שטח</strong>
+                        <strong>{{ l.equipmentPage.fieldPhoto }}</strong>
                         <span class="hist__num">{{ formatDateTime(item.photo.taken_at) }}</span>
                       </div>
                       <img
                         :src="item.photo.url"
-                        alt="תמונת ציוד"
+                        :alt="l.fieldPage.equipmentPhoto"
                         class="hist__photo"
                         @click="lightboxUrl = item.photo.url"
                       />
@@ -213,23 +213,23 @@
                     <div :class="`hist__dot--${item.event.status}`" class="hist__dot" />
                     <div class="hist__body">
                       <div class="hist__title-row">
-                        <strong>{{ item.event.contract_type ?? 'בדיקה' }}</strong>
+                        <strong>{{ item.event.contract_type ?? l.fieldPage.inspection }}</strong>
                         <span v-if="item.event.contract_number" class="hist__num">{{ item.event.contract_number }}</span>
                         <span :class="`hist__status--${item.event.status}`" class="hist__status">{{ item.event.status }}</span>
                       </div>
                       <div class="hist__dates">
-                        <span v-if="item.event.start_date">התחלה: {{ item.event.start_date }}</span>
+                        <span v-if="item.event.start_date">{{ l.equipmentPage.start }} {{ item.event.start_date }}</span>
                         <span v-if="item.event.expiry_date">
-                          פקיעה: {{ item.event.expiry_date }}
+                          {{ l.fieldPage.expires }} {{ item.event.expiry_date }}
                           <span v-if="item.event.days_until !== null" :class="item.event.days_until < 0 ? 'hist__overdue' : item.event.days_until <= 30 ? 'hist__warn' : ''">
-                            ({{ item.event.days_until < 0 ? `פג לפני ${Math.abs(item.event.days_until)}י` : `${item.event.days_until}י` }})
+                            ({{ item.event.days_until < 0 ? t("fieldPage.expiredDaysAgo", {days: Math.abs(item.event.days_until)}) : t("fieldPage.daysLeft", {days: item.event.days_until}) }})
                           </span>
                         </span>
                       </div>
                       <div v-if="item.event.inspector || item.event.load_capacity_test || item.event.pass_fail" class="hist__meta">
-                        <span v-if="item.event.inspector">בודק: {{ item.event.inspector }}</span>
-                        <span v-if="item.event.load_capacity_test">עומס מבחן: {{ item.event.load_capacity_test }}</span>
-                        <span v-if="item.event.pass_fail">תוצאה: {{ item.event.pass_fail }}</span>
+                        <span v-if="item.event.inspector">{{ l.equipmentPage.inspector }} {{ item.event.inspector }}</span>
+                        <span v-if="item.event.load_capacity_test">{{ l.equipmentPage.testLoad }} {{ item.event.load_capacity_test }}</span>
+                        <span v-if="item.event.pass_fail">{{ l.equipmentPage.result }} {{ item.event.pass_fail }}</span>
                       </div>
                       <router-link v-if="item.event.document_id" :to="`/documents/${item.event.document_id}`" class="hist__doc-link">
                         {{ item.event.document_name ?? item.event.document_id }}
@@ -238,7 +238,7 @@
                   </template>
                 </div>
               </div>
-              <p v-else class="hist__empty">אין היסטוריית בדיקות לציוד זה.</p>
+              <p v-else class="hist__empty">{{ l.equipmentPage.noHistory }}</p>
             </n-spin>
 
             <!-- Lightbox -->
@@ -247,24 +247,24 @@
             </div>
           </n-tab-pane>
 
-          <n-tab-pane name="checklist" tab="צ׳קליסט">
+          <n-tab-pane name="checklist" :tab="l.equipmentPage.checklistTab">
             <div class="checklist" style="margin-top:12px">
               <div class="checklist__head">
                 <div>
-                  <h3>בדיקת שטח</h3>
-                  <p>נשמר על פריט הציוד ומופיע גם במסך שטח.</p>
+                  <h3>{{ l.equipmentPage.fieldCheck }}</h3>
+                  <p>{{ l.equipmentPage.fieldCheckHint }}</p>
                 </div>
                 <n-button secondary size="small" @click="addChecklistItem">
                   <template #icon>
                     <n-icon :component="AddCircleOutline"/>
                   </template>
-                  הוסף שורה
+                  {{ l.equipmentPage.addRow }}
                 </n-button>
               </div>
               <div v-for="(item, index) in checklistDraft" :key="item.id" class="checklist__row">
                 <n-checkbox v-model:checked="item.checked"/>
-                <n-input v-model:value="item.label" placeholder="סעיף בדיקה"/>
-                <n-input v-model:value="item.note" placeholder="הערה"/>
+                <n-input v-model:value="item.label" :placeholder="l.equipmentPage.checkItem"/>
+                <n-input v-model:value="item.note" :placeholder="l.fieldPage.note"/>
                 <button class="btn btn--xs btn--ghost btn--danger" @click="removeChecklistItem(index)">
                   <n-icon :component="RemoveCircleOutline" class="btn-icon"/>
                 </button>
@@ -274,7 +274,7 @@
                   type="primary"
                   @click="saveChecklist"
               >
-                שמור צ׳קליסט
+                {{ l.equipmentPage.saveChecklist }}
               </n-button>
             </div>
           </n-tab-pane>
@@ -316,10 +316,10 @@
 
     <n-modal v-model:show="showQr" class="qr-modal" preset="card" :title="l.equipment.qrTitle">
       <div v-if="qrEquipment" class="qr-card">
-        <img :src="qrImageUrl" alt="קוד QR לציוד" class="qr-card__image"/>
+        <img :src="qrImageUrl" :alt="l.equipmentPage.qrAlt" class="qr-card__image"/>
         <div class="qr-card__body">
           <strong>{{ qrEquipment.name }}</strong>
-          <span v-if="qrEquipment.serial_number">מ״ס {{ qrEquipment.serial_number }}</span>
+          <span v-if="qrEquipment.serial_number">{{ l.fieldPage.serial }} {{ qrEquipment.serial_number }}</span>
           <input :value="qrFieldUrl" class="qr-card__link" readonly/>
         </div>
         <div class="qr-card__actions">
@@ -327,19 +327,19 @@
             <template #icon>
               <n-icon :component="ClipboardOutline"/>
             </template>
-            העתק קישור
+            {{ l.equipmentPage.copyLink }}
           </n-button>
           <n-button secondary @click="printQr">
             <template #icon>
               <n-icon :component="PrintOutline"/>
             </template>
-            הדפס
+            {{ l.equipmentPage.print }}
           </n-button>
           <n-button type="primary" @click="router.push(qrFieldPath)">
             <template #icon>
               <n-icon :component="OpenOutline"/>
             </template>
-            פתח בשטח
+            {{ l.equipmentPage.openInField }}
           </n-button>
         </div>
       </div>
@@ -434,8 +434,8 @@ function equipmentTitle(row: { name?: string | null; manufacturer?: string | nul
   if (branded) return branded;
   const name = (row.name ?? "").trim();
   if (name && name.length <= 48) return name;
-  if (row.serial_number) return `מס׳ ${row.serial_number}`;
-  return name ? `${name.slice(0, 40)}…` : "ציוד";
+  if (row.serial_number) return t("contractCard.serialNo", {serial: row.serial_number});
+  return name ? `${name.slice(0, 40)}…` : l.value.equipmentPage.equipment;
 }
 
 function equipmentSubtitle(row: { name?: string | null; description?: string | null; manufacturer?: string | null; model?: string | null }): string {
@@ -638,11 +638,11 @@ function checklistFromEquipment(r: Equipment): NonNullable<Equipment["inspection
 
 function defaultChecklist(): NonNullable<Equipment["inspection_checklist"]> {
   return [
-    {id: "visual", label: "בדיקה חזותית", checked: false, note: null},
-    {id: "serial", label: "אימות מספר סידורי / רישוי", checked: false, note: null},
-    {id: "load", label: "בדיקת עומס והתאמה", checked: false, note: null},
-    {id: "safety", label: "בדיקת אמצעי בטיחות", checked: false, note: null},
-    {id: "photos", label: "צילום מצב הציוד", checked: false, note: null},
+    {id: "visual", label: l.value.fieldPage.checkVisual, checked: false, note: null},
+    {id: "serial", label: l.value.fieldPage.checkSerial, checked: false, note: null},
+    {id: "load", label: l.value.fieldPage.checkLoad, checked: false, note: null},
+    {id: "safety", label: l.value.fieldPage.checkSafety, checked: false, note: null},
+    {id: "photos", label: l.value.fieldPage.checkPhotos, checked: false, note: null},
   ];
 }
 
@@ -663,9 +663,9 @@ async function saveChecklist() {
     checklistDraft.value = saved.checklist.map((item) => ({...item}));
     const row = rows.value.find((item) => String(item.id) === String(editing.value?.id));
     if (row) row.inspection_checklist = saved.checklist;
-    message.success("הצ׳קליסט נשמר");
+    message.success(l.value.equipmentPage.checklistSaved);
   } catch {
-    message.error("שגיאה בשמירת הצ׳קליסט");
+    message.error(l.value.fieldPage.checklistSaveError);
   } finally {
     savingChecklist.value = false;
   }
@@ -682,7 +682,7 @@ function openQr(r: Equipment) {
 
 async function copyQrLink() {
   await navigator.clipboard.writeText(qrFieldUrl.value);
-  message.success("הקישור הועתק");
+  message.success(l.value.equipmentPage.linkCopied);
 }
 
 function printQr() {
@@ -692,17 +692,17 @@ function printQr() {
 async function save() {
   if (!editing.value) return;
   if (!editing.value.name?.trim()) {
-    message.warning("יש להזין שם");
+    message.warning(l.value.equipmentPage.nameRequired);
     return;
   }
   saving.value = true;
   try {
     if (editing.value.id) {
       await api.equipment.update(editing.value.id, editing.value);
-      message.success("הציוד עודכן");
+      message.success(l.value.equipmentPage.updated);
     } else {
       await api.equipment.create(editing.value);
-      message.success("הציוד נוסף");
+      message.success(l.value.equipmentPage.added);
     }
     showEdit.value = false;
     await load(true);
@@ -718,7 +718,7 @@ async function backfill() {
   try {
     const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
     const r = await fetch(`${SERVER}/api/equipment/backfill`, { method: "POST", credentials: "include" }).then(x => x.json());
-    message.success(`קושרו ${r.patched} פריטים`);
+    message.success(t("equipmentPage.linked", {count: r.patched}));
     await load(true);
   } catch (e) {
     message.error(String(e));
@@ -729,13 +729,13 @@ async function backfill() {
 
 function deleteAll() {
   confirm({
-    title: "מחק הכל",
-    content: "למחוק את כל הציוד? פעולה זו אינה הפיכה.",
-    confirmText: "מחק הכל",
+    title: l.value.equipmentPage.deleteAll,
+    content: l.value.equipmentPage.deleteAllConfirm,
+    confirmText: l.value.equipmentPage.deleteAll,
     onConfirm: async () => {
       try {
         await api.equipment.deleteAll();
-        message.success("כל הציוד נמחק");
+        message.success(l.value.equipmentPage.allDeleted);
         await load(true);
       } catch (e) {
         message.error(String(e));
@@ -747,13 +747,13 @@ function deleteAll() {
 function del(r: Equipment) {
   if (!r.id) return;
   confirm({
-    title: "מחיקת ציוד",
-    content: `למחוק את "${equipmentTitle(r)}"?`,
-    confirmText: "מחק",
+    title: l.value.equipmentPage.deleteTitle,
+    content: t("equipmentPage.deleteConfirm", {name: equipmentTitle(r)}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await api.equipment.delete(r.id!);
-        message.success("נמחק");
+        message.success(l.value.equipmentPage.deleted);
         showEdit.value = false;
         await load(true);
       } catch (e) {

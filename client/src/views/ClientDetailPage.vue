@@ -4,29 +4,29 @@
       <template v-if="store.active">
         <PageHeader :title="store.active.display_name" :subtitle="headerSubtitle">
           <template #breadcrumb>
-            <router-link to="/clients">לקוחות</router-link>
+            <router-link to="/clients">{{ l.clientDetail.clients }}</router-link>
             <span class="sep">/</span>
             <span>{{ store.active.display_name }}</span>
           </template>
           <template #actions>
             <button class="btn btn--ghost" type="button" @click="router.push('/clients')">
               <n-icon :component="ArrowForwardOutline" class="btn-icon" />
-              חזרה
+              {{ l.clientDetail.back }}
             </button>
-            <n-tooltip :disabled="writesAllowed">
+            <n-tooltip v-if="canCreateInspection" :disabled="writesAllowed">
               <template #trigger>
                 <span class="locked-action" @click="!writesAllowed && goToSubscription()">
                   <button :disabled="!writesAllowed" class="btn btn--primary" type="button" @click="openReport">
                     <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-                    תסקיר חדש
+                    {{ l.clientDetail.newInspection }}
                   </button>
                 </span>
               </template>
-              שדרוג מנוי
+              {{ l.clientDetail.upgrade }}
             </n-tooltip>
             <button class="btn btn--primary" type="button" @click="openEdit">
               <n-icon :component="CreateOutline" class="btn-icon" />
-              עריכה
+              {{ l.clientDetail.edit }}
             </button>
           </template>
         </PageHeader>
@@ -79,10 +79,10 @@
 
         <section class="details-card">
           <div class="details-card__head">
-            <h2>פרטי לקוח</h2>
+            <h2>{{ l.clientDetail.details }}</h2>
             <button class="btn btn--ghost btn--xs" type="button" @click="openEdit">
               <n-icon :component="CreateOutline" :size="14" class="btn-icon" />
-              עריכה
+              {{ l.clientDetail.edit }}
             </button>
           </div>
           <dl class="details-grid">
@@ -100,7 +100,7 @@
           <p v-if="clientNotes" class="details-notes">{{ clientNotes }}</p>
         </section>
 
-        <div class="sectiontabs" role="tablist" aria-label="פרטי לקוח">
+        <div class="sectiontabs" role="tablist" :aria-label="l.clientDetail.details">
           <button
             v-for="tab in tabs"
             :key="tab.key"
@@ -131,13 +131,13 @@
               </colgroup>
               <thead>
                 <tr>
-                  <th>מסמך</th>
-                  <th class="hide-sm">סוג</th>
-                  <th>סטטוס</th>
-                  <th class="hide-sm">תאריך בדיקה</th>
-                  <th class="hide-sm">בתוקף עד</th>
-                  <th class="hide-sm">ייבוא</th>
-                  <th>פעולות</th>
+                  <th>{{ l.clientDetail.colDocument }}</th>
+                  <th class="hide-sm">{{ l.clientDetail.colType }}</th>
+                  <th>{{ l.clientDetail.colStatus }}</th>
+                  <th class="hide-sm">{{ l.clientDetail.colInspectionDate }}</th>
+                  <th class="hide-sm">{{ l.clientDetail.colValidUntil }}</th>
+                  <th class="hide-sm">{{ l.clientDetail.colImported }}</th>
+                  <th>{{ l.clientDetail2.actions }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,7 +172,7 @@
                           <n-icon :component="OpenOutline" :size="14" class="btn-icon" />
                         </button>
                       </template>
-                      פתח מסמך
+                      {{ l.clientDetail.openDocument }}
                     </n-tooltip>
                   </td>
                 </tr>
@@ -181,8 +181,8 @@
           </div>
           <div v-else class="panel-empty">
             <n-icon :component="DocumentTextOutline" :size="36" />
-            <h3>אין מסמכים</h3>
-            <p>ללקוח זה עדיין לא שויכו מסמכים</p>
+            <h3>{{ l.clientDetail.noDocs }}</h3>
+            <p>{{ l.clientDetail.noDocsHint }}</p>
           </div>
         </section>
 
@@ -191,7 +191,7 @@
             <span class="tab-panel__head-spacer"></span>
             <button class="btn btn--primary" type="button" @click="openEquipmentAdd">
               <n-icon :component="AddOutline" class="btn-icon" />
-              הוספת ציוד
+              {{ l.clientDetail.addEquipment }}
             </button>
           </div>
           <n-spin :show="loadingEquipment">
@@ -209,14 +209,14 @@
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>שם</th>
-                    <th class="hide-sm">קטגוריה</th>
-                    <th class="hide-sm">יצרן</th>
-                    <th class="hide-sm">דגם</th>
-                    <th class="hide-sm">מספר סידורי</th>
-                    <th class="hide-sm">עומס</th>
-                    <th>מסמך מקור</th>
-                    <th>פעולות</th>
+                    <th>{{ l.clientDetail.colName }}</th>
+                    <th class="hide-sm">{{ l.clientDetail.colCategory }}</th>
+                    <th class="hide-sm">{{ l.clientDetail.colManufacturer }}</th>
+                    <th class="hide-sm">{{ l.clientDetail.colModel }}</th>
+                    <th class="hide-sm">{{ l.clientDetail.colSerial }}</th>
+                    <th class="hide-sm">{{ l.clientDetail.colLoad }}</th>
+                    <th>{{ l.clientDetail.colSourceDoc }}</th>
+                    <th>{{ l.clientDetail2.actions }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -244,7 +244,7 @@
                         type="button"
                         @click="router.push(`/documents/${row.document_id}`)"
                       >
-                        {{ row.document_name || "מסמך מקור" }}
+                        {{ row.document_name || l.clientDetail.colSourceDoc }}
                       </button>
                       <span v-else class="muted">—</span>
                     </td>
@@ -259,7 +259,7 @@
                             <n-icon :component="OpenOutline" :size="14" class="btn-icon" />
                           </button>
                         </template>
-                        פתח בדיקה
+                        {{ l.clientDetail.openInspection }}
                       </n-tooltip>
                     </td>
                   </tr>
@@ -268,8 +268,8 @@
             </div>
             <div v-else-if="!loadingEquipment" class="panel-empty">
               <n-icon :component="ConstructOutline" :size="36" />
-              <h3>אין ציוד</h3>
-              <p>אין ציוד משויך ללקוח זה</p>
+              <h3>{{ l.clientDetail.noEquipment }}</h3>
+              <p>{{ l.clientDetail.noEquipmentHint }}</p>
             </div>
           </n-spin>
 
@@ -295,23 +295,23 @@
           </ol>
           <div v-else class="panel-empty">
             <n-icon :component="TimeOutline" :size="36" />
-            <h3>אין אירועים</h3>
-            <p>עדיין אין פעילות בציר הזמן של הלקוח</p>
+            <h3>{{ l.clientDetail.noEvents }}</h3>
+            <p>{{ l.clientDetail.noEventsHint }}</p>
           </div>
         </section>
       </template>
 
       <div v-else-if="!store.loading" class="panel-empty panel-empty--page">
         <n-icon :component="PeopleOutline" :size="40" />
-        <h3>הלקוח לא נמצא</h3>
-        <p>ייתכן שהלקוח נמחק או שאין הרשאה לצפות בו</p>
-        <button class="btn btn--primary" type="button" @click="router.push('/clients')">חזרה ללקוחות</button>
+        <h3>{{ l.clientDetail.notFound }}</h3>
+        <p>{{ l.clientDetail.notFoundHint }}</p>
+        <button class="btn btn--primary" type="button" @click="router.push('/clients')">{{ l.clientDetail.backToClients }}</button>
       </div>
     </n-spin>
 
     <n-modal
       v-model:show="showEdit"
-      title="עריכת לקוח"
+      :title="l.clientDetail.editTitle"
       :show-icon="false"
       preset="dialog"
       class="client-form-modal"
@@ -319,39 +319,39 @@
       :mask-closable="!saving"
     >
       <n-form v-if="editForm" label-placement="top" class="client-form">
-        <n-form-item label="שם מלא / שם חברה" required>
-          <n-input v-model:value="editForm.display_name" placeholder="ישראל ישראלי / חברת דוגמה בע״מ" />
+        <n-form-item :label="l.clientDetail.fullName" required>
+          <n-input v-model:value="editForm.display_name" :placeholder="l.clientDetail.fullNamePlaceholder" />
         </n-form-item>
-        <n-form-item label="סוג">
+        <n-form-item :label="l.clientDetail.colType">
           <n-radio-group v-model:value="editForm.entity_type">
-            <n-radio-button value="person">אדם פרטי</n-radio-button>
-            <n-radio-button value="company">חברה</n-radio-button>
+            <n-radio-button value="person">{{ l.clientDetail.person }}</n-radio-button>
+            <n-radio-button value="company">{{ l.clientDetail.company }}</n-radio-button>
           </n-radio-group>
         </n-form-item>
         <div class="client-form__grid">
-          <n-form-item label="איש קשר">
-            <n-input v-model:value="editForm.contact_person" placeholder="שם איש הקשר" />
+          <n-form-item :label="l.clientDetail.contactPerson">
+            <n-input v-model:value="editForm.contact_person" :placeholder="l.clientDetail.contactPersonPlaceholder" />
           </n-form-item>
-          <n-form-item label="מספר ת.ז / ח.פ">
+          <n-form-item :label="l.clientDetail.idNumber">
             <n-input v-model:value="editForm.id_number" dir="ltr" />
           </n-form-item>
-          <n-form-item label="אימייל">
+          <n-form-item :label="l.clientDetail.email">
             <n-input v-model:value="editForm.email" class="email-ltr" dir="ltr" placeholder="israel@example.com" />
           </n-form-item>
-          <n-form-item label="טלפון">
+          <n-form-item :label="l.clientDetail.phone">
             <n-input v-model:value="editForm.phone" placeholder="02-0000000" />
           </n-form-item>
-          <n-form-item label="נייד">
+          <n-form-item :label="l.clientDetail.mobile">
             <n-input v-model:value="editForm.mobile" placeholder="050-0000000" />
           </n-form-item>
         </div>
-        <n-form-item label="הערות">
+        <n-form-item :label="l.clientDetail.notes">
           <n-input v-model:value="editForm.notes" type="textarea" :rows="3" />
         </n-form-item>
       </n-form>
       <template #action>
-        <n-button :disabled="saving" @click="closeEdit">ביטול</n-button>
-        <n-button type="primary" :loading="saving" @click="doSave">שמור שינויים</n-button>
+        <n-button :disabled="saving" @click="closeEdit">{{ l.clientDetail.cancel }}</n-button>
+        <n-button type="primary" :loading="saving" @click="doSave">{{ l.clientDetail.saveChanges }}</n-button>
       </template>
     </n-modal>
 
@@ -434,20 +434,20 @@ type EditForm = {
   notes: string;
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  lift: "מכונות הרמה",
-  accessory: "אביזרי הרמה",
-  scaffold: "פיגומים",
-  ladder: "מעליות",
-  balloon: "מעלונים",
-  intake: "קולטי אוויר",
-  extractor: "קולטי קיטור",
-  other: "אחר",
-};
+const CATEGORY_LABELS = computed<Record<string, string>>(() => ({
+  lift: l.value.clientDetail.catLift,
+  accessory: l.value.clientDetail.catAccessory,
+  scaffold: l.value.clientDetail.catScaffold,
+  ladder: l.value.clientDetail.catLadder,
+  balloon: l.value.clientDetail.catBalloon,
+  intake: l.value.clientDetail.catIntake,
+  extractor: l.value.clientDetail.catExtractor,
+  other: l.value.clientDetail.catOther,
+}));
 
 const route = useRoute();
 const router = useRouter();
-const {href} = useI18n();
+const {href, l, canCreateInspection} = useI18n();
 const authStore = useAuthStore();
 const writesAllowed = computed(() => resolveUserPlan(authStore.user) !== "expired");
 
@@ -494,7 +494,7 @@ const clientStats = computed(() => {
   return [
     {
       key: "documents",
-      label: "מסמכים",
+      label: l.value.clientDetail.statDocuments,
       value: client?.doc_count ?? client?.document_count ?? store.activeDocuments.length,
       icon: DocumentTextOutline,
       tab: "docs" as TabKey,
@@ -502,7 +502,7 @@ const clientStats = computed(() => {
     },
     {
       key: "contracts",
-      label: "חוזים",
+      label: l.value.clientDetail.statContracts,
       value: client?.contract_count ?? 0,
       icon: BriefcaseOutline,
       tab: null,
@@ -510,7 +510,7 @@ const clientStats = computed(() => {
     },
     {
       key: "reminders",
-      label: "תזכורות פתוחות",
+      label: l.value.clientDetail.statOpenReminders,
       value: client?.open_reminder_count ?? 0,
       icon: NotificationsOutline,
       tab: null,
@@ -520,9 +520,9 @@ const clientStats = computed(() => {
 });
 
 const tabs = computed(() => [
-  { key: "docs" as const, label: "מסמכים", icon: DocumentTextOutline, count: store.activeDocuments.length },
-  { key: "equipment" as const, label: "ציוד", icon: ConstructOutline, count: equipment.value.length },
-  { key: "timeline" as const, label: "ציר זמן", icon: TimeOutline, count: store.activeTimeline.length },
+  { key: "docs" as const, label: l.value.clientDetail.statDocuments, icon: DocumentTextOutline, count: store.activeDocuments.length },
+  { key: "equipment" as const, label: l.value.clientDetail.tabEquipment, icon: ConstructOutline, count: equipment.value.length },
+  { key: "timeline" as const, label: l.value.clientDetail.tabTimeline, icon: TimeOutline, count: store.activeTimeline.length },
 ]);
 
 const contactChips = computed<ContactChip[]>(() => {
@@ -562,25 +562,25 @@ const clientDetails = computed<ClientDetailItem[]>(() => {
     .join(" · ");
 
   const details: ClientDetailItem[] = [
-    detailItem("display_name", "שם לקוח", client.display_name),
-    detailItem("entity_type", "סוג לקוח", entityLabel(client.entity_type)),
-    detailItem("contact_person", "איש קשר", client.contact_person),
-    { ...detailItem("id_number", "מספר ת.ז / ח.פ", client.id_number), ltr: true },
-    { ...detailItem("email", "אימייל", client.email), ltr: true, href: client.email ? `mailto:${client.email}` : undefined },
-    { ...detailItem("phone", "טלפון", client.phone), ltr: true, href: client.phone ? `tel:${client.phone}` : undefined },
-    { ...detailItem("mobile", "נייד", client.mobile), ltr: true, href: client.mobile ? `tel:${client.mobile}` : undefined },
+    detailItem("display_name", l.value.clientDetail.clientName, client.display_name),
+    detailItem("entity_type", l.value.clientDetail.clientType, entityLabel(client.entity_type)),
+    detailItem("contact_person", l.value.clientDetail.contactPerson, client.contact_person),
+    { ...detailItem("id_number", l.value.clientDetail.idNumber, client.id_number), ltr: true },
+    { ...detailItem("email", l.value.clientDetail.email, client.email), ltr: true, href: client.email ? `mailto:${client.email}` : undefined },
+    { ...detailItem("phone", l.value.clientDetail.phone, client.phone), ltr: true, href: client.phone ? `tel:${client.phone}` : undefined },
+    { ...detailItem("mobile", l.value.clientDetail.mobile, client.mobile), ltr: true, href: client.mobile ? `tel:${client.mobile}` : undefined },
   ];
 
   if (client.fax?.trim()) {
-    details.push({ ...detailItem("fax", "פקס", client.fax), ltr: true });
+    details.push({ ...detailItem("fax", l.value.clientDetail.fax, client.fax), ltr: true });
   }
   if (address) {
-    details.push(detailItem("address", "כתובת", address));
+    details.push(detailItem("address", l.value.clientDetail.address, address));
   }
 
   details.push(
-    detailItem("created_at", "נוצר", formatDate(client.created_at)),
-    detailItem("updated_at", "עודכן", formatDate(client.updated_at)),
+    detailItem("created_at", l.value.clientDetail.created, formatDate(client.created_at)),
+    detailItem("updated_at", l.value.clientDetail.updated, formatDate(client.updated_at)),
   );
 
   return details;
@@ -591,7 +591,7 @@ function onStatClick(stat: { tab: TabKey | null }) {
 }
 
 function categoryLabel(c: string) {
-  return CATEGORY_LABELS[c] ?? c;
+  return CATEGORY_LABELS.value[c] ?? c;
 }
 
 function detailItem(key: string, label: string, value: string | null | undefined): ClientDetailItem {
@@ -605,7 +605,7 @@ function displayValue(value: string | null | undefined) {
 }
 
 function entityLabel(entityType: string) {
-  return entityType === "company" ? "חברה" : "אדם פרטי";
+  return entityType === "company" ? l.value.clientDetail.company : l.value.clientDetail.person;
 }
 
 function parseTags(raw: string | null | undefined): string[] {
@@ -685,7 +685,7 @@ async function doSave() {
   saving.value = true;
   try {
     await store.update(store.active.id, editForm.value);
-    message.success("פרטי הלקוח עודכנו");
+    message.success(l.value.clientDetail.saved);
     showEdit.value = false;
     await store.fetchOne(store.active.id);
   } catch (e) {

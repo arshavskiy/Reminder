@@ -6,7 +6,7 @@
       :subtitle="l.documents.subtitle"
     >
       <template #hero>
-        <n-tooltip :disabled="!createLocked">
+        <n-tooltip v-if="canCreateInspection" :disabled="!createLocked">
           <template #trigger>
             <span class="locked-action" @click="createLocked && goToSubscription()">
               <button
@@ -240,7 +240,7 @@
     <!-- Quota bar (role = user only) -->
     <div v-if="isRegularUser" class="quota-bar">
       <div class="quota-bar__text">
-        <span>מסמכים: {{ store.documentQuotaUsed }} / {{ store.documentLimit ?? "∞" }}</span>
+        <span>{{ l.documentsMsg.quota }} {{ store.documentQuotaUsed }} / {{ store.documentLimit ?? "∞" }}</span>
         <span v-if="importLocked" class="quota-bar__limit">{{ importLockLabel }}</span>
       </div>
       <n-progress
@@ -525,7 +525,7 @@
               <td class="document-col document-col--select" @click.stop>
                 <n-checkbox
                   :checked="selectedIds.has(String(row.id))"
-                  :aria-label="`בחר ${row.file_name}`"
+                  :aria-label="t('documentsMsg.select', {name: row.file_name})"
                   @update:checked="(checked: boolean) => setRowSelected(String(row.id), checked)"
                 />
               </td>
@@ -642,18 +642,18 @@
       :negative-button-props="confirmCancelButtonProps"
       :positive-button-props="confirmActionButtonProps('success')"
       :show-icon="false"
-      negative-text="סגור"
-      positive-text="שדרג ל-Business "
+      :negative-text="l.documentsMsg.close"
+      :positive-text="l.documentsMsg.upgradeBusiness"
       preset="dialog"
       type="warning"
       @positive-click="showLimitModal = false"
       @negative-click="showLimitModal = false"
     >
       <template #header>
-        <ConfirmDialogHead title="הגעת למגבלת המסמכים" type="warning"/>
+        <ConfirmDialogHead :title="l.documentsMsg.limitTitle" type="warning"/>
       </template>
-      <p>הגעת למגבלת <strong>{{ store.documentLimit }}</strong> המסמכים בחשבון החינמי.</p>
-      <p class="text-sm text-[var(--text-secondary)]">שדרג לחשבון Business להעלאה בלתי מוגבלת.</p>
+      <p>{{ t("documentsMsg.limitBody", {limit: store.documentLimit ?? ""}) }}</p>
+      <p class="text-sm text-[var(--text-secondary)]">{{ l.documentsMsg.limitHint }}</p>
     </n-modal>
 
     <n-modal
@@ -662,24 +662,24 @@
       :negative-button-props="confirmCancelButtonProps"
       :positive-button-props="confirmActionButtonProps('warning')"
       :show-icon="false"
-      negative-text="ביטול"
-      positive-text="סרוק הכל מחדש"
+      :negative-text="l.documentsMsg.cancel"
+      :positive-text="l.documentsMsg.rescanAll"
       preset="dialog"
       type="warning"
       @positive-click="doRescanAll"
       @negative-click="showRescanAllConfirm = false"
     >
       <template #header>
-        <ConfirmDialogHead title="סריקה מחדש לכל המסמכים" type="warning"/>
+        <ConfirmDialogHead :title="l.documentsMsg.rescanAllTitle" type="warning"/>
       </template>
-      <div class="rescan-confirm" dir="rtl">
+      <div class="rescan-confirm" :dir="dir">
         <p>
-          הפעולה תסרוק מחדש את כל המסמכים הזמינים ותיצור מחדש את הנתונים שנוצרו מהם.
+          {{ l.documentsMsg.rescanAllBody }}
         </p>
         <ul>
-          <li>חוזים ותסקירים שנוצרו מהמסמך ייבנו מחדש.</li>
-          <li>תזכורות שנוצרו מהמסמך יימחקו ויחושבו מחדש.</li>
-          <li>הפעולה מיועדת לתיקוני מערכת כמו חישוב הפרש חודשים.</li>
+          <li>{{ l.documentsMsg.rescanAll1 }}</li>
+          <li>{{ l.documentsMsg.rescanAll2 }}</li>
+          <li>{{ l.documentsMsg.rescanAll3 }}</li>
         </ul>
       </div>
     </n-modal>
@@ -796,7 +796,7 @@ import {useDevModal} from "../composables/useDevModal.js";
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const store = useDocumentsStore();
-const {l, href, t, dir} = useI18n();
+const {l, href, t, dir, canCreateInspection} = useI18n();
 const authStore = useAuthStore();
 const rescanStore = useRescanModalStore();
 const router = useRouter();
@@ -837,7 +837,7 @@ const importLockLabel = computed(() => {
   if (createLocked.value || store.documentImportAllowed === false || !planAllowsDocumentImport(currentPlan.value)) {
     return PLAN_GATE_MESSAGES.documentImport;
   }
-  return `הגעת למגבלת ${store.documentLimit} סריקות`;
+  return t("documentsMsg.scanLimit", {limit: store.documentLimit ?? ""});
 });
 
 const uploading = ref(false);
@@ -870,11 +870,11 @@ function onQuotaReached() {
 }
 const viewMode = ref<"grid" | "list">("list");
 const rescanAlertTitle = computed(() => {
-  const action = rescanStore.kind === "upload" ? "העלאה" : "סריקה מחדש";
+  const upload = rescanStore.kind === "upload";
   if (rescanStore.remaining > 0) {
-    return `${action} פעילה: ${rescanStore.remaining} מתוך ${rescanStore.queued} עדיין בעיבוד`;
+    return t(upload ? "documentsMsg.uploadActive" : "documentsMsg.rescanActive", {remaining: rescanStore.remaining, queued: rescanStore.queued});
   }
-  return `${rescanStore.queued} מסמכים נשלחו ל${rescanStore.kind === "upload" ? "עיבוד" : "סריקה מחדש"}`;
+  return t(upload ? "documentsMsg.uploadQueued" : "documentsMsg.rescanQueued", {queued: rescanStore.queued});
 });
 const rescanRows = computed(() =>
   rescanStore.ids
@@ -928,24 +928,24 @@ async function handleGmailImport() {
     const failed = result.results.filter((r) => r.error).length;
     const imported = result.imported ?? 0;
     if (imported) {
-      message.success(`יובאו ${imported} תסקירים מ-Gmail`);
+      message.success(t("documentsMsg.gmailImported", {count: imported}));
     } else if (failed) {
-      message.warning("לא יובאו מסמכים. חלק מהקבצים נכשלו בעיבוד.");
+      message.warning(l.value.documentsMsg.gmailNoneImported);
     } else {
-      message.info("לא נמצאו תסקירים חדשים לייבוא");
+      message.info(l.value.documentsMsg.gmailNothingNew);
     }
     await store.fetch(undefined, true);
   } catch (err: any) {
     const code = String(err?.message ?? "");
     if (code.includes("gmail_not_connected")) {
-      message.error("Gmail לא מחובר. לחץ שוב כדי להתחבר.");
+      message.error(l.value.documentsMsg.gmailNotConnected);
     } else if (
         code.includes("document_monthly_limit_reached")
         || code.includes("document_monthly_quota_exceeded")
     ) {
-      message.error("הגעת למגבלת הייבוא החודשית של המנוי.");
+      message.error(l.value.documentsMsg.monthlyQuota);
     } else {
-      message.error("שגיאה בייבוא מ-Gmail");
+      message.error(l.value.documentsMsg.gmailError);
     }
   } finally {
     importingFromGmail.value = false;
@@ -954,28 +954,28 @@ async function handleGmailImport() {
 
 async function handleDriveExport() {
   if (!driveAllowed.value) {
-    message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.documentsMsg.drivePlanOnly);
     return;
   }
   try {
     const status = await api.drive.status();
     if (!status.allowed) {
-      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      message.warning(l.value.documentsMsg.drivePlanOnly);
       return;
     }
     if (!status.syncEnabled) {
-      message.warning("יש להפעיל סנכרון Drive בהגדרות הפרופיל לפני ייצוא");
+      message.warning(l.value.documentsMsg.driveSyncOff);
       return;
     }
     const folderGone = status.folderState === "missing" || status.folderState === "trashed";
     if (folderGone) {
       const count = status.syncedFileCount ?? 0;
       confirm({
-        title: status.folderState === "trashed" ? "תיקיית Drive בפח" : "תיקיית Drive נמחקה",
+        title: status.folderState === "trashed" ? l.value.documentsMsg.driveTrashed : l.value.documentsMsg.driveDeleted,
         content: count
-          ? `${count} מסמכים סומנו כמסונכרנים אבל הם כבר לא בתיקייה. ליצור תיקייה חדשה ולהעלות מחדש?`
-          : "תיקיית Google Drive נמחקה. ליצור תיקייה חדשה ולהעלות את המסמכים?",
-        confirmText: "העלה מחדש",
+          ? t("documentsMsg.driveMissingFiles", {count})
+          : l.value.documentsMsg.driveFolderGone,
+        confirmText: l.value.documentsMsg.reupload,
         type: "warning",
         onConfirm: runDriveExport,
       });
@@ -984,16 +984,16 @@ async function handleDriveExport() {
     await runDriveExport();
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
-      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      message.warning(l.value.documentsMsg.drivePlanOnly);
     } else {
-      message.error("שגיאה בייצוא ל-Drive");
+      message.error(l.value.documentsMsg.driveExportError);
     }
   }
 }
 
 function openMonthlyReport() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning(l.value.documentsMsg.reportsPlanOnly);
     return;
   }
   showMonthlyReport.value = true;
@@ -1005,16 +1005,16 @@ async function runDriveExport() {
   try {
     const started = await api.drive.exportAll();
     activeDriveExportJob.value = started;
-    message.info("ייצוא ל-Drive התחיל ברקע");
+    message.info(l.value.documentsMsg.driveStarted);
     const result = await waitForDriveExportJob(started.jobId);
     lastDriveExportJob.value = result;
-    const folderHint = result.folderName ? ` לתיקיית "${result.folderName}"` : "";
+    const folderHint = result.folderName ? t("documentsMsg.toFolder", {folder: result.folderName}) : "";
     if (result.recreated) {
-      message.success(`נוצרה תיקייה חדשה והועלו ${result.uploaded} מסמכים${folderHint}${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+      message.success(`${t("documentsMsg.newFolderUploaded", {count: result.uploaded})}${folderHint}${result.failed > 0 ? ` ${t("documentsMsg.failedSuffix", {count: result.failed})}` : ""}`);
     } else if (result.total === 0) {
-      message.info("כל המסמכים כבר מסונכרנים ל-Drive");
+      message.info(l.value.documentsMsg.allSynced);
     } else {
-      message.success(`הועלו ${result.uploaded} מסמכים${folderHint} ב-Google Drive${result.failed > 0 ? ` (${result.failed} נכשלו)` : ""}`);
+      message.success(`${t("documentsMsg.uploadedToDrive", {count: result.uploaded})}${folderHint}${result.failed > 0 ? ` ${t("documentsMsg.failedSuffix", {count: result.failed})}` : ""}`);
     }
     if (result.folderUrl) {
       window.open(result.folderUrl, "_blank", "noopener,noreferrer");
@@ -1022,11 +1022,11 @@ async function runDriveExport() {
     await store.fetch(undefined, true);
   } catch (err: any) {
     if (String(err?.message ?? "").includes("drive_plan_required")) {
-      message.warning("ייצוא ל-Google Drive זמין במסלולים בסיסי ועסקי בלבד");
+      message.warning(l.value.documentsMsg.drivePlanOnly);
     } else if (String(err?.message ?? "").includes("drive_scope_missing")) {
-      message.warning("יש להתחבר מחדש ל-Gmail כדי לאשר גישה ל-Drive");
+      message.warning(l.value.documentsMsg.reconnectForDrive);
     } else {
-      message.error("שגיאה בייצוא ל-Drive");
+      message.error(l.value.documentsMsg.driveExportError);
     }
   } finally {
     activeDriveExportJob.value = null;
@@ -1097,19 +1097,20 @@ type DocumentSortKey = "file" | "type" | "date" | "import" | "client" | "number"
 const documentSortBy = ref<DocumentSortKey>("import");
 const documentSortDir = ref<"asc" | "desc">("desc");
 
-const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  inspection_report: "תסקיר בדיקה",
-  contract: "חוזה / הסכם",
-  invoice: "חשבונית",
-  certificate: "תעודה / הסמכה",
-  unknown: "לא ידוע",
-  "חוזה שירות": "חוזה / הסכם",
-  חשבונית: "חשבונית",
-  "תסקיר בדיקה": "תסקיר בדיקה",
-};
+// Keys include legacy Hebrew document types stored on older documents.
+const DOCUMENT_TYPE_LABELS = computed<Record<string, string>>(() => ({
+  inspection_report: l.value.documentsMsg.typeInspection,
+  contract: l.value.documentsMsg.typeContract,
+  invoice: l.value.documentsMsg.typeInvoice,
+  certificate: l.value.documentsMsg.typeCertificate,
+  unknown: l.value.documentsMsg.typeUnknown,
+  "חוזה שירות": l.value.documentsMsg.typeContract,
+  חשבונית: l.value.documentsMsg.typeInvoice,
+  "תסקיר בדיקה": l.value.documentsMsg.typeInspection,
+}));
 
 function formatDocumentTypeLabel(raw: string): string {
-  return DOCUMENT_TYPE_LABELS[raw] ?? raw;
+  return DOCUMENT_TYPE_LABELS.value[raw] ?? raw;
 }
 
 const INSPECTION_TYPE_LABELS: Record<string, string> = Object.fromEntries(
@@ -1301,8 +1302,8 @@ function documentImportSourceLabel(row: Document | Record<string, unknown>): str
   const source = String((row as any).import_source ?? "").trim();
   if (source === "gmail" || isGmailImported(row)) return "Gmail";
   if (source === "drive") return "Drive";
-  if (source === "upload") return "העלאה";
-  if (String((row as any).document_source ?? "") === "generated") return "נוצר";
+  if (source === "upload") return l.value.documentsMsg.sourceUpload;
+  if (String((row as any).document_source ?? "") === "generated") return l.value.documentsMsg.sourceGenerated;
   return "";
 }
 
@@ -1377,11 +1378,11 @@ function expiryClass(date: string | null | undefined) {
   return "expiry expiry--ok";
 }
 function reminderStatusLabel(status: string | null | undefined) {
-  if (status === "assigned") return "תזכורת נקבעה";
-  if (status === "missing") return "אין תזכורת";
-  if (status === "error") return "שגיאת סריקה";
+  if (status === "assigned") return l.value.documentsMsg.scanAssigned;
+  if (status === "missing") return l.value.documentsMsg.scanMissing;
+  if (status === "error") return l.value.documentsMsg.scanError;
   if (status === "not_applicable") return "";
-  return "ממתין";
+  return l.value.documentsMsg.scanPending;
 }
 function reminderTagType(status: string | null | undefined): "success" | "warning" | "error" | "info" | "default" {
   if (status === "assigned") return "success";
@@ -1418,7 +1419,7 @@ function shouldShowReminderBadge(row: Document): boolean {
 
 /** Prefer the linked/matched template's document_kind (e.g. תלוש משכורת). */
 function documentTypeLabel(row: Document | Record<string, unknown>): string {
-  if (isInvoiceLikeDocument(row)) return "חשבונית";
+  if (isInvoiceLikeDocument(row)) return l.value.documentsMsg.typeInvoice;
   let extracted: Record<string, unknown> = {};
   try {
     const raw = (row as any).extracted_fields;
@@ -1495,7 +1496,7 @@ function emailDeliveryTitle(row: Document): string {
   const delivery = emailDelivery(row);
   const recipient = delivery?.recipient ? `: ${delivery.recipient}` : "";
   const reason = delivery?.reason ? ` - ${delivery.reason}` : "";
-  return `אימייל חזר${recipient}${reason}`;
+  return `${l.value.contractCard.emailBounced}${recipient}${reason}`;
 }
 
 function matchesStatusFilter(row: Document, filter: DocumentStatusFilter) {
@@ -1634,14 +1635,14 @@ async function openDocumentReminderPreview(row: Document) {
     const result = await api.reminders.list({documentId: String(row.id), limit: 1}, true);
     const reminder = result.rows[0];
     if (!reminder) {
-      message.info("לא נמצאה תזכורת למסמך הזה");
+      message.info(l.value.documentsMsg.noReminderForDoc);
       return;
     }
     previewReminderId.value = reminder.id;
     previewReminderTitle.value = reminder.title ?? row.file_name ?? null;
     showReminderPreview.value = true;
   } catch {
-    message.error("שגיאה בטעינת התזכורת של המסמך");
+    message.error(l.value.documentsMsg.reminderLoadError);
   }
 }
 
@@ -1656,7 +1657,7 @@ async function openExtractModal(docId: string) {
   extracting.value = true;
   try {
     await api.documents.extract(docId);
-    message.success("חילוץ AI הושלם");
+    message.success(l.value.documentDetailMsg.aiExtractDone);
     await store.fetch(undefined, true);
   } catch (e) {
     message.error(String(e));
@@ -1740,8 +1741,8 @@ async function uploadFiles(
   try {
     const {ids, duplicates} = await api.documents.upload(files, options, options?.templateId);
     const newCount = ids.length - (duplicates?.length ?? 0);
-    if (newCount > 0) message.info(`${newCount} מסמכים נוספו לתור עיבוד`);
-    if (duplicates?.length) message.warning(`${duplicates.length} קובץ/ים כבר קיים/ים: ${duplicates.join(", ")}`);
+    if (newCount > 0) message.info(t("documentsMsg.queued", {count: newCount}));
+    if (duplicates?.length) message.warning(t("documentsMsg.duplicates", {count: duplicates.length, names: duplicates.join(", ")}));
     rescanStore.start({ queued: ids.length, ids, duplicates, kind: "upload" });
     await store.fetch(undefined, true);
     updateRescanRowsFromDocuments();
@@ -1767,7 +1768,7 @@ async function doRescanAll() {
   try {
     await runRescan(true);
   } catch {
-    message.error("שגיאה בסריקה מחדש של כל המסמכים");
+    message.error(l.value.documentsMsg.rescanAllError);
   } finally {
     rescanningAll.value = false;
   }
@@ -1776,9 +1777,9 @@ async function doRescanAll() {
 async function runRescan(all: boolean) {
   const data = await api.documents.rescan(all ? { all: true } : undefined);
   if (data.queued === 0) {
-    message.info(all ? "אין מסמכים זמינים לסריקה מחדש" : "אין מסמכים שצריכים סריקה מחדש");
+    message.info(all ? l.value.documentsMsg.nothingToRescan : l.value.documentsMsg.nothingNeedsRescan);
   } else {
-    message.success(`${data.queued} מסמכים נשלחו לסריקה מחדש`);
+    message.success(t("documentsMsg.rescanQueued", {queued: data.queued}));
     rescanStore.start({ queued: data.queued, ids: data.ids ?? [], mode: data.mode, kind: "rescan" });
     await store.fetch(undefined, true);
     updateRescanRowsFromDocuments();
@@ -1819,19 +1820,19 @@ function startBatchPolling(ids: string[]) {
         if (rescanStore.kind === "upload") {
           const completed = watchedRows.filter((row) => row.processing_status === "done").length;
           if (failed) {
-            message.warning(`העלאה הסתיימה: ${completed} עובדו, ${failed} שגיאות`);
+            message.warning(t("documentsMsg.uploadDoneErrors", {completed, failed}));
           } else {
-            message.success(`העלאה הסתיימה: ${completed} מסמכים עובדו`);
+            message.success(t("documentsMsg.uploadDone", {completed}));
           }
         } else if (missing || failed) {
-          message.warning(`סריקה הסתיימה: ${assigned} עם תזכורת, ${missing} ללא תזכורת, ${failed} שגיאות`);
+          message.warning(t("documentsMsg.scanDoneMixed", {assigned, missing, failed}));
         } else {
-          message.success(`סריקה הסתיימה: ${assigned} מסמכים קיבלו תזכורת`);
+          message.success(t("documentsMsg.scanDone", {assigned}));
         }
       } else if (attempts >= 40) {
         stopRescanPolling();
         rescanStore.markBackground();
-        message.info("הסריקה עדיין רצה ברקע, הרשימה תתעדכן ברענון הבא");
+        message.info(l.value.documentsMsg.scanStillRunning);
       }
     } catch {
       if (attempts >= 3) stopRescanPolling();
@@ -1854,22 +1855,22 @@ function updateRescanRowsFromDocuments() {
 function confirmDeleteAll() {
   const count = filteredRows.value.length;
   confirm({
-    title: "מחיקת מסמכים",
-    content: `האם למחוק את ${count} המסמכים המסוננים? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק הכל",
+    title: l.value.documentsMsg.deleteDocsTitle,
+    content: t("documentsMsg.deleteFilteredConfirm", {count}),
+    confirmText: l.value.equipmentPage.deleteAll,
     onConfirm: doDeleteAll,
   });
 }
 
 function confirmDeleteDocument(row: Document) {
   confirm({
-    title: "מחיקת מסמך",
-    content: `למחוק את המסמך "${row.file_name}"? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.documentDetailMsg.deleteDocTitle,
+    content: t("documentDetailMsg.deleteDocConfirm", {name: row.file_name}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await store.deleteDoc(row.id);
-        message.success("המסמך נמחק");
+        message.success(l.value.documentDetailMsg.docDeleted);
       } catch (e) {
         message.error(String(e));
       }
@@ -1927,9 +1928,9 @@ function confirmBulkDelete() {
   const count = selectedIds.value.size;
   if (!count) return;
   confirm({
-    title: "מחיקת מסמכים נבחרים",
-    content: `האם למחוק ${count} מסמכים נבחרים? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק נבחרים",
+    title: l.value.documentsMsg.deleteSelectedTitle,
+    content: t("documentsMsg.deleteSelectedConfirm", {count}),
+    confirmText: l.value.documentsMsg.deleteSelected,
     onConfirm: doBulkDelete,
   });
 }
@@ -1939,12 +1940,12 @@ async function doBulkDelete() {
   bulkDeleting.value = true;
   try {
     await Promise.all(ids.map((id) => api.documents.delete(id)));
-    message.success(ids.length === 1 ? "המסמך נמחק" : `${ids.length} מסמכים נמחקו`);
+    message.success(ids.length === 1 ? l.value.documentDetailMsg.docDeleted : t("documentsMsg.docsDeleted", {count: ids.length}));
     selectedIds.value = new Set();
     bulkMode.value = false;
     await store.fetch(undefined, true);
   } catch {
-    message.error("שגיאה במחיקת המסמכים");
+    message.error(l.value.documentsMsg.deleteError);
   } finally {
     bulkDeleting.value = false;
   }
@@ -1954,10 +1955,10 @@ async function doDeleteAll() {
   try {
     const ids = filteredRows.value.map((r) => r.id);
     await Promise.all(ids.map((id) => store.deleteDoc(id)));
-    message.success(`${ids.length} מסמכים נמחקו`);
+    message.success(t("documentsMsg.docsDeleted", {count: ids.length}));
     await store.fetch(undefined, true);
   } catch {
-    message.error("שגיאה במחיקת המסמכים");
+    message.error(l.value.documentsMsg.deleteError);
   } finally {
     deletingAll.value = false;
   }
@@ -1975,7 +1976,7 @@ async function bulkDownload() {
       window.open(`${SERVER}/api/documents/${id}/download?dl=1`, "_blank", "noopener");
       await new Promise((r) => setTimeout(r, 400));
     }
-    message.success(`${ids.length} קבצים הורדו`);
+    message.success(t("documentsMsg.filesDownloaded", {count: ids.length}));
   } finally {
     bulkDownloading.value = false;
   }
@@ -1996,7 +1997,7 @@ async function bulkMergePdf() {
     });
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
-      message.error(payload.error ?? "מיזוג הקבצים נכשל");
+      message.error(payload.error ?? l.value.documentsMsg.mergeFailed);
       return;
     }
 
@@ -2012,11 +2013,11 @@ async function bulkMergePdf() {
 
     message.success(
       skipped > 0
-        ? `${merged} קבצים מוזגו, ${skipped} דולגו (לא PDF או קובץ חסר)`
-        : `${merged} קבצים מוזגו לקובץ אחד`,
+        ? t("documentsMsg.mergedSkipped", {merged, skipped})
+        : t("documentsMsg.merged", {merged}),
     );
   } catch (err) {
-    message.error(err instanceof Error ? err.message : "מיזוג הקבצים נכשל");
+    message.error(err instanceof Error ? err.message : l.value.documentsMsg.mergeFailed);
   } finally {
     bulkMerging.value = false;
   }
@@ -2037,9 +2038,9 @@ async function bulkExtractAi() {
     }
     const completed = ids.length - failed;
     if (failed) {
-      message.warning(`חילוץ AI הסתיים: ${completed} הצליחו, ${failed} נכשלו`);
+      message.warning(t("documentsMsg.aiDoneMixed", {completed, failed}));
     } else {
-      message.success(`חילוץ AI הושלם עבור ${completed} מסמכים`);
+      message.success(t("documentsMsg.aiDone", {completed}));
     }
     await store.fetch(undefined, true);
   } finally {

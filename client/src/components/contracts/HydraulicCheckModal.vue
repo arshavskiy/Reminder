@@ -1715,7 +1715,7 @@ function openCreatePrintTemplate() {
 
 function openEditPrintTemplate() {
   if (!templateId.value) {
-    message.warning("בחר תבנית לעריכה");
+    message.warning(l.value.inspectionModalMsg.chooseTemplateToEdit);
     return;
   }
   visible.value = false;
@@ -1786,11 +1786,11 @@ function guessReportTypeFromText(...texts: Array<string | null | undefined>): Re
 function suggestReportTypeFromEquipment(eq: Equipment) {
   const suggestion = guessReportTypeFromText(eq.name, eq.description);
   if (!suggestion || suggestion.value === reportType.value) return;
-  const text = `הציוד שנבחר מתאים ל"${suggestion.label}" - להחליף את סוג התסקיר?`;
+  const text = t("inspectionModalMsg.suggestReportType", {label: suggestion.label});
   const reactive = message.info(text, {
     duration: 8000,
     render: () =>
-      h("div", {class: "hm-report-suggestion", dir: "rtl"}, [
+      h("div", {class: "hm-report-suggestion", dir: dir.value}, [
         h("span", null, text),
         h(
           "button",
@@ -1801,7 +1801,7 @@ function suggestReportTypeFromEquipment(eq: Equipment) {
               reactive.destroy();
             },
           },
-          "החלף"
+          l.value.inspectionModalMsg.switch
         ),
       ]),
   });
@@ -2197,16 +2197,16 @@ async function createBillingDocument(contractId: string): Promise<string | null>
     notes: billingNotes.value,
   });
   await paymentService.issue(created._id);
-  return "הצעת מחיר";
+  return l.value.inspectionModalMsg.quote;
 }
 
 async function createContract() {
-  if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
+  if (!hydraulicForm.value) throw new Error(l.value.inspectionModal.formNotReady);
   if (!clientId.value && !hydraulicForm.value.business.display_name.trim()) {
-    throw new Error("יש לבחור לקוח קיים או להזין שם עסק");
+    throw new Error(l.value.inspectionModal.missingClient);
   }
   if (!expiryDateMs.value) {
-    throw new Error("יש להזין תאריך תוקף");
+    throw new Error(l.value.inspectionModalMsg.expiryRequired);
   }
   const contractNumber = formatContractNumber(
       hydraulicForm.value.contract_number?.trim() || suggestedContractNumber.value,
@@ -2232,9 +2232,9 @@ async function createContract() {
 }
 
 async function updateContract(contractId: string) {
-  if (!hydraulicForm.value) throw new Error("הטופס לא מוכן");
+  if (!hydraulicForm.value) throw new Error(l.value.inspectionModal.formNotReady);
   if (!expiryDateMs.value) {
-    throw new Error("יש להזין תאריך תוקף");
+    throw new Error(l.value.inspectionModalMsg.expiryRequired);
   }
   const contractNumber = formatContractNumber(
       hydraulicForm.value.contract_number?.trim() || suggestedContractNumber.value,
@@ -2303,7 +2303,7 @@ async function doCreate() {
     if (!updatingContractId.value) validateBillingDocument();
     if (updatingContractId.value) {
       await updateContract(updatingContractId.value);
-      message.success("התסקיר עודכן");
+      message.success(l.value.inspectionModalMsg.updated);
       emit("updated");
     } else {
       const result = await createContract();
@@ -2311,9 +2311,11 @@ async function doCreate() {
       try {
         billingLabel = await createBillingDocument(String(result.contract.id));
       } catch (error) {
-        message.warning(`התסקיר נשמר, אך הצעת המחיר לא הופקה: ${error instanceof Error ? error.message : String(error)}`);
+        message.warning(t("inspectionModalMsg.savedQuoteFailed", {error: error instanceof Error ? error.message : String(error)}));
       }
-      message.success(`התסקיר נשמר עבור ${result.client.display_name}${billingLabel ? ` ו${billingLabel} הופקה` : ""}.`);
+      message.success(billingLabel
+        ? t("inspectionModalMsg.savedForClientWithBilling", {client: result.client.display_name, billing: billingLabel})
+        : t("inspectionModalMsg.savedForClient", {client: result.client.display_name}));
       emit("created");
     }
     clearDraftOnClose.value = true;
@@ -2330,7 +2332,7 @@ async function doCreate() {
 async function saveDraftAndPreview() {
   if (!hydraulicForm.value) return;
   if (!templateId.value) {
-    saveError.value = "בחר תבנית הדפסה";
+    saveError.value = l.value.inspectionModalMsg.choosePrintTemplate;
     return;
   }
   saveError.value = null;
@@ -2349,9 +2351,9 @@ async function saveDraftAndPreview() {
       clientIdValue = String(result.client.id ?? clientIdValue);
       try {
         const billingLabel = await createBillingDocument(contractIdValue);
-        if (billingLabel) message.success(`${billingLabel} הופקה ונשמרה במסמכים`);
+        if (billingLabel) message.success(t("inspectionModalMsg.billingIssued", {billing: billingLabel}));
       } catch (error) {
-        message.warning(`התסקיר נשמר, אך הצעת המחיר לא הופקה: ${error instanceof Error ? error.message : String(error)}`);
+        message.warning(t("inspectionModalMsg.savedQuoteFailed", {error: error instanceof Error ? error.message : String(error)}));
       }
     }
     await api.printTemplates.saveDraft(

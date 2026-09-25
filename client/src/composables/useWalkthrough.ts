@@ -250,7 +250,7 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".dash__intake",
       title: "Quick upload area",
-      text: "Drag documents here, click + to create a new inspection report, or import inspection reports from Gmail.",
+      text: "Drag documents here, or import inspection reports from Gmail.",
       placement: "bottom",
     },
     {
@@ -282,7 +282,7 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".page-header__hero",
       title: "Inspection actions",
-      text: "New inspection, file upload, Gmail import, Drive export, and the monthly report.",
+      text: "File upload, Gmail import, Drive export, and the monthly report.",
       placement: "bottom",
     },
     {

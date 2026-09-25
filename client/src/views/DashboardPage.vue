@@ -23,7 +23,7 @@
           </button>
         </div>
         <div class="dash__intake-actions">
-          <n-tooltip v-if="hasFeature(FEATURES.pages.contracts)" :disabled="writesAllowed">
+          <n-tooltip v-if="canCreateInspection && hasFeature(FEATURES.pages.contracts)" :disabled="writesAllowed">
             <template #trigger>
               <span class="dash__locked-action" @click="!writesAllowed && goToSubscription()">
                 <button
@@ -262,7 +262,7 @@ import {useOnboarding} from "../composables/useOnboarding.js";
 import {useI18n} from "../composables/useI18n.js";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
-const {l, href, locale} = useI18n();
+const {l, href, locale, canCreateInspection} = useI18n();
 function onTableImported() {
   calendarNextTestsOnly.value = false;
   store.fetch(true);

@@ -24,7 +24,7 @@
             <n-icon :component="AddOutline" class="btn-icon" />
             {{ l.clients.newClient }}
           </button>
-          <n-tooltip :disabled="writesAllowed">
+          <n-tooltip v-if="canCreateInspection" :disabled="writesAllowed">
             <template #trigger>
               <span class="locked-action" @click="!writesAllowed && goToSubscription()">
                 <button :disabled="!writesAllowed" class="btn btn--ghost" type="button" @click="openReportClientPicker">
@@ -226,14 +226,14 @@
         </p>
         <button v-if="!search && entityFilter === 'all'" class="btn btn--primary" type="button" @click="openCreate">
           <n-icon :component="AddOutline" class="btn-icon" />
-          צור לקוח ראשון
+          {{ l.clientsMsg.createFirst }}
         </button>
       </div>
     </n-spin>
 
     <div v-if="filteredRows.length" class="clients-foot">
-      <span>מציג {{ filteredRows.length }} מתוך {{ store.total }} לקוחות</span>
-      <span class="clients-foot__sum">סה״כ מסמכים: <b class="ltr">{{ visibleDocumentTotal }}</b></span>
+      <span>{{ t("clientsMsg.showing", {shown: filteredRows.length, total: store.total}) }}</span>
+      <span class="clients-foot__sum">{{ l.clientsMsg.totalDocs }} <b class="ltr">{{ visibleDocumentTotal }}</b></span>
     </div>
 
     <!-- Create / Edit -->
@@ -380,7 +380,7 @@ import { api } from "../services/apiService.js";
 import type { Client } from "@shared/types.js";
 
 const store = useClientsStore();
-const {l, dir, t, href} = useI18n();
+const {l, dir, t, href, canCreateInspection} = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 const writesAllowed = computed(() => resolveUserPlan(authStore.user) !== "expired");
@@ -454,9 +454,9 @@ function sortIcon(key: ClientSortKey) {
 }
 
 function sortTitle(key: ClientSortKey): string {
-  if (sortKey.value !== key) return "מיון";
+  if (sortKey.value !== key) return l.value.clientsMsg.sort;
   if (key === "doc_count") return sortDir.value === "asc" ? "0-9" : "9-0";
-  return sortDir.value === "asc" ? "א-ת" : "ת-א";
+  return sortDir.value === "asc" ? l.value.clientsMsg.sortAsc : l.value.clientsMsg.sortDesc;
 }
 
 const filteredRows = computed(() => {
@@ -663,17 +663,17 @@ function openEdit(row: Client) {
 
 async function doSave() {
   if (!form.value.display_name.trim()) {
-    message.warning("יש להזין שם");
+    message.warning(l.value.clientsMsg.needName);
     return;
   }
   saving.value = true;
   try {
     if (editingId.value) {
       await store.update(editingId.value, form.value);
-      message.success("הלקוח עודכן");
+      message.success(l.value.clientsMsg.updated);
     } else {
       const created = await store.create(form.value);
-      message.success(`לקוח "${created.display_name}" נוצר`);
+      message.success(t("clientsMsg.created", {name: created.display_name}));
     }
     showCreate.value = false;
     resetForm();
@@ -687,16 +687,16 @@ async function doSave() {
 
 function doDelete(row: Client) {
   confirm({
-    title: "מחיקת לקוח",
-    content: `למחוק את "${row.display_name}"?`,
-    confirmText: "מחק",
+    title: l.value.clientsMsg.deleteTitle,
+    content: t("clientsMsg.deleteConfirm", {name: row.display_name}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await store.remove(String(row.id));
-        message.success("הלקוח נמחק");
+        message.success(l.value.clientsMsg.deleted);
         refresh();
       } catch {
-        message.error("שגיאה במחיקה");
+        message.error(l.value.clientsMsg.deleteError);
       }
     },
   });
@@ -707,13 +707,13 @@ function bulkDeleteSelected() {
   const count = rows.length;
   if (!count) return;
   confirm({
-    title: "מחיקת לקוחות",
-    content: `למחוק ${count} לקוחות נבחרים? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.clientsMsg.deleteManyTitle,
+    content: t("clientsMsg.deleteManyConfirm", {count}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await Promise.all(rows.map((row) => store.remove(String(row.id))));
-        message.success(`${count} לקוחות נמחקו`);
+        message.success(t("clientsMsg.deletedMany", {count}));
         selectedClientKeys.value = [];
         refresh();
       } catch (e) {
@@ -759,10 +759,6 @@ function bulkDeleteSelected() {
 .clients-toolbar__search {
   flex: 1 1 260px;
   max-width: 420px;
-}
-
-.clients-toolbar__search :deep(.n-input__input-el) {
-  direction: rtl;
 }
 
 .clients-filters {
@@ -879,7 +875,7 @@ function bulkDeleteSelected() {
 .clients-table th,
 .clients-table td {
   padding: 8px 10px;
-  text-align: right;
+  text-align: start;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-color);
   font-size: 13px;
@@ -1039,6 +1035,10 @@ function bulkDeleteSelected() {
   direction: ltr;
   unicode-bidi: isolate;
   text-align: right;
+}
+
+.clients-page[dir="ltr"] .ltr {
+  text-align: left;
 }
 
 .phone-stack {

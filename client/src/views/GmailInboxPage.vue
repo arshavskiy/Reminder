@@ -1550,28 +1550,7 @@ function matchImportedProvider(doc: ImportedDocumentCard): GmailSearchProvider |
 }
 
 function providerCategoryLabel(category: string): string {
-  const labels: Record<string, string> = {
-    transport: "תחבורה",
-    parking: "חניה",
-    fuel: "דלק",
-    tv: "טלוויזיה וסטרימינג",
-    marketplace: "קניות",
-    food: "מזון",
-    payment: "לא מסווג",
-    household: "חשבונות הבית",
-    government: "ממשלה",
-    insurance: "ביטוח",
-    finance: "פיננסים",
-    travel: "תיירות",
-    healthcare: "בריאות",
-    education: "לימודים",
-    retail: "קמעונאות",
-    electronics: "אלקטרוניקה",
-    nonprofit: "עמותות",
-    digital: "דיגיטל",
-    development: "פיתוח",
-    general: "כללי",
-  };
+  const labels: Record<string, string> = l.value.providerCategory;
   return labels[category] ?? category;
 }
 

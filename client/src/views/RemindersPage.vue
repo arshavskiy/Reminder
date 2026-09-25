@@ -86,8 +86,8 @@
       class="reminders-alert"
       :show-icon="false"
     >
-      להפעלת "תזכורת בדיקה" יש להגדיר כתובת לבדיקות ב-
-      <router-link to="/settings" style="color: #63e2b7">הגדרות   אימייל</router-link>
+      {{ l.remindersMsg.testSetupHint }}
+      <router-link to="/settings" style="color: #63e2b7">{{ l.remindersMsg.emailSettings }}</router-link>
     </n-alert>
 
     <section class="reminders-summary">
@@ -198,23 +198,23 @@
     </section>
 
     <!-- Quick-test modal -->
-    <n-modal v-model:show="showQuickTest" title="🧪 שליחת תזכורת בדיקה" :show-icon="false" preset="dialog" style="width: 420px; max-width: 95vw">
+    <n-modal v-model:show="showQuickTest" :title="l.remindersMsg.quickTestTitle" :show-icon="false" preset="dialog" style="width: 420px; max-width: 95vw">
       <n-form label-placement="top">
-        <n-form-item label="נמען">
+        <n-form-item :label="l.remindersMsg.recipient">
           <n-input :value="testEmail" disabled />
         </n-form-item>
-        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
+        <n-form-item v-if="canSelectEmailTemplates" :label="l.remindersMsg.emailTemplate">
           <n-select
             v-model:value="quickTestTemplateId"
             :options="emailTemplateOptions"
             :virtual-scroll="false"
-            placeholder="ברירת מחדל"
+            :placeholder="l.remindersMsg.defaultTemplate"
             clearable
           />
         </n-form-item>
       </n-form>
       <template #action>
-        <n-button @click="showQuickTest = false">ביטול</n-button>
+        <n-button @click="showQuickTest = false">{{ l.remindersMsg.cancel }}</n-button>
         <n-button type="primary" :loading="testing" @click="doQuickTest">{{ l.common.send }}</n-button>
       </template>
     </n-modal>
@@ -232,7 +232,7 @@
 
         <!-- ── Personal reminder: title + date + category + optional self-email ── -->
         <template v-if="isPersonalReminder">
-          <n-form-item label="כותרת" required>
+          <n-form-item :label="l.remindersMsg.title" required>
             <n-input v-model:value="newReminder.title" :placeholder="l.notifications.quickAddTitlePlaceholder" />
           </n-form-item>
           <n-form-item :label="l.reminders.targetDate" required>
@@ -262,40 +262,40 @@
 
         <!-- ── Normal (client/category) reminder ── -->
         <template v-else>
-        <n-form-item label="לקוח (אופציונלי)">
+        <n-form-item :label="l.remindersMsg.clientOptional">
           <n-select
             v-model:value="newReminder.client_id"
             :options="clientOptions"
             :virtual-scroll="false"
-            placeholder="בחר לקוח..."
+            :placeholder="l.remindersMsg.pickClient"
             filterable
             clearable
             @update:value="onPickClient"
           />
         </n-form-item>
-        <n-form-item label="תסקיר/חוזה (אופציונלי)">
+        <n-form-item :label="l.remindersMsg.contractOptional">
           <n-select
             v-model:value="newReminderContractId"
             :options="contractOptions"
             :virtual-scroll="false"
             :loading="loadingContracts"
             :disabled="!newReminder.client_id"
-            placeholder="בחר תסקיר/חוזה לשליפת נתונים..."
+            :placeholder="l.remindersMsg.pickContract"
             filterable
             clearable
             @update:value="onPickContract"
           />
         </n-form-item>
-        <n-form-item label="כותרת" required>
-          <n-input v-model:value="newReminder.title" placeholder="לדוגמה: חידוש ביטוח רכב" />
+        <n-form-item :label="l.remindersMsg.title" required>
+          <n-input v-model:value="newReminder.title" :placeholder="l.remindersMsg.titlePlaceholder" />
         </n-form-item>
-        <n-form-item label="מועד התזכורת הבאה" required>
+        <n-form-item :label="l.remindersMsg.nextReminder" required>
           <n-select v-model:value="reminderDateMode" :options="reminderDateModeOptions" />
         </n-form-item>
-        <n-form-item v-if="reminderDateMode === 'months'" label="בעוד כמה חודשים" required>
+        <n-form-item v-if="reminderDateMode === 'months'" :label="l.remindersMsg.inMonths" required>
           <n-select v-model:value="reminderIntervalMonths" :options="reminderIntervalOptions" />
         </n-form-item>
-        <n-form-item v-else label="תאריך תזכורת מותאם אישית" required>
+        <n-form-item v-else :label="l.remindersMsg.customDate" required>
           <n-date-picker v-model:value="reminderCustomDateMs" type="date" style="width: 100%" />
         </n-form-item>
         <n-form-item :label="newReminder.client_id ? l.reminders.recipientEmail : l.reminders.recipientEmailOptional" :required="Boolean(newReminder.client_id)">
@@ -304,44 +304,44 @@
             :placeholder="emailPlaceholder"
           />
         </n-form-item>
-        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
+        <n-form-item v-if="canSelectEmailTemplates" :label="l.remindersMsg.emailTemplate">
           <n-select
             v-model:value="newReminder.email_template_id"
             :options="emailTemplateOptions"
             :virtual-scroll="false"
             :loading="loadingEmailTemplates"
-            placeholder="ברירת מחדל"
+            :placeholder="l.remindersMsg.defaultTemplate"
             clearable
           />
         </n-form-item>
-        <n-form-item label="קטגוריה (אופציונלי)">
+        <n-form-item :label="l.remindersMsg.categoryOptional">
           <n-select
             v-model:value="newReminder.category"
             :options="newReminderCategoryOptions"
-            placeholder="ללא קטגוריה"
+            :placeholder="l.remindersMsg.noCategory"
             clearable
             filterable
             tag
             :virtual-scroll="false"
           />
         </n-form-item>
-        <n-form-item label="קובץ מצורף (אופציונלי)">
+        <n-form-item :label="l.remindersMsg.attachmentOptional">
           <n-select
             v-model:value="attachMode"
             :options="[
-              { label: 'ללא קובץ', value: 'none' },
-              { label: 'הפניה בלבד (שם קובץ/מספר)', value: 'reference' },
-              { label: 'העלאת קובץ', value: 'upload' },
+              { label: l.remindersMsg.attachNone, value: 'none' },
+              { label: l.remindersMsg.attachReference, value: 'reference' },
+              { label: l.remindersMsg.attachUpload, value: 'upload' },
             ]"
           />
         </n-form-item>
-        <n-form-item v-if="attachMode === 'reference'" label="שם קובץ / מספר אסמכתא">
-          <n-input v-model:value="attachReference" placeholder="לדוגמה: תסקיר-2027-01.pdf" />
+        <n-form-item v-if="attachMode === 'reference'" :label="l.remindersMsg.referenceLabel">
+          <n-input v-model:value="attachReference" :placeholder="l.remindersMsg.referencePlaceholder" />
         </n-form-item>
-        <n-form-item v-if="attachMode === 'upload'" label="בחירת קובץ">
+        <n-form-item v-if="attachMode === 'upload'" :label="l.remindersMsg.chooseFile">
           <input ref="attachFileInput" type="file" @change="onAttachFileChange" />
         </n-form-item>
-        <n-form-item label="תוכן">
+        <n-form-item :label="l.remindersMsg.body">
           <n-input v-model:value="newReminder.body" type="textarea" :rows="3" />
         </n-form-item>
         </template>
@@ -360,40 +360,40 @@
         </n-form-item>
       </n-form>
       <template #action>
-        <n-button @click="showCreate = false">ביטול</n-button>
-        <n-button type="primary" :loading="creating" @click="doCreate">צור תזכורת</n-button>
+        <n-button @click="showCreate = false">{{ l.remindersMsg.cancel }}</n-button>
+        <n-button type="primary" :loading="creating" @click="doCreate">{{ l.remindersMsg.create }}</n-button>
       </template>
     </n-modal>
 
     <!-- Edit reminder modal -->
-    <n-modal v-model:show="showEditDate" title="עריכת תזכורת" :show-icon="false" preset="dialog" style="width: 420px; max-width: 95vw">
+    <n-modal v-model:show="showEditDate" :title="l.remindersMsg.editTitle" :show-icon="false" preset="dialog" style="width: 420px; max-width: 95vw">
       <n-form label-placement="top" v-if="editingReminder">
-        <n-form-item label="כותרת">
+        <n-form-item :label="l.remindersMsg.title">
           <n-input :value="editingReminder.title" disabled />
         </n-form-item>
-        <n-form-item label="תאריך שליחה" required>
+        <n-form-item :label="l.remindersMsg.sendDate" required>
           <n-date-picker v-model:value="editDateMs" type="date" style="width: 100%" />
         </n-form-item>
-        <n-form-item label="אימייל לשליחה" required>
-          <n-input v-model:value="editEmailTo" placeholder="כתובת אימייל אחת או יותר, מופרדות בפסיק" />
+        <n-form-item :label="l.remindersMsg.sendTo" required>
+          <n-input v-model:value="editEmailTo" :placeholder="l.remindersMsg.sendToPlaceholder" />
         </n-form-item>
-        <n-form-item label="אימייל שולח">
-          <n-input :value="senderLabel" disabled placeholder="לא הוגדר אימייל שולח" />
+        <n-form-item :label="l.remindersMsg.sender">
+          <n-input :value="senderLabel" disabled :placeholder="l.remindersMsg.noSender" />
         </n-form-item>
-        <n-form-item v-if="canSelectEmailTemplates" label="תבנית אימייל">
+        <n-form-item v-if="canSelectEmailTemplates" :label="l.remindersMsg.emailTemplate">
           <n-select
             v-model:value="editEmailTemplateId"
             :options="emailTemplateOptions"
             :virtual-scroll="false"
-            placeholder="ברירת מחדל"
+            :placeholder="l.remindersMsg.defaultTemplate"
             clearable
           />
         </n-form-item>
 
       </n-form>
       <template #action>
-        <n-button @click="showEditDate = false">ביטול</n-button>
-        <n-button type="primary" :loading="savingDate" @click="doSaveDate">שמור</n-button>
+        <n-button @click="showEditDate = false">{{ l.remindersMsg.cancel }}</n-button>
+        <n-button type="primary" :loading="savingDate" @click="doSaveDate">{{ l.remindersMsg.save }}</n-button>
       </template>
     </n-modal>
     <ReminderPreviewModal
@@ -492,16 +492,13 @@ const triggerDateMs = ref<number | null>(Date.now());
 const reminderDateMode = ref<"months" | "date">("months");
 const reminderCustomDateMs = ref<number | null>(null);
 const reminderIntervalMonths = ref<4 | 6 | 12 | 14>(4);
-const reminderDateModeOptions = [
-  { label: "בעוד מספר חודשים מהיום", value: "months" },
-  { label: "בתאריך מותאם אישית", value: "date" },
-];
-const reminderIntervalOptions = [
-  { label: "4 חודשים", value: 4 },
-  { label: "6 חודשים", value: 6 },
-  { label: "12 חודשים", value: 12 },
-  { label: "14 חודשים", value: 14 },
-];
+const reminderDateModeOptions = computed(() => [
+  { label: l.value.remindersMsg.modeMonths, value: "months" },
+  { label: l.value.remindersMsg.modeDate, value: "date" },
+]);
+const reminderIntervalOptions = computed(() =>
+  ([4, 6, 12, 14] as const).map((months) => ({ label: t("remindersMsg.monthsCount", {months}), value: months }))
+);
 const emailTemplates = ref<EmailTemplate[]>([]);
 const loadingEmailTemplates = ref(false);
 let emailTemplatesPromise: Promise<void> | null = null;
@@ -565,25 +562,25 @@ const newReminderCategoryOptions = computed(() => {
 const emailTemplateOptions = computed(() =>
   emailTemplates.value.length
     ? emailTemplates.value.map((t) => ({
-    label: t.is_default ? `${t.name}  (ברירת מחדל)` : t.name,
+    label: t.is_default ? `${t.name}  (${l.value.remindersMsg.defaultTemplate})` : t.name,
     value: t.id,
   }))
-    : [{ label: "אין תבניות אימייל זמינות", value: "__empty__", disabled: true }]
+    : [{ label: l.value.remindersMsg.noTemplates, value: "__empty__", disabled: true }]
 );
 
 const contractOptions = computed(() =>
   {
     if (loadingContracts.value) {
-      return [{ label: "טוען תסקירים/חוזים...", value: "__loading__", disabled: true }];
+      return [{ label: l.value.remindersMsg.loadingContracts, value: "__loading__", disabled: true }];
     }
     if (newReminder.value?.client_id && newReminderContracts.value.length === 0) {
-      return [{ label: "אין תסקירים/חוזים ללקוח שנבחר", value: "__empty__", disabled: true }];
+      return [{ label: l.value.remindersMsg.noContracts, value: "__empty__", disabled: true }];
     }
     return newReminderContracts.value.map((c) => {
     const parts = [
-      c.contract_number || "ללא מספר",
-      c.contract_type || "חוזה",
-      c.expiry_date ? `תוקף עד ${c.expiry_date}` : null,
+      c.contract_number || l.value.remindersMsg.noNumber,
+      c.contract_type || l.value.remindersMsg.contract,
+      c.expiry_date ? t("remindersMsg.validUntil", {date: c.expiry_date}) : null,
       contractEquipmentLabel(c),
     ].filter(Boolean);
     return {
@@ -595,9 +592,9 @@ const contractOptions = computed(() =>
 );
 
 const emailPlaceholder = computed(() => {
-  if (!newReminder.value?.client_id) return "ייקבע אוטומטית לפי הלקוח";
+  if (!newReminder.value?.client_id) return l.value.remindersMsg.emailAuto;
   const c = clientsStore.rows.find((x) => x.id === newReminder.value!.client_id);
-  return c?.email ?? testEmail.value ?? "אין אימייל ללקוח";
+  return c?.email ?? testEmail.value ?? l.value.remindersMsg.clientNoEmail;
 });
 
 const statusOptions = computed(() => [
@@ -831,7 +828,7 @@ async function onPickClient(clientId: string | null) {
   const c = clientsStore.rows.find((x) => x.id === clientId);
   if (!c) return;
   if (c.email) newReminder.value.email_to = c.email;
-  if (!newReminder.value.title.trim()) newReminder.value.title = `תזכורת עבור ${c.display_name}`;
+  if (!newReminder.value.title.trim()) newReminder.value.title = `${l.value.remindersMsg.reminderFor} ${c.display_name}`;
   if (!newReminder.value.body.trim() && c.notes) newReminder.value.body = c.notes;
 
   // Fetch contracts for this client
@@ -855,9 +852,9 @@ function onPickContract(contractId: string | null) {
   if (!contract) return;
 
   // Use contract type + number as default title if user hasn't typed one
-  if (!newReminder.value.title.trim() || newReminder.value.title.startsWith("תזכורת עבור")) {
+  if (!newReminder.value.title.trim() || newReminder.value.title.startsWith(l.value.remindersMsg.reminderFor)) {
     const number = contract.contract_number ? ` ${contract.contract_number}` : "";
-    newReminder.value.title = `${contract.contract_type || "תסקיר/חוזה"}${number}`.trim();
+    newReminder.value.title = `${contract.contract_type || l.value.remindersMsg.inspectionOrContract}${number}`.trim();
   }
   if (contract.expiry_date) {
     reminderDateMode.value = "date";
@@ -902,11 +899,11 @@ function contractEquipmentLabel(contract: ContractWithClient): string | null {
 
 function contractBody(contract: ContractWithClient): string {
   const lines = [
-    contract.contract_type ? `סוג: ${contract.contract_type}` : null,
-    contract.contract_number ? `מספר: ${contract.contract_number}` : null,
-    contract.start_date ? `תאריך תסקיר: ${contract.start_date}` : null,
-    contract.expiry_date ? `תאריך תפוגה: ${contract.expiry_date}` : null,
-    contractEquipmentLabel(contract) ? `ציוד: ${contractEquipmentLabel(contract)}` : null,
+    contract.contract_type ? `${l.value.remindersMsg.bodyType} ${contract.contract_type}` : null,
+    contract.contract_number ? `${l.value.remindersMsg.bodyNumber} ${contract.contract_number}` : null,
+    contract.start_date ? `${l.value.remindersMsg.bodyInspectionDate} ${contract.start_date}` : null,
+    contract.expiry_date ? `${l.value.remindersMsg.bodyExpiry} ${contract.expiry_date}` : null,
+    contractEquipmentLabel(contract) ? `${l.value.remindersMsg.bodyEquipment} ${contractEquipmentLabel(contract)}` : null,
     contract.summary,
   ].filter(Boolean);
   return lines.join("\n");
@@ -962,19 +959,19 @@ async function doCreate() {
 
   if (!newReminder.value) return;
   if (!newReminder.value.title.trim()) {
-    message.warning("יש להזין כותרת ותאריך");
+    message.warning(l.value.remindersMsg.needTitleDate);
     return;
   }
   if (reminderDateMode.value === "date" && !reminderCustomDateMs.value) {
-    message.warning("יש לבחור תאריך תזכורת");
+    message.warning(l.value.remindersMsg.needDate);
     return;
   }
   if (newReminder.value.client_id && !newReminder.value.email_to.trim()) {
-    message.warning("יש להזין כתובת אימייל");
+    message.warning(l.value.remindersMsg.needEmail);
     return;
   }
   if (attachMode.value === "upload" && !attachFile.value) {
-    message.warning("יש לבחור קובץ לצירוף");
+    message.warning(l.value.remindersMsg.needFile);
     return;
   }
   creating.value = true;
@@ -1014,7 +1011,7 @@ async function doCreate() {
       calendar_kind: createCalendarKind.value,
       calendar_time: createCalendarKind.value === "event" ? clockFromMs(createEventTimeMs.value) : null,
     } as any);
-    message.success("תזכורת נוצרה");
+    message.success(l.value.remindersMsg.created);
     showCreate.value = false;
     load();
   } catch (e) {
@@ -1069,7 +1066,7 @@ async function openEditDate(row: ReminderWithContext) {
 async function doSaveDate() {
   if (!editingReminder.value || !editDateMs.value) return;
   if (!editEmailTo.value.trim()) {
-    message.warning("יש להזין כתובת אימייל");
+    message.warning(l.value.remindersMsg.needEmail);
     return;
   }
   savingDate.value = true;
@@ -1080,7 +1077,7 @@ async function doSaveDate() {
       email_to: normalizeEmailTo(editEmailTo.value),
       email_template_id: canSelectEmailTemplates.value ? editEmailTemplateId.value : null,
     });
-    message.success("התזכורת עודכנה");
+    message.success(l.value.remindersMsg.updated);
     showEditDate.value = false;
     load();
   } catch (e) {
@@ -1092,13 +1089,13 @@ async function doSaveDate() {
 
 function confirmDelete(row: ReminderWithContext) {
   confirm({
-    title: "מחיקת תזכורת",
-    content: `למחוק את התזכורת "${row.title}"? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.remindersMsg.deleteTitle,
+    content: t("remindersMsg.deleteConfirm", {title: row.title}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await store.remove(row.id);
-        message.success("התזכורת נמחקה");
+        message.success(l.value.remindersMsg.deleted);
         load();
       } catch (e) {
         message.error(String(e));
@@ -1109,17 +1106,17 @@ function confirmDelete(row: ReminderWithContext) {
 
 async function sendReminderRow(row: ReminderWithContext) {
   if (!effectiveEmailTo(row)?.trim()) {
-    message.warning("חסר אימייל לשליחה");
+    message.warning(l.value.remindersMsg.missingEmail);
     return;
   }
   sendingReminderId.value = row.id;
   try {
     const res = await store.sendNow(row.id);
     if (res.success) {
-      message.success(row.status === "sent" ? "התזכורת נשלחה שוב" : "תזכורת נשלחה");
+      message.success(row.status === "sent" ? l.value.remindersMsg.resent : l.value.remindersMsg.sent);
       await load();
     } else {
-      message.error(res.error ?? "שגיאה בשליחה");
+      message.error(res.error ?? l.value.remindersMsg.sendError);
     }
   } catch (e) {
     message.error(String(e));
@@ -1130,13 +1127,13 @@ async function sendReminderRow(row: ReminderWithContext) {
 
 function dismissReminderRow(row: ReminderWithContext) {
   confirm({
-    title: "ביטול תזכורת",
-    content: `לבטל את התזכורת "${row.title}"?`,
-    confirmText: "בטל תזכורת",
+    title: l.value.remindersMsg.cancelTitle,
+    content: t("remindersMsg.cancelConfirm", {title: row.title}),
+    confirmText: l.value.remindersMsg.cancelReminder,
     onConfirm: async () => {
       try {
         await store.dismiss(row.id);
-        message.success("התזכורת בוטלה");
+        message.success(l.value.remindersMsg.cancelled);
         load();
       } catch (e) {
         message.error(String(e));
@@ -1150,13 +1147,13 @@ function doDeleteFiltered() {
   const count = rowsToDelete.length;
   if (!count) return;
   confirm({
-    title: "מחיקת תזכורות",
-    content: `למחוק ${count} תזכורות מתוך הסינון הנוכחי? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.remindersMsg.deleteManyTitle,
+    content: t("remindersMsg.deleteFilteredConfirm", {count}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await Promise.all(rowsToDelete.map((row) => store.remove(row.id)));
-        message.success(`${count} תזכורות נמחקו`);
+        message.success(t("remindersMsg.deletedMany", {count}));
       } catch (e) {
         message.error(String(e));
       }
@@ -1167,7 +1164,7 @@ function doDeleteFiltered() {
 async function bulkSendSelected() {
   const rows = selectedReminders().filter((row) => row.status !== "dismissed");
   if (!rows.length) {
-    message.warning("אין תזכורות נבחרות לשליחה");
+    message.warning(l.value.remindersMsg.noneSelectedToSend);
     return;
   }
   bulkSending.value = true;
@@ -1175,8 +1172,8 @@ async function bulkSendSelected() {
     const results = await Promise.allSettled(rows.map((row) => store.sendNow(row.id)));
     const sent = results.filter((result) => result.status === "fulfilled" && (result.value as any).success).length;
     const failed = results.length - sent;
-    if (sent) message.success(`${sent} תזכורות נשלחו`);
-    if (failed) message.error(`${failed} תזכורות נכשלו`);
+    if (sent) message.success(t("remindersMsg.sentMany", {count: sent}));
+    if (failed) message.error(t("remindersMsg.failedMany", {count: failed}));
     selectedReminderKeys.value = [];
     load();
   } finally {
@@ -1188,18 +1185,18 @@ function bulkDismissSelected() {
   const rows = selectedReminders().filter((row) => row.status === "pending");
   const count = rows.length;
   if (!count) {
-    message.warning("אין תזכורות ממתינות לביטול");
+    message.warning(l.value.remindersMsg.noneToCancel);
     return;
   }
   confirm({
-    title: "ביטול תזכורות",
-    content: `לבטל ${count} תזכורות נבחרות?`,
-    confirmText: "בטל תזכורות",
+    title: l.value.remindersMsg.cancelManyTitle,
+    content: t("remindersMsg.cancelManyConfirm", {count}),
+    confirmText: l.value.remindersMsg.cancelMany,
     onConfirm: async () => {
       bulkDismissing.value = true;
       try {
         await Promise.all(rows.map((row) => store.dismiss(row.id)));
-        message.success(`${count} תזכורות בוטלו`);
+        message.success(t("remindersMsg.cancelledMany", {count}));
         selectedReminderKeys.value = [];
         load();
       } catch (e) {
@@ -1216,14 +1213,14 @@ function bulkDeleteSelected() {
   const count = rows.length;
   if (!count) return;
   confirm({
-    title: "מחיקת תזכורות",
-    content: `למחוק ${count} תזכורות נבחרות? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.remindersMsg.deleteManyTitle,
+    content: t("remindersMsg.deleteSelectedConfirm", {count}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       bulkDeleting.value = true;
       try {
         await Promise.all(rows.map((row) => store.remove(row.id)));
-        message.success(`${count} תזכורות נמחקו`);
+        message.success(t("remindersMsg.deletedMany", {count}));
         selectedReminderKeys.value = [];
         load();
       } catch (e) {
@@ -1252,17 +1249,17 @@ async function doQuickTest() {
       source_type: "manual",
       trigger_date: today,
       advance_days: 0,
-      title: `בדיקה — ${new Date().toLocaleString("he-IL")}`,
-      body: "תזכורת בדיקה שנוצרה מתוך לוח הבקרה",
+      title: `${l.value.remindersMsg.testPrefix} — ${new Date().toLocaleString(locale.value === "en" ? "en-US" : "he-IL")}`,
+      body: l.value.remindersMsg.testBody,
       email_to: JSON.stringify([testEmail.value]),
       email_template_id: canSelectEmailTemplates.value ? quickTestTemplateId.value : null,
     });
     const sendResult = await api.reminders.sendNow(created.id);
     showQuickTest.value = false;
     if (sendResult.success) {
-      message.success(`תזכורת בדיקה נשלחה ל-${testEmail.value}`);
+      message.success(t("remindersMsg.testSent", {email: testEmail.value ?? ""}));
     } else {
-      message.error(sendResult.error ?? "שגיאה בשליחה");
+      message.error(sendResult.error ?? l.value.remindersMsg.sendError);
     }
     load();
   } catch (e) {
