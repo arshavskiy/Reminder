@@ -276,8 +276,38 @@ describe("parseInlineReceipt", () => {
     }
   });
 
+  it("parses a Bolt ride receipt in Thai baht", () => {
+    const html = '<p>Thanks for choosing Bolt</p><td>Total</td><td>&#3647;80.00</td><td>Total charged</td><td>&#3647;80.00</td>'
+      + '<p>Ride details</p><p>Saturday, 5 July 2025</p><a href="https://x.awstrack.me/L0/https:%2F%2Finvoice.bolt.eu%2F%3Fs=4411d567-320c-4c01-b94a-41c4918ece0a/1/abc">Download PDF invoice</a>';
+    const result = parseInlineReceipt("bangkok@bolt.eu", html, "Your Bolt trip on Saturday");
+    expect(result).toMatchObject({ vendor: "Bolt", transactionId: "4411d567-320c-4c01-b94a-41c4918ece0a", amount: 80, currency: "THB", date: "2025-07-05" });
+  });
+
+  it("parses a Bolt ride receipt in Georgian lari", () => {
+    const html = "<p>Tuesday, 14 January 2025</p><td>Total charged</td><td>31.10&#8382;</td>";
+    const result = parseInlineReceipt("receipts-georgia@bolt.eu", html, "Your Bolt trip on Tuesday");
+    expect(result).toMatchObject({ vendor: "Bolt", amount: 31.1, currency: "GEL", date: "2025-01-14" });
+  });
+
+  it("parses a Grab ride e-receipt", () => {
+    const html = "<div>GrabSUV</div><div>Picked up on 23 June 2025</div><div>Booking ID: A-8XFOSPJWW5GCAV</div><td>Total Paid</td><td><div>THB 523</div></td>";
+    const result = parseInlineReceipt("no-reply@grab.com", html, "Your Grab E-Receipt");
+    expect(result).toMatchObject({ vendor: "Grab", transactionId: "A-8XFOSPJWW5GCAV", amount: 523, currency: "THB", merchant: "GrabSUV", date: "2025-06-23" });
+  });
+
+  it("parses a Thai GrabFood e-receipt", () => {
+    const html = "<p>ทานอาหารให้อร่อย!</p><td>รวม</td><td>฿ 972</td><td>วันที่ | เวลา</td><td>16 Jun 25 19:46 +0700</td><td>GrabFood</td><td>รหัสการจอง</td><td>A-8WL22IFGXD5UAV</td>";
+    const result = parseInlineReceipt("no-reply@grab.com", html, "Your Grab E-Receipt");
+    expect(result).toMatchObject({ vendor: "Grab", transactionId: "A-8WL22IFGXD5UAV", amount: 972, currency: "THB", merchant: "GrabFood", date: "2025-06-16" });
+  });
+
+  it("ignores Bolt and Grab marketing mail", () => {
+    expect(parseInlineReceipt("thailand@business-email.bolt.eu", "<p>Total charged ฿80.00</p>", "3 reasons to travel for work with Bolt")).toBeNull();
+    expect(parseInlineReceipt("no-reply@grab.com", "<p>Total Paid THB 523</p>", "You're in! It only gets better from here with Grab.")).toBeNull();
+  });
+
   it("returns null for a non-whitelisted sender", () => {
-    const result = parseInlineReceipt("no-reply@grab.com", PAYPAL_HTML, "Your Grab E-Receipt");
+    const result = parseInlineReceipt("no-reply@example-rides.com", PAYPAL_HTML, "Your E-Receipt");
     expect(result).toBeNull();
   });
 

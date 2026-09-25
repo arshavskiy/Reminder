@@ -93,6 +93,8 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "moovit", category: "transport", label: "תחבורה - Moovit", terms: ["moovitapp.com", "Moovit", "מוביט"], sort_order: 660, enabled: true },
   { id: "gett", category: "transport", label: "תחבורה - Gett", terms: ["gett.com", "Gett", "גט טקסי"], sort_order: 670, enabled: true },
   { id: "yango", category: "transport", label: "תחבורה - Yango", terms: ["yango.com", "Yango", "יאנגו"], sort_order: 680, enabled: true },
+  { id: "bolt", category: "transport", label: "תחבורה - Bolt", terms: ["bolt.eu", "Your Bolt trip", "Bolt"], sort_order: 682, enabled: true },
+  { id: "grab", category: "transport", label: "תחבורה - Grab", terms: ["grab.com", "Grab E-Receipt", "GrabFood"], sort_order: 684, enabled: true },
   { id: "egged", category: "transport", label: "תחבורה - אגד", terms: ["egged.co.il", "אגד"], sort_order: 690, enabled: true },
   { id: "dan", category: "transport", label: "תחבורה - דן", terms: ["dan.co.il", "דן"], sort_order: 700, enabled: true },
   { id: "metropoline", category: "transport", label: "תחבורה - מטרופולין", terms: ["metropoline.com", "מטרופולין"], sort_order: 710, enabled: true },

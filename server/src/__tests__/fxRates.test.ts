@@ -86,4 +86,17 @@ describe("RUB via the Russian central bank", () => {
     // 1 USD = 3.6 ILS and 90 RUB, so 900 RUB = 10 USD = 36 ILS.
     expect(await fresh.toIls(900, "RUB")).toBeCloseTo(36);
   });
+
+  it("crosses other currencies the BoI lacks through RUB", async () => {
+    const xml = CBR_XML.replace("</ValCurs>", '<Valute ID="R01675"><NumCode>764</NumCode><CharCode>THB</CharCode><Nominal>10</Nominal><Name>TH</Name><Value>27,0000</Value></Valute></ValCurs>');
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).includes("cbr.ru")
+      ? { ok: true, arrayBuffer: async () => new TextEncoder().encode(xml).buffer }
+      : { ok: true, json: async () => BOI_RESPONSE })));
+    vi.resetModules();
+    const fresh = await import("../invoices/fxRates");
+    // 10 THB = 27 RUB = 0.3 USD = 1.08 ILS, so 100 THB = 10.8 ILS.
+    expect(await fresh.toIls(100, "THB")).toBeCloseTo(10.8);
+    // BoI rates still win for currencies it publishes.
+    expect(await fresh.toIls(100, "EUR")).toBeCloseTo(400);
+  });
 });

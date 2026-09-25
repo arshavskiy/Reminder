@@ -817,7 +817,7 @@ const categoryOptions = computed<SelectOption[]>(() => {
     value,
   }));
 });
-const CURRENCY_SYMBOLS: Record<string, string> = { ILS: "₪", USD: "$", EUR: "€", GBP: "£", RUB: "₽" };
+const CURRENCY_SYMBOLS: Record<string, string> = { ILS: "₪", USD: "$", EUR: "€", GBP: "£", RUB: "₽", THB: "฿", GEL: "₾" };
 const currencyOptions = computed<SelectOption[]>(() => currencies.value.map((code) => ({
   label: CURRENCY_SYMBOLS[code] ? `${CURRENCY_SYMBOLS[code]} ${code}` : code,
   value: code,

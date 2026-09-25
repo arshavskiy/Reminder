@@ -59,6 +59,8 @@ function detectCurrency(raw: string): string {
   if (/€|EUR/i.test(raw)) return "EUR";
   if (/£|GBP/i.test(raw)) return "GBP";
   if (/₽|RUB|руб/i.test(raw)) return "RUB";
+  if (/฿|THB/i.test(raw)) return "THB";
+  if (/₾|GEL/i.test(raw)) return "GEL";
   return "ILS";
 }
 
@@ -220,6 +222,55 @@ function parseAliExpress(html: string, subject: string): ParsedInlineReceipt | n
   };
 }
 
+// "Your Bolt trip on Saturday" — "Total charged ฿80.00" / "Total charged 31.10₾".
+// The body has no receipt number, so the invoice link token identifies the ride.
+function parseBolt(html: string, subject: string): ParsedInlineReceipt | null {
+  if (!/Your Bolt trip/i.test(subject)) return null;
+  const text = stripTags(html);
+  const charged = text.match(/Total charged\s*([^\d\s]{0,3})\s*([\d,]+(?:\.\d+)?)\s*([^\d\s]{0,3})/i);
+  if (!charged) return null;
+  const amount = parseAmount(charged[2]);
+  if (amount === null) return null;
+  const token = html.match(/invoice\.bolt\.eu(?:%2F|\/)(?:%3F|\?)s(?:=|%3D)([0-9a-f-]{16,})/i);
+  const dateMatch = text.match(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/);
+  const date = dateMatch ? parseHumanDate(dateMatch[1]) : null;
+  return {
+    vendor: "Bolt",
+    transactionId: token ? token[1] : `bolt-${date ?? "trip"}-${amount}`,
+    amount,
+    currency: detectCurrency(`${charged[1]} ${charged[3]}`),
+    merchant: null,
+    date,
+  };
+}
+
+// "Your Grab E-Receipt". Rides are in English ("Booking ID: A-8XFOSPJWW5GCAV
+// ... Total Paid THB 523"); GrabFood can be in Thai ("รวม ฿ 972 ... รหัสการจอง A-...").
+function parseGrab(html: string, subject: string): ParsedInlineReceipt | null {
+  if (!/E-?Receipt/i.test(subject)) return null;
+  const text = stripTags(html);
+  const booking = text.match(/\b(A-[A-Z0-9]{10,})\b/);
+  const paid = text.match(/Total Paid\s*([A-Z]{3})\s*([\d,]+(?:\.\d+)?)/i)
+    ?? text.match(/(?:รวม|Total)\s*([฿$₪€£])\s*([\d,]+(?:\.\d+)?)/);
+  if (!booking || !paid) return null;
+  const amount = parseAmount(paid[2]);
+  if (amount === null) return null;
+  const service = text.match(/\b(GrabFood|GrabSUV|JustGrab|GrabCar|GrabTaxi|GrabBike|GrabExpress|GrabMart)\b/);
+  const pickedUp = text.match(/Picked up on\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i);
+  const shortDate = text.match(/\b(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2})\s+\d{1,2}:\d{2}/);
+  const date = pickedUp
+    ? parseHumanDate(pickedUp[1])
+    : shortDate ? parseHumanDate(`${shortDate[1]} ${shortDate[2]} 20${shortDate[3]}`) : null;
+  return {
+    vendor: "Grab",
+    transactionId: booking[1],
+    amount,
+    currency: normalizeCurrencyToken(paid[1]) ?? "THB",
+    merchant: service ? service[1] : null,
+    date,
+  };
+}
+
 // Whitelist gate: only these sender patterns are eligible to be parsed into
 // an invoice record at all. Detection (the link-only/inline banner) stays
 // broader than this on purpose — this list is strictly the "safe to create a
@@ -233,6 +284,8 @@ const INLINE_RECEIPT_PARSERS: Array<{
   { senderPattern: /@(support\.facebook\.com|business-updates\.facebook\.com)$/i, parse: parseMeta },
   { senderPattern: /@google\.com$/i, parse: parseGooglePlay },
   { senderPattern: /@(notice\.)?aliexpress\.com$/i, parse: parseAliExpress },
+  { senderPattern: /@([a-z0-9-]+\.)*bolt\.eu$/i, parse: parseBolt },
+  { senderPattern: /@([a-z0-9-]+\.)*grab\.com$/i, parse: parseGrab },
 ];
 
 export function parseInlineReceipt(from: string, html: string, subject: string): ParsedInlineReceipt | null {

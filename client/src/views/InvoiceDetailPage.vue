@@ -276,6 +276,8 @@ const currencyOptions: SelectOption[] = [
   { label: "$ USD - US dollar", value: "USD" },
   { label: "€ EUR - Euro", value: "EUR" },
   { label: "₽ RUB - Russian ruble", value: "RUB" },
+  { label: "฿ THB - Thai baht", value: "THB" },
+  { label: "₾ GEL - Georgian lari", value: "GEL" },
 ];
 // Values are the stored (Hebrew) expense category names.
 const categoryOptions = computed<SelectOption[]>(() => [

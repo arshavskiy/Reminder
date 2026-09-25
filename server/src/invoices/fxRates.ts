@@ -1,8 +1,9 @@
 // Daily representative exchange rates published by the Bank of Israel, used to
 // normalize invoice amounts in foreign currencies to Shekels for totals/sorting.
 const BOI_XML_URL = "https://www.boi.org.il/PublicApi/GetExchangeRates";
-// The Bank of Israel does not publish RUB. The Central Bank of Russia publishes
-// RUB per USD daily, so RUB is crossed through the BoI USD rate.
+// The Bank of Israel publishes about 14 currencies (no RUB, THB, GEL, ...).
+// The Central Bank of Russia publishes RUB rates for ~50, so every currency the
+// BoI lacks is crossed through RUB and the BoI USD rate.
 const CBR_XML_URL = "https://www.cbr.ru/scripts/XML_daily.asp";
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // BoI publishes once per business day
@@ -25,30 +26,43 @@ async function fetchBoiRates(): Promise<Map<string, number>> {
     if (!code || !Number.isFinite(rate) || rate <= 0) continue;
     rates.set(code, rate / unit);
   }
-  if (!rates.has("RUB")) {
-    const usdIls = rates.get("USD");
-    const rubPerUsd = usdIls ? await fetchCbrRubPerUsd().catch(() => null) : null;
-    if (usdIls && rubPerUsd) rates.set("RUB", usdIls / rubPerUsd);
+  const usdIls = rates.get("USD");
+  const cbr = usdIls ? await fetchCbrRates().catch(() => null) : null;
+  const rubPerUsd = cbr?.get("USD");
+  if (usdIls && cbr && rubPerUsd) {
+    const ilsPerRub = usdIls / rubPerUsd;
+    if (!rates.has("RUB")) rates.set("RUB", ilsPerRub);
+    for (const [code, rubPerUnit] of cbr) {
+      if (!rates.has(code)) rates.set(code, rubPerUnit * ilsPerRub);
+    }
   }
   return rates;
 }
 
-// Parses "<CharCode>USD</CharCode><Nominal>1</Nominal>...<Value>84,3414</Value>"
-// from the CBR daily XML. Values use a decimal comma and are per Nominal units.
-export function parseCbrRubPerUsd(xml: string): number | null {
-  const match = xml.match(/<CharCode>USD<\/CharCode>\s*<Nominal>(\d+)<\/Nominal>[\s\S]*?<Value>([\d.,]+)<\/Value>/);
-  if (!match) return null;
-  const nominal = Number(match[1]) || 1;
-  const value = Number(match[2].replace(",", "."));
-  return Number.isFinite(value) && value > 0 ? value / nominal : null;
+// Parses every "<CharCode>USD</CharCode><Nominal>1</Nominal>...<Value>84,3414</Value>"
+// from the CBR daily XML into RUB per one unit. Values use a decimal comma and
+// are quoted per Nominal units (THB is per 10).
+export function parseCbrRates(xml: string): Map<string, number> {
+  const rates = new Map<string, number>();
+  const valute = /<CharCode>([A-Z]{3})<\/CharCode>\s*<Nominal>(\d+)<\/Nominal>[\s\S]*?<Value>([\d.,]+)<\/Value>/g;
+  for (const match of xml.matchAll(valute)) {
+    const nominal = Number(match[2]) || 1;
+    const value = Number(match[3].replace(",", "."));
+    if (Number.isFinite(value) && value > 0) rates.set(match[1], value / nominal);
+  }
+  return rates;
 }
 
-async function fetchCbrRubPerUsd(): Promise<number | null> {
+export function parseCbrRubPerUsd(xml: string): number | null {
+  return parseCbrRates(xml).get("USD") ?? null;
+}
+
+async function fetchCbrRates(): Promise<Map<string, number>> {
   const res = await fetch(CBR_XML_URL);
   if (!res.ok) throw new Error(`CBR exchange rate request failed: ${res.status}`);
   // The feed is windows-1251. The tags and numbers are ASCII, so latin1 is enough.
   const xml = new TextDecoder("latin1").decode(await res.arrayBuffer());
-  return parseCbrRubPerUsd(xml);
+  return parseCbrRates(xml);
 }
 
 async function getRates(): Promise<Map<string, number>> {
