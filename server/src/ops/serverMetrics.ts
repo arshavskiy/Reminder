@@ -297,6 +297,40 @@ export function railwayInfo() {
   };
 }
 
+let deploymentCache: {at: number; data: any} | null = null;
+
+/** When this Railway deployment was created. Cached for 10 minutes; the id does not change until the next deploy. */
+export async function railwayDeployment(): Promise<{id: string; status: string | null; createdAt: string | null; error: string | null} | null> {
+  const e = process.env;
+  const id = e.RAILWAY_DEPLOYMENT_ID;
+  if (!e.RAILWAY_API_TOKEN || !id) return null;
+  if (deploymentCache && Date.now() - deploymentCache.at < 10 * 60_000) return deploymentCache.data;
+  const query = `query deployment($id: String!) {
+    deployment(id: $id) { id status createdAt }
+  }`;
+  try {
+    const res = await fetch(RAILWAY_API, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", Authorization: `Bearer ${e.RAILWAY_API_TOKEN}`},
+      body: JSON.stringify({query, variables: {id}}),
+      signal: AbortSignal.timeout(8_000),
+    });
+    const body = await res.json() as any;
+    if (!res.ok || body.errors?.length) throw new Error(body.errors?.[0]?.message ?? `HTTP ${res.status}`);
+    const node = body.data?.deployment;
+    const data = {
+      id,
+      status: node?.status ?? null,
+      createdAt: node?.createdAt ?? null,
+      error: node ? null : "deployment not found",
+    };
+    if (data.createdAt) deploymentCache = {at: Date.now(), data};
+    return data;
+  } catch (err: any) {
+    return {id, status: null, createdAt: null, error: err?.message ?? String(err)};
+  }
+}
+
 /** CPU/memory/network for the service over the selected range, from Railway's API (cached 60s per range). */
 export async function railwayMetrics(range: GraphRange = "1h"): Promise<any | null> {
   const e = process.env;
@@ -508,14 +542,18 @@ export async function liveSnapshot(range: GraphRange = "1h") {
     }
   }
   const alerts = await col("server_alerts").find({}).sort({created_at: -1}).limit(20).toArray().catch(() => []);
-  const ranged = await railwayMetrics(range);
-  const latest = range === "1h" ? ranged : await railwayMetrics("1h");
-  const metrics = ranged && latest ? {...latest, series: ranged.series ?? {}, error: ranged.error ?? latest.error} : (ranged ?? latest);
+  const [ranged, latest, deployment] = await Promise.all([
+    railwayMetrics(range),
+    range === "1h" ? Promise.resolve(null) : railwayMetrics("1h"),
+    railwayDeployment(),
+  ]);
+  const gauge = range === "1h" ? ranged : latest;
+  const metrics = ranged && gauge ? {...gauge, series: ranged.series ?? {}, error: ranged.error ?? gauge.error} : (ranged ?? gauge);
   return {
     now: new Date().toISOString(),
     range,
     rangeLabel: GRAPH_RANGE[range].label,
-    railway: {...railwayInfo(), metrics},
+    railway: {...railwayInfo(), deployment, metrics},
     container: {
       pid: process.pid,
       uptimeSeconds: Math.round(process.uptime()),
