@@ -1180,7 +1180,7 @@ export const api = {
     monitorContractAdvances: () => adminGet<any>("/admin/monitor/contract-advances"),
     monitorBadEmails: () => adminGet<any>("/admin/monitor/bad-emails"),
     monitorSystemHealth: () => adminGet<any>("/admin/monitor/system-health"),
-    monitorServerLive: () => adminGet<any>("/admin/monitor/server-live"),
+    monitorServerLive: (range = "1h") => adminGet<any>(`/admin/monitor/server-live?range=${encodeURIComponent(range)}`),
     sendTestServerAlert: () => adminPost<{ ok: true }>("/admin/monitor/test-alert", {}),
     monitorImportQueue: () => adminGet<any>("/admin/monitor/import-queue"),
     monitorInvoices: () => adminGet<any>("/admin/monitor/invoices"),

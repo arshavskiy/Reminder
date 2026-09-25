@@ -86,8 +86,10 @@ function formatBytes(bytes: number): string {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 20px 22px;
-  min-height: 128px;
+  padding: 14px 16px;
+  min-height: 112px;
+  min-width: 0;
+  container-type: inline-size;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -114,11 +116,15 @@ function formatBytes(bytes: number): string {
 }
 
 .stat-card__title {
-  font-size: 13px;
+  font-size: clamp(10px, 6.5cqi, 13px);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stat-card__icon {
@@ -129,7 +135,8 @@ function formatBytes(bytes: number): string {
 .stat-card__values {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .stat-card__primary {
@@ -138,18 +145,21 @@ function formatBytes(bytes: number): string {
 }
 
 .stat-card__num {
-  font-size: 28px;
+  font-size: clamp(15px, 13cqi, 26px);
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.1;
   margin-bottom: 4px;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .stat-card__num.is-md {
-  font-size: 20px;
+  font-size: clamp(14px, 11cqi, 18px);
 }
 .stat-card__num.is-sm {
-  font-size: 16px;
+  font-size: clamp(12px, 9cqi, 15px);
 }
 
 .stat-card--error .stat-card__num {
@@ -165,37 +175,45 @@ function formatBytes(bytes: number): string {
 }
 
 .stat-card__label {
-  font-size: 12px;
+  font-size: clamp(10px, 5.5cqi, 12px);
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stat-card__secondary {
   text-align: left;
-  padding-left: 16px;
+  padding-left: 10px;
   border-left: 1px solid var(--border-color);
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 50%;
+  max-width: 46%;
 }
 
 .stat-card__num-small {
-  font-size: 18px;
+  font-size: clamp(12px, 8cqi, 16px);
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.15;
   margin-bottom: 2px;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .stat-card__num-small.is-md {
-  font-size: 14px;
+  font-size: clamp(11px, 7cqi, 14px);
 }
 .stat-card__num-small.is-sm {
-  font-size: 12px;
+  font-size: clamp(11px, 6cqi, 12px);
 }
 
 .stat-card__label-small {
-  font-size: 11px;
+  font-size: clamp(10px, 5cqi, 11px);
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stat-card__trend {

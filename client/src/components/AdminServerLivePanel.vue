@@ -102,13 +102,25 @@
         />
       </div>
 
+      <div class="charts-toolbar">
+        <div class="field-label">Graph range</div>
+        <div class="range-picks" role="group" aria-label="Graph time range">
+          <button
+            v-for="opt in RANGE_OPTIONS"
+            :key="opt.id"
+            type="button"
+            :class="{ on: range === opt.id }"
+            @click="setRange(opt.id)"
+          >{{ opt.id }}</button>
+        </div>
+      </div>
       <div class="charts">
         <div class="chart-box">
-          <div class="field-label">Requests per minute and p95 latency (60 min)</div>
+          <div class="field-label">Requests and p95 latency ({{ rangeLabel }})</div>
           <div ref="httpChartEl" class="chart" />
         </div>
         <div class="chart-box">
-          <div class="field-label">{{ railwaySeries ? "Container CPU and memory (Railway, 60 min)" : "Process CPU and memory (60 min)" }}</div>
+          <div class="field-label">{{ sysChartTitle }}</div>
           <div ref="sysChartEl" class="chart" />
         </div>
       </div>
@@ -174,6 +186,16 @@ async function togglePush(next: boolean) {
     message.error(err?.message ?? "Could not change push");
   }
 }
+const RANGE_OPTIONS = [
+  {id: "1h", label: "1 hour"},
+  {id: "8h", label: "8 hours"},
+  {id: "1d", label: "1 day"},
+  {id: "7d", label: "7 days"},
+  {id: "1m", label: "1 month"},
+] as const;
+type GraphRange = (typeof RANGE_OPTIONS)[number]["id"];
+const range = ref<GraphRange>("1h");
+const rangeLabel = computed(() => data.value?.rangeLabel ?? RANGE_OPTIONS.find((opt) => opt.id === range.value)?.label ?? "1 hour");
 const data = ref<any | null>(null);
 const lastOkAt = ref(0);
 const nowTick = ref(Date.now());
@@ -196,6 +218,7 @@ const railwaySeries = computed(() => {
   const series = railway.value?.series;
   return series && (series.CPU_USAGE?.length || series.MEMORY_USAGE_GB?.length) ? series : null;
 });
+const sysChartTitle = computed(() => `${railwaySeries.value ? "Container CPU and memory (Railway)" : "Process CPU and memory"}, ${rangeLabel.value}`);
 const railwayCpu = computed(() => railway.value?.cpuVcpu != null && railway.value?.cpuLimitVcpu
   ? Math.round((railway.value.cpuVcpu / railway.value.cpuLimitVcpu) * 1000) / 10
   : null);
@@ -228,7 +251,13 @@ function uptime(seconds: number) {
   return d ? `${d}d ${hrs}h` : hrs ? `${hrs}h ${min}m` : `${min}m`;
 }
 
-const timeLabel = (ts: number | string) => new Date(ts).toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+function timeLabel(ts: number | string) {
+  const date = new Date(ts);
+  if (range.value === "1m") return date.toLocaleDateString("en-GB", {day: "2-digit", month: "short"});
+  if (range.value === "7d") return date.toLocaleString("en-GB", {day: "2-digit", month: "short", hour: "2-digit"});
+  if (range.value === "1d") return date.toLocaleString("en-GB", {day: "2-digit", hour: "2-digit", minute: "2-digit"});
+  return date.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+}
 const muted = (text: string) => h("span", {style: "font-size:12px;color:var(--text-secondary)"}, text);
 
 const slowColumns: DataTableColumns<any> = [
@@ -259,7 +288,7 @@ function renderCharts() {
     grid: {left: 40, right: 44, top: 28, bottom: 24},
     tooltip: {trigger: "axis"},
     legend: {top: 0, textStyle: axisText, itemWidth: 10, itemHeight: 8},
-    xAxis: {type: "category", data: http.map((b) => timeLabel(b.ts)), axisLabel: axisText},
+    xAxis: {type: "category", data: http.map((b) => timeLabel(b.ts)), axisLabel: {...axisText, hideOverlap: true}},
     yAxis: [
       {type: "value", name: "req", axisLabel: axisText, splitLine: {lineStyle: {opacity: 0.15}}},
       {type: "value", name: "ms", axisLabel: axisText, splitLine: {show: false}},
@@ -283,7 +312,7 @@ function renderCharts() {
     grid: {left: 40, right: 50, top: 28, bottom: 24},
     tooltip: {trigger: "axis"},
     legend: {top: 0, textStyle: axisText, itemWidth: 10, itemHeight: 8},
-    xAxis: {type: "time", axisLabel: {...axisText, formatter: (v: number) => timeLabel(v)}},
+    xAxis: {type: "time", axisLabel: {...axisText, hideOverlap: true, formatter: (v: number) => timeLabel(v)}},
     yAxis: [
       {type: "value", name: "CPU %", axisLabel: axisText, splitLine: {lineStyle: {opacity: 0.15}}},
       {type: "value", name: "MB", axisLabel: axisText, splitLine: {show: false}},
@@ -297,7 +326,7 @@ function renderCharts() {
 
 async function load() {
   try {
-    data.value = await api.admin.monitorServerLive();
+    data.value = await api.admin.monitorServerLive(range.value);
     lastOkAt.value = Date.now();
     await nextTick();
     renderCharts();
@@ -316,6 +345,12 @@ async function sendTest() {
   } finally {
     testing.value = false;
   }
+}
+
+function setRange(next: GraphRange) {
+  if (range.value === next) return;
+  range.value = next;
+  void load();
 }
 
 function onResize() {
@@ -407,9 +442,42 @@ onBeforeUnmount(() => {
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.charts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.range-picks {
+  display: flex;
+  gap: 4px;
+}
+
+.range-picks button {
+  appearance: none;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.range-picks button.on {
+  background: var(--brand-color);
+  border-color: transparent;
+  color: #10231c;
 }
 
 .charts {
