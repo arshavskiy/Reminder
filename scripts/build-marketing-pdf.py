@@ -97,6 +97,22 @@ slides = [
     ]),
 ]
 
+# Keep declared seat/mailbox limits out of customer promises until verified.
+for i, (title, subtitle, items) in enumerate(slides):
+    if isinstance(items, list):
+        replacements = {
+            "30 days, no credit card, 20 imports total; 2 users and 2 connected email accounts. Calendar and field work are excluded.": "30 days, no credit card and 20 imports total. Calendar and field work are excluded.",
+            "50 imports per month, OCR/AI, storage/Drive, reminders and reports; 2 users and 2 email accounts.": "50 imports per month, OCR/AI, storage/Drive, reminders and reports.",
+            "Unlimited catalog imports/users/email accounts; Calendar and field work; 24-month inspection and 36-month invoice Gmail history.": "Unlimited catalog document imports; Calendar and field work; 24-month inspection and 36-month invoice Gmail history.",
+            "2 users, manual records, generated PDFs, reminders and reports. No imports, connected email accounts, AI or file-storage entitlement.": "Manual records, generated PDFs, reminders and reports. No imports, AI or file-storage entitlement.",
+        }
+        slides[i] = (title, subtitle, [(h, replacements.get(b, b)) for h, b in items])
+
+slides.insert(2, ("A document becomes a plan of action", "The business workflow at a glance", "flow"))
+slides.insert(6, ("A useful reminder, ready to review", "Real product screen: Hebrew email-template preview", {"image": "email-template.png", "caption": "Preview the message  /  Review relevant records  /  Follow up before expiry"}))
+slides.insert(10, ("See where expenses accumulate", "Real product screen: expense analysis by supplier", {"image": "expense-dashboard.png", "caption": "Filter the period  /  Compare supplier contributions  /  Inspect the supporting records"}))
+slides.insert(11, ("One record connects the follow-up", "How the product information fits together", "connections"))
+
 c = canvas.Canvas(str(OUT), pagesize=(W, H))
 c.setTitle("RemindOCR | Marketing feature presentation")
 c.setAuthor("RemindOCR")
@@ -118,7 +134,35 @@ for n, (title, subtitle, items) in enumerate(slides, 1):
     title_height = paragraph(title, 48, 452, 864, 35 if n == 1 else 29, INK, True)
     subtitle_top = 452 - title_height - 13
     paragraph(subtitle, 48, subtitle_top, 864, 17, MUTED)
-    if items == "plans":
+    if isinstance(items, dict):
+        c.drawImage(str(ROOT / "docs/marketing/assets" / items["image"]), 48, 104,
+                    width=864, height=258, preserveAspectRatio=True, anchor="c")
+        paragraph(items["caption"], 48, 86, 864, 15, GREEN, True)
+        paragraph("User-supplied screenshot, September 2026. Figures illustrate this account, not typical results.", 48, 65, 864, 10, MUTED)
+    elif items == "flow":
+        steps = [("Collect", "Upload or Gmail"), ("Extract", "OCR + AI"), ("Review", "Confirm the date"), ("Remind", "Email follow-up")]
+        for i, (label, detail) in enumerate(steps):
+            x = 132 + i * 230
+            c.setFillColor(HexColor(GREEN)); c.circle(x, 275, 32, fill=1, stroke=0)
+            c.setFillColor(HexColor("#FFFFFF")); c.setFont("Helvetica-Bold", 24); c.drawCentredString(x, 267, str(i+1))
+            if i < 3:
+                c.setStrokeColor(HexColor(GREEN)); c.setLineWidth(2); c.line(x+45,275,x+181,275)
+                c.line(x+181,275,x+171,281); c.line(x+181,275,x+171,269)
+            paragraph(label, x-80, 222, 160, 24, INK, True)
+            paragraph(detail, x-80, 180, 170, 16, MUTED)
+        paragraph("Review is the decision point: confirm extracted details before relying on a renewal date.", 48, 104, 864, 18, GREEN)
+    elif items == "connections":
+        nodes = [(100,290,"Source document"),(620,290,"Client record"),(100,155,"Expiry date"),(620,155,"Reminder + report")]
+        c.setStrokeColor(HexColor("#B2D5C2")); c.setLineWidth(3)
+        for x,y,label in nodes:
+            c.line(480,246,x+100,y)
+        c.setFillColor(HexColor(GREEN)); c.roundRect(365,211,230,70,12,fill=1,stroke=0)
+        paragraph("Tracked record",388,256,190,23,"#FFFFFF",True)
+        for x,y,label in nodes:
+            c.setFillColor(HexColor("#E8F2EC")); c.roundRect(x,y-25,230,55,8,fill=1,stroke=0)
+            paragraph(label,x+15,y+12,205,19,INK,True)
+        paragraph("Keep the original, the customer and the next action connected.",48,91,864,19,GREEN)
+    elif items == "plans":
         xs = [48, 268, 488, 708]
         for x, name, price, summary in zip(xs, ["Trial", "Digital", "Basic", "Business"],
                 ["$0", "$45", "$75", "$119"],
@@ -146,3 +190,4 @@ for n, (title, subtitle, items) in enumerate(slides, 1):
     c.showPage()
 c.save()
 print(OUT)
+
