@@ -12,7 +12,7 @@
       <div class="app-nav__logo">
         <img class="app-nav__logo-img" :src="logoSrc" alt="" />
       </div>
-      <span v-show="showLabels" class="app-nav__brand-text">לובי</span>
+      <span v-show="showLabels" class="app-nav__brand-text">RemindOCR</span>
     </div>
 
     <nav class="app-nav__list">
