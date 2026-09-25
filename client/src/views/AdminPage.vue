@@ -267,9 +267,9 @@
       <!-- ── Documents & Extraction ── -->
       <section v-if="activeSection === 'documents'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="docMonitor">
+        <template v-else>
           <!-- Pipeline Summary Cards -->
-          <div class="admin-stats-grid">
+          <div v-if="docMonitor" class="admin-stats-grid">
             <AdminStatCard
               title="Total Processed"
               :primary="pipelineStats.total"
@@ -306,8 +306,9 @@
             />
           </div>
 
-          <!-- Storage per user -->
-          <div class="monitor-block" style="margin-top: 20px">
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+            <n-tab-pane v-if="docMonitor" name="storage" tab="S3 Storage">
+          <div class="monitor-block">
             <div class="monitor-block__title">S3 Storage by User</div>
             <div class="admin-stats-grid" style="margin-top:10px">
               <div v-for="s in docMonitor.storage" :key="s.user_id" class="admin-stat-card">
@@ -320,7 +321,8 @@
             </div>
           </div>
 
-          <!-- Per-user status matrix -->
+            </n-tab-pane>
+            <n-tab-pane v-if="docMonitor" name="status" tab="Status by User">
           <div class="monitor-block">
             <div class="monitor-block__title">Document Status by User</div>
             <n-data-table
@@ -334,13 +336,16 @@
             />
           </div>
 
-          <!-- Failed extractions -->
-          <div class="monitor-block" v-if="docMonitor.failed.length > 0">
+            </n-tab-pane>
+            <n-tab-pane v-if="docMonitor" name="failed" :tab="`Failed (${docMonitor.failed.length})`">
+          <div class="monitor-block">
             <div class="monitor-block__title">
               Failed Extraction
               <n-tag v-if="docMonitor.failed.length" type="error" size="small" round style="margin-right:8px">{{ docMonitor.failed.length }}</n-tag>
             </div>
+            <div v-if="docMonitor.failed.length === 0" class="admin-tab-empty">No failed extractions</div>
             <n-data-table
+              v-else
               :columns="failedDocsColumns"
               :data="docMonitor.failed"
               :bordered="false"
@@ -351,13 +356,16 @@
             />
           </div>
 
-          <!-- Stuck documents -->
-          <div class="monitor-block" v-if="docMonitor.stuck.length > 0">
+            </n-tab-pane>
+            <n-tab-pane v-if="docMonitor" name="stuck" :tab="`Stuck (${docMonitor.stuck.length})`">
+          <div class="monitor-block">
             <div class="monitor-block__title">
               Stuck Documents (Queued > 10 min)
-              <n-tag type="warning" size="small" round style="margin-right:8px">{{ docMonitor.stuck.length }}</n-tag>
+              <n-tag v-if="docMonitor.stuck.length" type="warning" size="small" round style="margin-right:8px">{{ docMonitor.stuck.length }}</n-tag>
             </div>
+            <div v-if="docMonitor.stuck.length === 0" class="admin-tab-empty">No documents stuck in the queue</div>
             <n-data-table
+              v-else
               :columns="stuckDocsColumns"
               :data="docMonitor.stuck"
               :bordered="false"
@@ -368,7 +376,8 @@
             />
           </div>
 
-          <!-- Extracted field values per document -->
+            </n-tab-pane>
+            <n-tab-pane v-if="docMonitor" name="fields" :tab="`Fields (${extractionsTotal})`">
           <div class="monitor-block">
             <div class="monitor-block__title">Extracted Field Values</div>
             <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
@@ -411,7 +420,8 @@
             </div>
           </div>
 
-          <!-- Pipeline Gaps -->
+            </n-tab-pane>
+            <n-tab-pane v-if="docMonitor" name="gaps" tab="Pipeline Gaps">
           <div v-if="pipelineGaps" class="monitor-block" style="border-color:rgba(208,48,80,0.25)">
             <div class="monitor-block__title">Pipeline Gaps</div>
 
@@ -474,15 +484,10 @@
               ✅ No pipeline gaps detected
             </div>
           </div>
-        </template>
-      </section>
-
-      <!-- ── Extraction Quality ── -->
-      <section v-if="activeSection === 'extraction_quality'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="extractionQuality">
-          <!-- Summary cards -->
-          <div class="admin-stats-grid">
+          <div v-else class="admin-tab-empty">Pipeline gap data is not loaded</div>
+            </n-tab-pane>
+<n-tab-pane name="backends" tab="By Backend">
+<div class="admin-stats-grid">
             <AdminStatCard
               title="Total AI Runs"
               :primary="extractionQuality.summary.total_runs"
@@ -515,7 +520,7 @@
             />
           </div>
 
-          <!-- By Backend -->
+          
           <div class="monitor-block">
             <div class="monitor-block__title">Success Rate by Backend</div>
             <n-data-table
@@ -527,14 +532,16 @@
               style="margin-top:10px"
             />
           </div>
-
-          <!-- Recent parse failures -->
-          <div class="monitor-block" v-if="extractionQuality.recent_failures.length > 0">
+            </n-tab-pane>
+            <n-tab-pane name="parse_failures" :tab="`Parse failures (${extractionQuality.recent_failures.length})`">
+          <div class="monitor-block">
             <div class="monitor-block__title">
               Recent Parse Failures
-              <n-tag type="error" size="small" round style="margin-right:8px">{{ extractionQuality.recent_failures.length }}</n-tag>
+              <n-tag v-if="extractionQuality.recent_failures.length" type="error" size="small" round style="margin-right:8px">{{ extractionQuality.recent_failures.length }}</n-tag>
             </div>
+            <div v-if="extractionQuality.recent_failures.length === 0" class="admin-tab-empty">No recent parse failures</div>
             <n-data-table
+              v-else
               :columns="parseFailureColumns"
               :data="extractionQuality.recent_failures"
               :bordered="false"
@@ -544,14 +551,16 @@
               :row-class-name="() => 'row-error'"
             />
           </div>
-
-          <!-- Slow runs -->
-          <div class="monitor-block" v-if="extractionQuality.slow_runs.length > 0">
+            </n-tab-pane>
+            <n-tab-pane name="slow" :tab="`Slow (${extractionQuality.slow_runs.length})`">
+          <div class="monitor-block">
             <div class="monitor-block__title">
               Slow Runs (&gt;30s)
-              <n-tag type="warning" size="small" round style="margin-right:8px">{{ extractionQuality.slow_runs.length }}</n-tag>
+              <n-tag v-if="extractionQuality.slow_runs.length" type="warning" size="small" round style="margin-right:8px">{{ extractionQuality.slow_runs.length }}</n-tag>
             </div>
+            <div v-if="extractionQuality.slow_runs.length === 0" class="admin-tab-empty">No slow runs</div>
             <n-data-table
+              v-else
               :columns="slowRunColumns"
               :data="extractionQuality.slow_runs"
               :bordered="false"
@@ -561,515 +570,9 @@
               style="margin-top:10px"
             />
           </div>
-
-          <div v-if="extractionQuality.recent_failures.length === 0 && extractionQuality.slow_runs.length === 0"
-               style="text-align:center;padding:40px;color:var(--text-secondary)">
-            ✅ No parse failures or slow runs detected
-          </div>
-        </template>
-        <div v-else style="text-align:center;padding:60px;color:var(--text-secondary)">
-          Click Refresh to load extraction quality data
-        </div>
-      </section>
-
-      <!-- ── Reminders ── -->
-      <section v-if="activeSection === 'reminders'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="reminderMonitor">
-          <!-- Email Delivery Summary Cards (MOST IMPORTANT) -->
-          <div class="admin-stats-grid">
-            <AdminStatCard
-              title="Email Delivery Success"
-              :primary="emailStats.successRate"
-              primary-label="Success Rate %"
-              :secondary="emailStats.sent"
-              secondary-label="Sent Successfully"
-              :status="emailStats.successRate >= 90 ? 'success' : emailStats.successRate >= 70 ? 'warning' : 'error'"
-              format="percent"
-            />
-            <AdminStatCard
-              title="Failed Email Sends"
-              :primary="emailStats.failed"
-              primary-label="Failed Attempts"
-              :secondary="reminderMonitor.failedSends?.length ?? 0"
-              secondary-label="Recent Failures"
-              :status="emailStats.failed > 0 ? 'error' : 'success'"
-            />
-            <AdminStatCard
-              title="Pending Reminders"
-              :primary="emailStats.pending"
-              primary-label="Waiting to Send"
-              :secondary="reminderMonitor.pending?.length ?? 0"
-              secondary-label="Upcoming Soon"
-              :status="emailStats.pending > 100 ? 'warning' : 'default'"
-            />
-            <AdminStatCard
-              title="Total Reminders"
-              :primary="emailStats.total"
-              primary-label="Sent + Failed"
-              :status="'default'"
-            />
-          </div>
-
-          <!-- ⚠️ CRITICAL: Failed Sends (at top for visibility) -->
-          <div class="monitor-block" style="margin-top: 20px; border-color: rgba(208, 48, 80, 0.3); background: rgba(208, 48, 80, 0.02)">
-            <div class="monitor-block__title" style="color: #d03050">
-              🔴 Failed Email Deliveries
-              <n-tag v-if="reminderMonitor.failedSends.length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedSends.length }}</n-tag>
-            </div>
-            <div v-if="reminderMonitor.failedSends.length === 0" style="padding: 20px; text-align: center; color: var(--text-secondary)">
-              ✅ No failed sends detected
-            </div>
-            <n-data-table
-              v-else
-              :columns="failedSendsColumns"
-              :data="reminderMonitor.failedSends"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              :max-height="350"
-              size="small"
-              style="margin-top:10px"
-              :row-class-name="() => 'row-error'"
-            />
-          </div>
-
-          <!-- Status counts per user -->
-          <div class="monitor-block">
-            <div class="monitor-block__title">Reminder Status by User</div>
-            <n-data-table
-              :columns="reminderStatusColumns"
-              :data="reminderStatusRows"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              :max-height="350"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <!-- Pending reminders (those about to trigger) -->
-          <div class="monitor-block">
-            <div class="monitor-block__title">
-              Pending Reminders (Waiting to Send)
-              <n-tag v-if="reminderMonitor.pending.length" type="warning" size="small" round style="margin-right:8px">{{ reminderMonitor.pending.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="pendingReminderColumns"
-              :data="reminderMonitor.pending"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <!-- Failed Escalations -->
-          <div class="monitor-block" v-if="(reminderMonitor.failedEscalations ?? []).length > 0"
-               style="border-color:rgba(208,48,80,0.3);background:rgba(208,48,80,0.02)">
-            <div class="monitor-block__title" style="color:#d03050">
-              🔴 Failed Escalations
-              <n-tag type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedEscalations.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="failedEscalationColumns"
-              :data="reminderMonitor.failedEscalations"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-              :row-class-name="() => 'row-error'"
-            />
-          </div>
-
-          <!-- Contract Auto-Advances -->
-          <div class="monitor-block" v-if="contractAdvances.length > 0">
-            <div class="monitor-block__title">
-              Contract Auto-Advances
-              <n-tag size="small" round style="margin-right:8px">{{ contractAdvances.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="contractAdvanceColumns"
-              :data="contractAdvances"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-        </template>
-      </section>
-
-      <!-- ── Scheduler ── -->
-      <section v-if="activeSection === 'scheduler'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="schedulerMonitor">
-          <!-- Scheduler Health Summary Cards -->
-          <div class="admin-stats-grid">
-            <AdminStatCard
-              title="Scheduler Health"
-              :primary="schedulerMonitor.jobs.filter((j: any) => !j.last_error && (j.consecutive_failures ?? 0) === 0).length"
-              :primary-label="`Healthy Jobs`"
-              :secondary="schedulerMonitor.jobs.length"
-              secondary-label="Total Jobs"
-              :status="schedulerMonitor.jobs.some((j: any) => j.last_error || (j.consecutive_failures ?? 0) > 0) ? 'warning' : 'success'"
-            />
-            <AdminStatCard
-              title="Emails Sent (Last Hour)"
-              :primary="schedulerMonitor.sentLastHour"
-              primary-label="Successful Sends"
-              :secondary="schedulerMonitor.failedLastHour"
-              secondary-label="Failed Attempts"
-              :status="schedulerMonitor.failedLastHour === 0 ? 'success' : 'warning'"
-            />
-            <AdminStatCard
-              title="Last Run"
-              :primary="formatDate(schedulerMonitor.lastRunTime)"
-              primary-label="Most Recent Tick"
-              :secondary="formatDate(schedulerMonitor.nextRunTime)"
-              secondary-label="Next Scheduled"
-              :status="'default'"
-            />
-            <AdminStatCard
-              title="Check Interval"
-              :primary="formatInterval(schedulerMonitor.intervalSeconds)"
-              primary-label="Scheduler Period"
-              :status="'default'"
-            />
-            <AdminStatCard
-              v-if="schedulerMonitor.backup"
-              title="Database Backup"
-              :primary="formatDate(schedulerMonitor.backup.last_run_at)"
-              primary-label="Last Backup"
-              :secondary="formatBytes(schedulerMonitor.backup.size_bytes)"
-              secondary-label="Volume"
-              :status="backupStatus(schedulerMonitor.backup.last_run_at)"
-            />
-            <AdminStatCard
-              v-else
-              title="Database Backup"
-              primary="No backups yet"
-              :status="'warning'"
-            />
-          </div>
-
-          <!-- Per-job health table -->
-          <div class="monitor-block" style="margin-top: 20px">
-            <div class="monitor-block__title">Cron Job Health</div>
-            <n-data-table
-              :columns="cronJobColumns"
-              :data="schedulerMonitor.jobs ?? []"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              :max-height="350"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <div class="monitor-block">
-            <div class="monitor-block__title">Monthly Report Schedule by User</div>
-            <n-data-table
-              :columns="monthlyScheduleColumns"
-              :data="schedulerMonitor.monthlySchedule"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              :max-height="350"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-        </template>
-      </section>
-
-      <!-- ── Monthly Reports ── -->
-
-      <!-- Background processes & temp-file disk usage -->
-      <section v-if="activeSection === 'processes'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="processMonitor">
-          <n-alert v-if="pausedProcessCount > 0" type="warning" :bordered="false" style="margin-bottom:16px">
-            {{ pausedProcessCount }} background {{ pausedProcessCount === 1 ? 'process is' : 'processes are' }}
-            paused. Paused work stays queued and resumes where it left off.
-          </n-alert>
-
-          <div class="admin-stats-grid">
-            <AdminStatCard
-              title="Background Processes"
-              :primary="processMonitor.processes.length - pausedProcessCount"
-              primary-label="Running"
-              :secondary="pausedProcessCount"
-              secondary-label="Paused"
-              :status="pausedProcessCount === 0 ? 'success' : 'warning'"
-            />
-            <AdminStatCard
-              title="Queued Work"
-              :primary="totalQueuedJobs"
-              primary-label="Jobs Waiting"
-              :secondary="totalRunningJobs"
-              secondary-label="In Flight"
-              :status="totalStaleJobs > 0 ? 'warning' : 'default'"
-            />
-            <AdminStatCard
-              title="Temp Files On Disk"
-              :primary="formatBytes(tempTotalBytes)"
-              primary-label="Total Size"
-              :secondary="tempTotalFiles"
-              secondary-label="Files"
-              :status="tempStaleBytes > 0 ? 'warning' : 'success'"
-            />
-            <AdminStatCard
-              title="Sweeper"
-              :primary="processMonitor.temp_files.sweeper.running ? 'Running' : 'Stopped'"
-              :primary-label="`Every ${processMonitor.temp_files.sweeper.interval_minutes}m`"
-              :secondary="formatDate(processMonitor.temp_files.sweeper.last_run_at)"
-              secondary-label="Last Sweep"
-              :status="processMonitor.temp_files.sweeper.running ? 'success' : 'warning'"
-            />
-            <AdminStatCard
-              title="This Container"
-              :primary="formatInterval(processMonitor.container.uptime_seconds)"
-              primary-label="Uptime"
-              :secondary="formatBytes(processMonitor.container.memory_rss_bytes)"
-              secondary-label="Memory (RSS)"
-              :status="'default'"
-            />
-          </div>
-
-          <div class="monitor-block" style="margin-top:20px">
-            <div class="monitor-block__title">Background Processes</div>
-            <n-data-table
-              :columns="processColumns"
-              :data="processMonitor.processes"
-              :bordered="false"
-              :pagination="false"
-              size="small"
-              style="margin-top:10px"
-            />
-            <p class="process-note">
-              Pausing is stored in the database, so it survives a redeploy and applies to every
-              container. A job already in flight is allowed to finish — only the next one is held back.
-            </p>
-          </div>
-
-          <div class="monitor-block">
-            <div class="monitor-block__toolbar">
-              <div class="monitor-block__title">Temp Directories</div>
-              <n-button
-                size="small"
-                secondary
-                :loading="sweepRunning"
-                @click="runTempSweep"
-              >
-                Sweep now
-              </n-button>
-            </div>
-            <n-data-table
-              :columns="tempDirColumns"
-              :data="processMonitor.temp_files.directories"
-              :bordered="false"
-              :pagination="false"
-              size="small"
-              style="margin-top:10px"
-            />
-            <p class="process-note">
-              Files here are scratch copies — the real document lives in object storage. Anything older
-              than {{ processMonitor.temp_files.sweeper.retention_hours }}h is swept automatically.
-            </p>
-          </div>
-
-          <div class="monitor-block">
-            <div class="monitor-block__toolbar">
-              <div class="monitor-block__title">Outstanding Work By User</div>
-              <n-select
-                v-model:value="selectedQueueProcess"
-                :options="queueProcessOptions"
-                size="small"
-                style="width:220px"
-                @update:value="loadProcessJobs"
-              />
-            </div>
-            <n-data-table
-              v-if="selectedProcessUserLoad.length"
-              :columns="userLoadColumns"
-              :data="selectedProcessUserLoad"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              :max-height="320"
-              size="small"
-              style="margin-top:10px"
-            />
-            <p v-else class="process-note">No outstanding jobs for this worker.</p>
-            <p v-if="selectedProcessUserLoad.length" class="process-note">
-              Completed jobs are left out — this is work still queued, running, retrying or failed,
-              so a single account's stuck batch does not read as a system-wide outage.
-            </p>
-          </div>
-
-          <div class="monitor-block">
-            <div class="monitor-block__toolbar">
-              <div class="monitor-block__title">Recent Jobs</div>
-              <div class="queue-filter">
-                <n-select
-                  v-model:value="queueUserFilter"
-                  :options="userSelectOptions"
-                  size="small"
-                  clearable
-                  filterable
-                  placeholder="All users"
-                  style="width:260px"
-                  @update:value="loadProcessJobs"
-                />
-              </div>
-            </div>
-            <n-data-table
-              :columns="queueJobColumns"
-              :data="processJobs"
-              :loading="jobsLoading"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              :max-height="400"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-        </template>
-      </section>
-
-      <section v-if="activeSection === 'monthly'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="monthlyMonitor">
-          <div class="monitor-block">
-            <div class="monitor-block__title">
-              Monthly Report Configuration by User
-              <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">
-                {{ filteredMonthlySchedules.length }} of {{ monthlyMonitor.schedules.length }}
-              </span>
-            </div>
-            <div class="admin-section__toolbar" style="margin-top:8px">
-              <n-input v-model:value="monthlyFilter.q" clearable size="small" placeholder="Search user or recipient..." style="max-width: 260px">
-                <template #prefix><n-icon :component="SearchOutline" /></template>
-              </n-input>
-              <n-select v-model:value="monthlyFilter.enabled" clearable size="small" placeholder="Enabled" :options="monthlyEnabledOptions" style="width: 130px" />
-              <n-select v-model:value="monthlyFilter.day" clearable size="small" placeholder="Day" :options="monthlyDayOptions" style="width: 110px" />
-              <n-select v-model:value="monthlyFilter.status" clearable size="small" placeholder="Status" :options="monthlyStatusOptions" style="width: 150px" />
-            </div>
-            <n-data-table
-              :columns="monthlyScheduleDetailColumns"
-              :data="filteredMonthlySchedules"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <div class="monitor-block">
-            <div class="monitor-block__title">
-              Monthly Report Send Failures
-              <n-tag v-if="monthlyMonitor.failedDeliveries.length" type="error" size="small" round style="margin-right:8px">{{ monthlyMonitor.failedDeliveries.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="failedSendsColumns"
-              :data="monthlyMonitor.failedDeliveries"
-              :bordered="false"
-              :pagination="{ pageSize: 10 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-        </template>
-      </section>
-      <!-- ── Bad Emails ── -->
-      <section v-if="activeSection === 'bad_emails'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="badEmailsData">
-          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-            <n-tag :type="badEmailsData.summary.total_bad_clients ? 'error' : 'success'" round>
-              Bad client emails: {{ badEmailsData.summary.total_bad_clients }}
-            </n-tag>
-            <n-tag :type="badEmailsData.summary.total_bad_reminders ? 'warning' : 'success'" round>
-              Bad reminder emails: {{ badEmailsData.summary.total_bad_reminders }}
-            </n-tag>
-            <n-tag :type="badEmailsData.summary.total_bad_doc_emails ? 'warning' : 'success'" round>
-              Bad extracted emails: {{ badEmailsData.summary.total_bad_doc_emails }}
-            </n-tag>
-            <n-tag :type="badEmailsData.summary.total_bounced ? 'error' : 'success'" round>
-              Bounced: {{ badEmailsData.summary.total_bounced }}
-            </n-tag>
-          </div>
-
-          <div v-if="badEmailsData.bad_clients.length" class="monitor-block">
-            <div class="monitor-block__title">
-              Bad Client Emails
-              <n-tag type="error" size="small" round style="margin-right:8px">{{ badEmailsData.bad_clients.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="badClientEmailColumns"
-              :data="badEmailsData.bad_clients"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <div v-if="badEmailsData.bad_reminders.length" class="monitor-block">
-            <div class="monitor-block__title">
-              Bad Reminder Emails
-              <n-tag type="warning" size="small" round style="margin-right:8px">{{ badEmailsData.bad_reminders.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="badReminderEmailColumns"
-              :data="badEmailsData.bad_reminders"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <div v-if="badEmailsData.bad_doc_emails.length" class="monitor-block">
-            <div class="monitor-block__title">
-              Bad Extracted Emails (from documents)
-              <n-tag type="warning" size="small" round style="margin-right:8px">{{ badEmailsData.bad_doc_emails.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="badDocEmailColumns"
-              :data="badEmailsData.bad_doc_emails"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <div v-if="badEmailsData.bounced.length" class="monitor-block">
-            <div class="monitor-block__title">
-              Bounced Emails
-              <n-tag type="error" size="small" round style="margin-right:8px">{{ badEmailsData.bounced.length }}</n-tag>
-            </div>
-            <n-data-table
-              :columns="bouncedEmailColumns"
-              :data="badEmailsData.bounced"
-              :bordered="false"
-              :pagination="{ pageSize: 15 }"
-              size="small"
-              style="margin-top:10px"
-            />
-          </div>
-
-          <div v-if="!badEmailsData.bad_clients.length && !badEmailsData.bad_reminders.length && !badEmailsData.bad_doc_emails.length && !badEmailsData.bounced.length" class="monitor-block">
-            <n-empty description="No bad emails found" />
-          </div>
-        </template>
-      </section>
-
-      <!-- ── System Health ── -->
-      <!-- ── Import Queue ── -->
-      <section v-if="activeSection === 'import_queue'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="importQueue">
-          <n-alert
+            </n-tab-pane>
+          <n-tab-pane name="iq_health" tab="Queue Health">
+<n-alert
             v-if="importQueue.worker.stalled"
             type="error"
             title="Worker appears stalled"
@@ -1095,6 +598,7 @@
             <AdminStatCard title="Completed" :primary="importQueue.jobs.by_status.completed ?? 0" primary-label="Done" />
           </div>
 
+          
           <div class="monitor-block">
             <div class="monitor-block__title">Queue Health</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:8px;margin-top:10px;font-size:13px">
@@ -1110,19 +614,24 @@
               </div>
             </div>
           </div>
-
-          <div v-if="importQueue.failure_reasons.length" class="monitor-block">
+            </n-tab-pane>
+            <n-tab-pane name="iq_reasons" :tab="`Reasons (${importQueue.failure_reasons.length})`">
+          <div class="monitor-block">
             <div class="monitor-block__title">Failure Reasons</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+            <div v-if="!importQueue.failure_reasons.length" class="admin-tab-empty">No failure reasons</div>
+            <div v-else style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
               <n-tag v-for="r in importQueue.failure_reasons" :key="r.reason" type="warning" size="small">
                 {{ r.reason }} · {{ r.count }}
               </n-tag>
             </div>
           </div>
-
-          <div v-if="importQueue.recent_failures.length" class="monitor-block">
+            </n-tab-pane>
+            <n-tab-pane name="iq_failures" :tab="`Failures (${importQueue.recent_failures.length})`">
+          <div class="monitor-block">
             <div class="monitor-block__title">Recent Failures &amp; Retries</div>
+            <div v-if="!importQueue.recent_failures.length" class="admin-tab-empty">No recent failures</div>
             <n-data-table
+              v-else
               :columns="queueFailureColumns"
               :data="importQueue.recent_failures"
               :bordered="false"
@@ -1131,77 +640,9 @@
               style="margin-top:10px"
             />
           </div>
-        </template>
-      </section>
-
-      <!-- ── Invoices ── -->
-<!--      <section v-if="activeSection === 'invoices'" class="admin-section">-->
-<!--        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />-->
-<!--        <template v-else-if="invoiceMonitor">-->
-<!--          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">-->
-<!--            <AdminStatCard title="Invoices" :primary="invoiceMonitor.totals.invoices" primary-label="Saved rows" />-->
-<!--            <AdminStatCard title="With Amount" :primary="invoiceMonitor.totals.with_amount" primary-label="Have a total" />-->
-<!--            <AdminStatCard-->
-<!--              title="Save Rate"-->
-<!--              :primary="invoiceMonitor.totals.save_rate != null ? Math.round(invoiceMonitor.totals.save_rate * 100) + '%' : '—'"-->
-<!--              primary-label="Processed → saved"-->
-<!--              format="custom"-->
-<!--            />-->
-<!--            <AdminStatCard title="Not Saved" :primary="invoiceMonitor.processed_not_saved.reduce((s: number, r: any) => s + r.count, 0)" primary-label="Processed, skipped" />-->
-<!--          </div>-->
-
-<!--          <div class="monitor-block">-->
-<!--            <div class="monitor-block__title">By Document Subtype</div>-->
-<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
-<!--              <n-tag v-for="r in invoiceMonitor.by_subtype" :key="r.subtype" size="small">-->
-<!--                {{ r.subtype }} · {{ r.count }}-->
-<!--              </n-tag>-->
-<!--            </div>-->
-<!--          </div>-->
-
-<!--          <div class="monitor-block">-->
-<!--            <div class="monitor-block__title">Cash Flow</div>-->
-<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
-<!--              <n-tag v-for="(n, k) in invoiceMonitor.by_cash_flow" :key="k" size="small" :type="k === 'income' ? 'success' : 'default'">-->
-<!--                {{ k }} · {{ n }}-->
-<!--              </n-tag>-->
-<!--            </div>-->
-<!--          </div>-->
-
-<!--          <div v-if="invoiceMonitor.known_extractor_providers.length" class="monitor-block">-->
-<!--            <div class="monitor-block__title">Matched Vendors (deterministic extractors)</div>-->
-<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
-<!--              <n-tag v-for="r in invoiceMonitor.known_extractor_providers" :key="r.provider" size="small" type="info">-->
-<!--                {{ r.provider }} · {{ r.count }}-->
-<!--              </n-tag>-->
-<!--            </div>-->
-<!--          </div>-->
-
-<!--          <div v-if="invoiceMonitor.processed_not_saved.length" class="monitor-block">-->
-<!--            <div class="monitor-block__title">Processed But Not Saved (by classified kind)</div>-->
-<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
-<!--              <n-tag v-for="r in invoiceMonitor.processed_not_saved" :key="r.document_kind" size="small" type="warning">-->
-<!--                {{ r.document_kind }} · {{ r.count }}-->
-<!--              </n-tag>-->
-<!--            </div>-->
-<!--          </div>-->
-
-<!--          <div v-if="invoiceMonitor.missing_required_fields.length" class="monitor-block">-->
-<!--            <div class="monitor-block__title">Missing Required Fields</div>-->
-<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
-<!--              <n-tag v-for="r in invoiceMonitor.missing_required_fields" :key="r.field" size="small" type="error">-->
-<!--                {{ r.field }} · {{ r.count }}-->
-<!--              </n-tag>-->
-<!--            </div>-->
-<!--          </div>-->
-<!--        </template>-->
-<!--      </section>-->
-
-      <!-- ── Storage & Drive ── -->
-      <section v-if="activeSection === 'storage_drive'" class="admin-section">
-        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="storageDrive">
-          <n-alert
+            </n-tab-pane>
+          <n-tab-pane v-if="storageDrive" name="st_overview" tab="Object Storage">
+<n-alert
             v-if="!storageDrive.object_storage.configured"
             type="warning"
             title="Object storage is not configured"
@@ -1236,6 +677,8 @@
             </div>
           </div>
 
+            </n-tab-pane>
+            <n-tab-pane v-if="storageDrive" name="st_sources" tab="Import Sources">
           <div class="monitor-block">
             <div class="monitor-block__title">Import Sources</div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
@@ -1245,6 +688,8 @@
             </div>
           </div>
 
+            </n-tab-pane>
+            <n-tab-pane v-if="storageDrive" name="st_drive" tab="Google Drive">
           <div class="monitor-block">
             <div class="monitor-block__title">Google Drive</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:8px;margin-top:10px;font-size:13px">
@@ -1269,9 +714,37 @@
               style="margin-top:10px"
             />
           </div>
-        </template>
+            </n-tab-pane>
+            <n-tab-pane name="temp" tab="Temp Files">
+          <div class="monitor-block">
+            <div class="monitor-block__toolbar">
+              <div class="monitor-block__title">Temp Directories</div>
+              <n-button
+                size="small"
+                secondary
+                :loading="sweepRunning"
+                @click="runTempSweep"
+              >
+                Sweep now
+              </n-button>
+            </div>
+            <n-data-table
+              :columns="tempDirColumns"
+              :data="processMonitor.temp_files.directories"
+              :bordered="false"
+              :pagination="false"
+              size="small"
+              style="margin-top:10px"
+            />
+            <p class="process-note">
+              Files here are scratch copies — the real document lives in object storage. Anything older
+              than {{ processMonitor.temp_files.sweeper.retention_hours }}h is swept automatically.
+            </p>
+          </div>
 
-        <div class="monitor-block" style="margin-top:16px">
+            </n-tab-pane>
+            <n-tab-pane name="st_browser" tab="Browser">
+        <div class="monitor-block">
           <div class="monitor-block__title">Object Storage Browser</div>
           <p class="s3-browser__intro">
             List files in a user's S3 prefix and cross-check database links, orphans, and legacy keys.
@@ -1531,54 +1004,622 @@
             </div>
           </n-spin>
         </div>
+            </n-tab-pane>
+                    </n-tabs>
+        </template>
       </section>
 
-      <section v-if="activeSection === 'system_health'" class="admin-section">
-        <AdminServerLivePanel :key="`live-${adminDbTarget}`" />
+      <!-- ── Reminders ── -->
+      <section v-if="activeSection === 'reminders'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
-        <template v-else-if="systemHealth">
-          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
-            <AdminStatCard title="Uptime" :primary="systemHealth.server.uptime_human" primary-label="Server" format="custom" />
-            <AdminStatCard title="Node.js" :primary="systemHealth.server.node_version" primary-label="Runtime" format="custom" />
-            <AdminStatCard title="Memory (RSS)" :primary="systemHealth.server.memory.rss_mb + ' MB'" primary-label="Resident Set" format="custom" />
-            <AdminStatCard title="Active Sessions" :primary="systemHealth.active_sessions" primary-label="Open" />
+        <template v-else-if="reminderMonitor">
+          <!-- Email Delivery Summary Cards (MOST IMPORTANT) -->
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Email Delivery Success"
+              :primary="emailStats.successRate"
+              primary-label="Success Rate %"
+              :secondary="emailStats.sent"
+              secondary-label="Sent Successfully"
+              :status="emailStats.successRate >= 90 ? 'success' : emailStats.successRate >= 70 ? 'warning' : 'error'"
+              format="percent"
+            />
+            <AdminStatCard
+              title="Failed Email Sends"
+              :primary="emailStats.failed"
+              primary-label="Failed Attempts"
+              :secondary="reminderMonitor.failedSends?.length ?? 0"
+              secondary-label="Recent Failures"
+              :status="emailStats.failed > 0 ? 'error' : 'success'"
+            />
+            <AdminStatCard
+              title="Pending Reminders"
+              :primary="emailStats.pending"
+              primary-label="Waiting to Send"
+              :secondary="reminderMonitor.pending?.length ?? 0"
+              secondary-label="Upcoming Soon"
+              :status="emailStats.pending > 100 ? 'warning' : 'default'"
+            />
+            <AdminStatCard
+              title="Total Reminders"
+              :primary="emailStats.total"
+              primary-label="Sent + Failed"
+              :status="'default'"
+            />
           </div>
 
-          <div class="monitor-block">
-            <div class="monitor-block__title">Server Process</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;margin-top:10px;font-size:13px">
-              <div><span style="color:var(--text-secondary)">PID:</span> {{ systemHealth.server.pid }}</div>
-              <div><span style="color:var(--text-secondary)">Platform:</span> {{ systemHealth.server.platform }}</div>
-              <div><span style="color:var(--text-secondary)">Heap Used:</span> {{ systemHealth.server.memory.heap_used_mb }} MB</div>
-              <div><span style="color:var(--text-secondary)">Heap Total:</span> {{ systemHealth.server.memory.heap_total_mb }} MB</div>
-              <div><span style="color:var(--text-secondary)">External:</span> {{ systemHealth.server.memory.external_mb }} MB</div>
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+            <n-tab-pane name="failed" :tab="`Failed (${reminderMonitor.failedSends.length})`">
+          <div class="monitor-block" style="border-color: rgba(208, 48, 80, 0.3); background: rgba(208, 48, 80, 0.02)">
+            <div class="monitor-block__title" style="color: #d03050">
+              Failed Email Deliveries
+              <n-tag v-if="reminderMonitor.failedSends.length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedSends.length }}</n-tag>
             </div>
+            <div v-if="reminderMonitor.failedSends.length === 0" class="admin-tab-empty">No failed sends</div>
+            <n-data-table
+              v-else
+              :columns="failedSendsColumns"
+              :data="reminderMonitor.failedSends"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
+              size="small"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
           </div>
-
+            </n-tab-pane>
+            <n-tab-pane name="status" tab="By User">
+          <div class="monitor-block">
+            <div class="monitor-block__title">Reminder Status by User</div>
+            <n-data-table
+              :columns="reminderStatusColumns"
+              :data="reminderStatusRows"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="pending" :tab="`Pending (${reminderMonitor.pending.length})`">
           <div class="monitor-block">
             <div class="monitor-block__title">
-              Database: {{ systemHealth.database.name }}
-              <span v-if="systemHealth.database.size_mb != null" style="font-weight:400;font-size:12px;color:var(--text-secondary);margin-right:8px">
-                ({{ systemHealth.database.size_mb }} MB data / {{ systemHealth.database.storage_mb }} MB storage)
-              </span>
+              Pending Reminders (Waiting to Send)
+              <n-tag v-if="reminderMonitor.pending.length" type="warning" size="small" round style="margin-right:8px">{{ reminderMonitor.pending.length }}</n-tag>
             </div>
+            <div v-if="reminderMonitor.pending.length === 0" class="admin-tab-empty">No reminders waiting to send</div>
             <n-data-table
-              :columns="collectionStatsColumns"
-              :data="systemHealth.database.collections"
+              v-else
+              :columns="pendingReminderColumns"
+              :data="reminderMonitor.pending"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="escalations" :tab="`Escalations (${(reminderMonitor.failedEscalations ?? []).length})`">
+          <div class="monitor-block" style="border-color:rgba(208,48,80,0.3);background:rgba(208,48,80,0.02)">
+            <div class="monitor-block__title" style="color:#d03050">
+              Failed Escalations
+              <n-tag v-if="(reminderMonitor.failedEscalations ?? []).length" type="error" size="small" round style="margin-right:8px">{{ reminderMonitor.failedEscalations.length }}</n-tag>
+            </div>
+            <div v-if="(reminderMonitor.failedEscalations ?? []).length === 0" class="admin-tab-empty">No failed escalations</div>
+            <n-data-table
+              v-else
+              :columns="failedEscalationColumns"
+              :data="reminderMonitor.failedEscalations"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+              :row-class-name="() => 'row-error'"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="advances" :tab="`Advances (${contractAdvances.length})`">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Contract Auto-Advances
+              <n-tag v-if="contractAdvances.length" size="small" round style="margin-right:8px">{{ contractAdvances.length }}</n-tag>
+            </div>
+            <div v-if="contractAdvances.length === 0" class="admin-tab-empty">No contract auto-advances</div>
+            <n-data-table
+              v-else
+              :columns="contractAdvanceColumns"
+              :data="contractAdvances"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+          </n-tabs>
+        </template>
+      </section>
+
+      <!-- ── Monthly Reports ── -->
+
+      <!-- Background processes & temp-file disk usage -->
+      <section v-if="activeSection === 'processes'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="processMonitor">
+          <n-alert v-if="pausedProcessCount > 0" type="warning" :bordered="false" style="margin-bottom:16px">
+            {{ pausedProcessCount }} background {{ pausedProcessCount === 1 ? 'process is' : 'processes are' }}
+            paused. Paused work stays queued and resumes where it left off.
+          </n-alert>
+
+          <div class="admin-stats-grid">
+            <AdminStatCard
+              title="Background Processes"
+              :primary="processMonitor.processes.length - pausedProcessCount"
+              primary-label="Running"
+              :secondary="pausedProcessCount"
+              secondary-label="Paused"
+              :status="pausedProcessCount === 0 ? 'success' : 'warning'"
+            />
+            <AdminStatCard
+              title="Queued Work"
+              :primary="totalQueuedJobs"
+              primary-label="Jobs Waiting"
+              :secondary="totalRunningJobs"
+              secondary-label="In Flight"
+              :status="totalStaleJobs > 0 ? 'warning' : 'default'"
+            />
+            <AdminStatCard
+              title="Temp Files On Disk"
+              :primary="formatBytes(tempTotalBytes)"
+              primary-label="Total Size"
+              :secondary="tempTotalFiles"
+              secondary-label="Files"
+              :status="tempStaleBytes > 0 ? 'warning' : 'success'"
+            />
+            <AdminStatCard
+              title="Sweeper"
+              :primary="processMonitor.temp_files.sweeper.running ? 'Running' : 'Stopped'"
+              :primary-label="`Every ${processMonitor.temp_files.sweeper.interval_minutes}m`"
+              :secondary="formatDate(processMonitor.temp_files.sweeper.last_run_at)"
+              secondary-label="Last Sweep"
+              :status="processMonitor.temp_files.sweeper.running ? 'success' : 'warning'"
+            />
+            <AdminStatCard
+              title="This Container"
+              :primary="formatInterval(processMonitor.container.uptime_seconds)"
+              primary-label="Uptime"
+              :secondary="formatBytes(processMonitor.container.memory_rss_bytes)"
+              secondary-label="Memory (RSS)"
+              :status="'default'"
+            />
+          </div>
+
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+            <n-tab-pane name="workers" tab="Processes">
+          <div class="monitor-block">
+            <div class="monitor-block__title">Background Processes</div>
+            <n-data-table
+              :columns="processColumns"
+              :data="processMonitor.processes"
               :bordered="false"
               :pagination="false"
               size="small"
               style="margin-top:10px"
             />
+            <p class="process-note">
+              Pausing is stored in the database, so it survives a redeploy and applies to every
+              container. A job already in flight is allowed to finish — only the next one is held back.
+            </p>
           </div>
+
+            </n-tab-pane>
+            <n-tab-pane name="work" tab="Work by User">
+          <div class="monitor-block">
+            <div class="monitor-block__toolbar">
+              <div class="monitor-block__title">Outstanding Work By User</div>
+              <n-select
+                v-model:value="selectedQueueProcess"
+                :options="queueProcessOptions"
+                size="small"
+                style="width:220px"
+                @update:value="loadProcessJobs"
+              />
+            </div>
+            <n-data-table
+              v-if="selectedProcessUserLoad.length"
+              :columns="userLoadColumns"
+              :data="selectedProcessUserLoad"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              :max-height="320"
+              size="small"
+              style="margin-top:10px"
+            />
+            <p v-else class="process-note">No outstanding jobs for this worker.</p>
+            <p v-if="selectedProcessUserLoad.length" class="process-note">
+              Completed jobs are left out — this is work still queued, running, retrying or failed,
+              so a single account's stuck batch does not read as a system-wide outage.
+            </p>
+          </div>
+
+            </n-tab-pane>
+            <n-tab-pane name="jobs" tab="Recent Jobs">
+          <div class="monitor-block">
+            <div class="monitor-block__toolbar">
+              <div class="monitor-block__title">Recent Jobs</div>
+              <div class="queue-filter">
+                <n-select
+                  v-model:value="queueUserFilter"
+                  :options="userSelectOptions"
+                  size="small"
+                  clearable
+                  filterable
+                  placeholder="All users"
+                  style="width:260px"
+                  @update:value="loadProcessJobs"
+                />
+              </div>
+            </div>
+            <n-data-table
+              :columns="queueJobColumns"
+              :data="processJobs"
+              :loading="jobsLoading"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              :max-height="400"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+<n-tab-pane name="cron" tab="Cron Jobs">
+<div class="admin-stats-grid">
+            <AdminStatCard
+              title="Scheduler Health"
+              :primary="schedulerMonitor.jobs.filter((j: any) => !j.last_error && (j.consecutive_failures ?? 0) === 0).length"
+              :primary-label="`Healthy Jobs`"
+              :secondary="schedulerMonitor.jobs.length"
+              secondary-label="Total Jobs"
+              :status="schedulerMonitor.jobs.some((j: any) => j.last_error || (j.consecutive_failures ?? 0) > 0) ? 'warning' : 'success'"
+            />
+            <AdminStatCard
+              title="Emails Sent (Last Hour)"
+              :primary="schedulerMonitor.sentLastHour"
+              primary-label="Successful Sends"
+              :secondary="schedulerMonitor.failedLastHour"
+              secondary-label="Failed Attempts"
+              :status="schedulerMonitor.failedLastHour === 0 ? 'success' : 'warning'"
+            />
+            <AdminStatCard
+              title="Last Run"
+              :primary="formatDate(schedulerMonitor.lastRunTime)"
+              primary-label="Most Recent Tick"
+              :secondary="formatDate(schedulerMonitor.nextRunTime)"
+              secondary-label="Next Scheduled"
+              :status="'default'"
+            />
+            <AdminStatCard
+              title="Check Interval"
+              :primary="formatInterval(schedulerMonitor.intervalSeconds)"
+              primary-label="Scheduler Period"
+              :status="'default'"
+            />
+            <AdminStatCard
+              v-if="schedulerMonitor.backup"
+              title="Database Backup"
+              :primary="formatDate(schedulerMonitor.backup.last_run_at)"
+              primary-label="Last Backup"
+              :secondary="formatBytes(schedulerMonitor.backup.size_bytes)"
+              secondary-label="Volume"
+              :status="backupStatus(schedulerMonitor.backup.last_run_at)"
+            />
+            <AdminStatCard
+              v-else
+              title="Database Backup"
+              primary="No backups yet"
+              :status="'warning'"
+            />
+          </div>
+
+          
+          <div class="monitor-block">
+            <div class="monitor-block__title">Cron Job Health</div>
+            <n-data-table
+              :columns="cronJobColumns"
+              :data="schedulerMonitor.jobs ?? []"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="monthly" tab="Monthly Schedule">
+          <div class="monitor-block">
+            <div class="monitor-block__title">Monthly Report Schedule by User</div>
+            <n-data-table
+              :columns="monthlyScheduleColumns"
+              :data="schedulerMonitor.monthlySchedule"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              :max-height="350"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+                    </n-tabs>
         </template>
+      </section>
+
+      <section v-if="activeSection === 'monthly'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="monthlyMonitor">
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+            <n-tab-pane name="config" tab="Configuration">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Monthly Report Configuration by User
+              <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">
+                {{ filteredMonthlySchedules.length }} of {{ monthlyMonitor.schedules.length }}
+              </span>
+            </div>
+            <div class="admin-section__toolbar" style="margin-top:8px">
+              <n-input v-model:value="monthlyFilter.q" clearable size="small" placeholder="Search user or recipient..." style="max-width: 260px">
+                <template #prefix><n-icon :component="SearchOutline" /></template>
+              </n-input>
+              <n-select v-model:value="monthlyFilter.enabled" clearable size="small" placeholder="Enabled" :options="monthlyEnabledOptions" style="width: 130px" />
+              <n-select v-model:value="monthlyFilter.day" clearable size="small" placeholder="Day" :options="monthlyDayOptions" style="width: 110px" />
+              <n-select v-model:value="monthlyFilter.status" clearable size="small" placeholder="Status" :options="monthlyStatusOptions" style="width: 150px" />
+            </div>
+            <n-data-table
+              :columns="monthlyScheduleDetailColumns"
+              :data="filteredMonthlySchedules"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+
+            </n-tab-pane>
+            <n-tab-pane name="failures" :tab="`Failures (${monthlyMonitor.failedDeliveries.length})`">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Monthly Report Send Failures
+              <n-tag v-if="monthlyMonitor.failedDeliveries.length" type="error" size="small" round style="margin-right:8px">{{ monthlyMonitor.failedDeliveries.length }}</n-tag>
+            </div>
+            <n-data-table
+              :columns="failedSendsColumns"
+              :data="monthlyMonitor.failedDeliveries"
+              :bordered="false"
+              :pagination="{ pageSize: 10 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+          </n-tabs>
+        </template>
+      </section>
+      <!-- ── Bad Emails ── -->
+      <section v-if="activeSection === 'bad_emails'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="badEmailsData">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+            <n-tag :type="badEmailsData.summary.total_bad_clients ? 'error' : 'success'" round>
+              Bad client emails: {{ badEmailsData.summary.total_bad_clients }}
+            </n-tag>
+            <n-tag :type="badEmailsData.summary.total_bad_reminders ? 'warning' : 'success'" round>
+              Bad reminder emails: {{ badEmailsData.summary.total_bad_reminders }}
+            </n-tag>
+            <n-tag :type="badEmailsData.summary.total_bad_doc_emails ? 'warning' : 'success'" round>
+              Bad extracted emails: {{ badEmailsData.summary.total_bad_doc_emails }}
+            </n-tag>
+            <n-tag :type="badEmailsData.summary.total_bounced ? 'error' : 'success'" round>
+              Bounced: {{ badEmailsData.summary.total_bounced }}
+            </n-tag>
+          </div>
+
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+            <n-tab-pane name="clients" :tab="`Clients (${badEmailsData.bad_clients.length})`">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Bad Client Emails
+              <n-tag v-if="badEmailsData.bad_clients.length" type="error" size="small" round style="margin-right:8px">{{ badEmailsData.bad_clients.length }}</n-tag>
+            </div>
+            <div v-if="!badEmailsData.bad_clients.length" class="admin-tab-empty">No bad client emails</div>
+            <n-data-table
+              v-else
+              :columns="badClientEmailColumns"
+              :data="badEmailsData.bad_clients"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="reminders" :tab="`Reminders (${badEmailsData.bad_reminders.length})`">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Bad Reminder Emails
+              <n-tag v-if="badEmailsData.bad_reminders.length" type="warning" size="small" round style="margin-right:8px">{{ badEmailsData.bad_reminders.length }}</n-tag>
+            </div>
+            <div v-if="!badEmailsData.bad_reminders.length" class="admin-tab-empty">No bad reminder emails</div>
+            <n-data-table
+              v-else
+              :columns="badReminderEmailColumns"
+              :data="badEmailsData.bad_reminders"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="extracted" :tab="`Extracted (${badEmailsData.bad_doc_emails.length})`">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Bad Extracted Emails (from documents)
+              <n-tag v-if="badEmailsData.bad_doc_emails.length" type="warning" size="small" round style="margin-right:8px">{{ badEmailsData.bad_doc_emails.length }}</n-tag>
+            </div>
+            <div v-if="!badEmailsData.bad_doc_emails.length" class="admin-tab-empty">No bad extracted emails</div>
+            <n-data-table
+              v-else
+              :columns="badDocEmailColumns"
+              :data="badEmailsData.bad_doc_emails"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+            <n-tab-pane name="bounced" :tab="`Bounced (${badEmailsData.bounced.length})`">
+          <div class="monitor-block">
+            <div class="monitor-block__title">
+              Bounced Emails
+              <n-tag v-if="badEmailsData.bounced.length" type="error" size="small" round style="margin-right:8px">{{ badEmailsData.bounced.length }}</n-tag>
+            </div>
+            <div v-if="!badEmailsData.bounced.length" class="admin-tab-empty">No bounced emails</div>
+            <n-data-table
+              v-else
+              :columns="bouncedEmailColumns"
+              :data="badEmailsData.bounced"
+              :bordered="false"
+              :pagination="{ pageSize: 15 }"
+              size="small"
+              style="margin-top:10px"
+            />
+          </div>
+            </n-tab-pane>
+          </n-tabs>
+        </template>
+      </section>
+
+      <!-- ── System Health ── -->
+      <!-- ── Invoices ── -->
+<!--      <section v-if="activeSection === 'invoices'" class="admin-section">-->
+<!--        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />-->
+<!--        <template v-else-if="invoiceMonitor">-->
+<!--          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">-->
+<!--            <AdminStatCard title="Invoices" :primary="invoiceMonitor.totals.invoices" primary-label="Saved rows" />-->
+<!--            <AdminStatCard title="With Amount" :primary="invoiceMonitor.totals.with_amount" primary-label="Have a total" />-->
+<!--            <AdminStatCard-->
+<!--              title="Save Rate"-->
+<!--              :primary="invoiceMonitor.totals.save_rate != null ? Math.round(invoiceMonitor.totals.save_rate * 100) + '%' : '—'"-->
+<!--              primary-label="Processed → saved"-->
+<!--              format="custom"-->
+<!--            />-->
+<!--            <AdminStatCard title="Not Saved" :primary="invoiceMonitor.processed_not_saved.reduce((s: number, r: any) => s + r.count, 0)" primary-label="Processed, skipped" />-->
+<!--          </div>-->
+
+<!--          <div class="monitor-block">-->
+<!--            <div class="monitor-block__title">By Document Subtype</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.by_subtype" :key="r.subtype" size="small">-->
+<!--                {{ r.subtype }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          <div class="monitor-block">-->
+<!--            <div class="monitor-block__title">Cash Flow</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="(n, k) in invoiceMonitor.by_cash_flow" :key="k" size="small" :type="k === 'income' ? 'success' : 'default'">-->
+<!--                {{ k }} · {{ n }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          <div v-if="invoiceMonitor.known_extractor_providers.length" class="monitor-block">-->
+<!--            <div class="monitor-block__title">Matched Vendors (deterministic extractors)</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.known_extractor_providers" :key="r.provider" size="small" type="info">-->
+<!--                {{ r.provider }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          <div v-if="invoiceMonitor.processed_not_saved.length" class="monitor-block">-->
+<!--            <div class="monitor-block__title">Processed But Not Saved (by classified kind)</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.processed_not_saved" :key="r.document_kind" size="small" type="warning">-->
+<!--                {{ r.document_kind }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
+
+<!--          <div v-if="invoiceMonitor.missing_required_fields.length" class="monitor-block">-->
+<!--            <div class="monitor-block__title">Missing Required Fields</div>-->
+<!--            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">-->
+<!--              <n-tag v-for="r in invoiceMonitor.missing_required_fields" :key="r.field" size="small" type="error">-->
+<!--                {{ r.field }} · {{ r.count }}-->
+<!--              </n-tag>-->
+<!--            </div>-->
+<!--          </div>-->
+<!--        </template>-->
+<!--      </section>-->
+
+      <!-- ── Storage & Drive ── -->
+      <section v-if="activeSection === 'system_health'" class="admin-section">
+        <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+          <n-tab-pane name="live" tab="Live">
+            <AdminServerLivePanel :key="`live-${adminDbTarget}`" />
+          </n-tab-pane>
+          <n-tab-pane name="process" tab="Process">
+            <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+            <template v-else-if="systemHealth">
+              <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;margin-bottom:16px">
+                <AdminStatCard title="Uptime" :primary="systemHealth.server.uptime_human" primary-label="Server" format="custom" />
+                <AdminStatCard title="Node.js" :primary="systemHealth.server.node_version" primary-label="Runtime" format="custom" />
+                <AdminStatCard title="Memory (RSS)" :primary="systemHealth.server.memory.rss_mb + ' MB'" primary-label="Resident Set" format="custom" />
+                <AdminStatCard title="Active Sessions" :primary="systemHealth.active_sessions" primary-label="Open" />
+              </div>
+              <div class="monitor-block">
+                <div class="monitor-block__title">Server Process</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;margin-top:10px;font-size:13px">
+                  <div><span style="color:var(--text-secondary)">PID:</span> {{ systemHealth.server.pid }}</div>
+                  <div><span style="color:var(--text-secondary)">Platform:</span> {{ systemHealth.server.platform }}</div>
+                  <div><span style="color:var(--text-secondary)">Heap Used:</span> {{ systemHealth.server.memory.heap_used_mb }} MB</div>
+                  <div><span style="color:var(--text-secondary)">Heap Total:</span> {{ systemHealth.server.memory.heap_total_mb }} MB</div>
+                  <div><span style="color:var(--text-secondary)">External:</span> {{ systemHealth.server.memory.external_mb }} MB</div>
+                </div>
+              </div>
+            </template>
+          </n-tab-pane>
+          <n-tab-pane name="database" tab="Database">
+            <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+            <div v-else-if="systemHealth" class="monitor-block">
+              <div class="monitor-block__title">
+                Database: {{ systemHealth.database.name }}
+                <span v-if="systemHealth.database.size_mb != null" style="font-weight:400;font-size:12px;color:var(--text-secondary);margin-right:8px">
+                  ({{ systemHealth.database.size_mb }} MB data / {{ systemHealth.database.storage_mb }} MB storage)
+                </span>
+              </div>
+              <n-data-table
+                :columns="collectionStatsColumns"
+                :data="systemHealth.database.collections"
+                :bordered="false"
+                :pagination="false"
+                size="small"
+                style="margin-top:10px"
+              />
+            </div>
+          </n-tab-pane>
+        </n-tabs>
       </section>
 
       <!-- ── Settings ── -->
       <section v-if="activeSection === 'settings'" class="admin-section">
         <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
         <template v-else-if="adminSettings">
-          <!-- Push notifications -->
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+            <n-tab-pane name="push" tab="Notifications">
           <div class="monitor-block">
             <div class="monitor-block__title">Admin Push Notifications</div>
             <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 12px">
@@ -1595,8 +1636,9 @@
             </div>
           </div>
 
-          <!-- Config grid -->
-          <div class="monitor-block" style="margin-top:14px">
+            </n-tab-pane>
+            <n-tab-pane name="config" tab="Configuration">
+          <div class="monitor-block">
             <div class="monitor-block__title">Application Configuration</div>
             <div class="admin-settings-grid" style="margin-top:12px">
               <div class="admin-setting-row"><span class="admin-setting-key">Environment</span><span class="admin-setting-val">{{ adminSettings.appEnv }}</span></div>
@@ -1633,8 +1675,9 @@
             </div>
           </div>
 
-          <!-- Manual report trigger -->
-          <div class="monitor-block" style="margin-top:14px">
+            </n-tab-pane>
+            <n-tab-pane name="reports" tab="Monthly Reports">
+          <div class="monitor-block">
             <div class="monitor-block__title">Manual Monthly Report Trigger</div>
             <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 12px">
               Send this month's report immediately for any user, regardless of their schedule.
@@ -1647,6 +1690,8 @@
               size="small"
             />
           </div>
+            </n-tab-pane>
+          </n-tabs>
         </template>
         <div v-else style="text-align:center;padding:60px;color:var(--text-secondary)">
           Click Refresh to load settings
@@ -1740,6 +1785,8 @@ import {
   NSelect,
   NSpin,
   NSwitch,
+  NTabPane,
+  NTabs,
   NTag,
   NCheckbox,
   NTooltip,
@@ -1772,9 +1819,7 @@ import {
   RefreshOutline,
   SearchOutline,
   SendOutline,
-  ServerOutline,
   SettingsOutline,
-  TimerOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
 import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget, type InspectorLead, type InspectorLeadStatus, type InspectorLeadsResponse} from "../services/apiService.js";
@@ -1886,12 +1931,8 @@ const adminGroups: { key: AdminGroupKey; label: string }[] = [
 const adminSections: { key: string; label: string; icon: any; group?: AdminGroupKey }[] = [
   // Operations — is the system healthy
   { key: "system_health",      label: "System Health",          icon: PulseOutline,         group: "ops" },
-  { key: "processes",          label: "Processes & Temp Files", icon: PulseOutline,         group: "ops" },
-  { key: "scheduler",          label: "Scheduler",              icon: TimerOutline,         group: "ops" },
-  { key: "import_queue",       label: "Import Queue",           icon: TimerOutline,         group: "ops" },
+  { key: "processes",          label: "Processes",              icon: PulseOutline,         group: "ops" },
   { key: "documents",          label: "Documents & Extraction", icon: DocumentOutline,      group: "ops" },
-  { key: "extraction_quality", label: "Extraction Quality",     icon: FlashOutline,         group: "ops" },
-  { key: "storage_drive",      label: "Storage & Drive",        icon: ServerOutline,        group: "ops" },
   { key: "gmail",              label: "Gmail Inbox",            icon: MailOutline,          group: "ops" },
   // Users — customer accounts and their data
   { key: "users",              label: "Users",                  icon: PeopleOutline,        group: "users" },
@@ -1941,8 +1982,80 @@ function toggleNavGroup(key: string) {
   } catch { /* per-browser convenience only */ }
 }
 const activeSection = ref("system_health");
+/** Sections inside one sidebar page. The first entry is the default tab. */
+const PAGE_TABS: Record<string, readonly string[]> = {
+  documents: ["storage", "status", "failed", "stuck", "fields", "gaps", "backends", "parse_failures", "slow", "iq_health", "iq_reasons", "iq_failures", "st_overview", "st_sources", "st_drive", "st_browser", "temp"],
+  reminders: ["failed", "status", "pending", "escalations", "advances"],
+  processes: ["workers", "work", "jobs", "cron", "monthly"],
+  monthly: ["config", "failures"],
+  bad_emails: ["clients", "reminders", "extracted", "bounced"],
+  system_health: ["live", "process", "database"],
+  settings: ["push", "config", "reports"],
+};
+const pageTab = ref("live");
 const currentItem = computed(() => adminSections.find((i) => i.key === activeSection.value));
 const sectionLoading = ref(false);
+
+function allowedPageTabs(section: string): readonly string[] {
+  return PAGE_TABS[section] ?? [];
+}
+
+function queryValue(key: "section" | "tab"): string {
+  const raw = route.query[key];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === "string" ? value : "";
+}
+
+/** Old sidebar pages now live as tabs. Map a bookmarked section + tab onto the new page. */
+function canonicalSection(key: string): string {
+  if (key === "s3_storage" || key === "storage_drive" || key === "import_queue" || key === "extraction_quality") return "documents";
+  if (key === "scheduler") return "processes";
+  if (key === "processes" && queryValue("tab") === "temp") return "documents";
+  return key;
+}
+
+function legacyTab(section: string): string | null {
+  const rawSection = queryValue("section");
+  const tab = queryValue("tab");
+  if (rawSection === "scheduler") return tab === "monthly" ? "monthly" : "cron";
+  if (rawSection === "processes" && tab === "temp") return "temp";
+  if (rawSection === "import_queue") {
+    if (tab === "reasons") return "iq_reasons";
+    if (tab === "failures") return "iq_failures";
+    return "iq_health";
+  }
+  if (rawSection === "extraction_quality") {
+    if (tab === "failures") return "parse_failures";
+    if (tab === "slow") return "slow";
+    return "backends";
+  }
+  if (rawSection === "storage_drive" || rawSection === "s3_storage") {
+    if (rawSection === "s3_storage" || tab === "browser") return "st_browser";
+    if (tab === "sources") return "st_sources";
+    if (tab === "drive") return "st_drive";
+    return "st_overview";
+  }
+  if (section === "documents" && tab === "temp") return "temp";
+  return null;
+}
+
+function tabFromQuery(section: string): string {
+  const allowed = allowedPageTabs(section);
+  if (!allowed.length) return "";
+  const mapped = legacyTab(section);
+  if (mapped && allowed.includes(mapped)) return mapped;
+  const value = queryValue("tab");
+  if (value && allowed.includes(value)) return value;
+  return allowed[0];
+}
+
+function onPageTab(tab: string) {
+  if (!allowedPageTabs(activeSection.value).includes(tab) || tab === pageTab.value) return;
+  pageTab.value = tab;
+  const current = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
+  if (current === tab) return;
+  void router.replace({query: {...route.query, tab}});
+}
 
 // ── Users ──────────────────────────────────────────────────────────────────
 const users = ref<any[]>([]);
@@ -3512,13 +3625,19 @@ function backupStatus(lastRunAt: string | null): "success" | "warning" {
 
 // ── Section switching & loading ────────────────────────────────────────────
 async function switchSection(key: string) {
-  if (key === "s3_storage") key = "storage_drive";
+  key = canonicalSection(key);
   activeSection.value = key;
   if (isMobileViewport.value) {
     showMobileNav.value = false;
   }
-  if (route.query.section !== key) {
-    await router.replace({ query: { ...route.query, section: key } });
+  const tab = tabFromQuery(key);
+  pageTab.value = tab;
+  const nextQuery: Record<string, unknown> = { ...route.query, section: key };
+  const currentTab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
+  if (tab) nextQuery.tab = tab;
+  else delete nextQuery.tab;
+  if (route.query.section !== key || (currentTab ?? "") !== tab) {
+    await router.replace({ query: nextQuery as any });
   }
   if (SEED_SECTION_KEYS.includes(key) && !visitedSeedSections.value.has(key)) {
     visitedSeedSections.value = new Set([...visitedSeedSections.value, key]);
@@ -3538,37 +3657,45 @@ async function loadSectionData(key: string) {
   sectionLoading.value = true;
   try {
     if (key === "documents") {
-      const [monitor, gaps] = await Promise.all([api.admin.monitorDocuments(), api.admin.monitorPipelineGaps(), loadExtractions(1)]);
+      if (users.value.length === 0) await loadUsers();
+      const [monitor, gaps, quality, queue, storage] = await Promise.all([
+        api.admin.monitorDocuments(),
+        api.admin.monitorPipelineGaps(),
+        api.admin.monitorExtractionQuality(),
+        api.admin.monitorImportQueue(),
+        api.admin.monitorStorageDrive(),
+        loadExtractions(1),
+      ]);
       docMonitor.value = monitor;
       pipelineGaps.value = gaps;
+      extractionQuality.value = quality;
+      importQueue.value = queue;
+      storageDrive.value = storage;
+      processMonitor.value = await api.admin.monitorProcesses();
     } else if (SEED_SECTION_KEYS.includes(key)) {
       // Every SEED page shows the lead totals, and WhatsApp needs the rows.
       if (key === "inspector_leads" || !inspectorLeadsRows.value.length) await loadInspectorLeads(1);
-    } else if (key === "extraction_quality") {
-      extractionQuality.value = await api.admin.monitorExtractionQuality();
     } else if (key === "reminders") {
       const [rem, advances] = await Promise.all([api.admin.monitorReminders(), api.admin.monitorContractAdvances()]);
       reminderMonitor.value = rem;
       contractAdvances.value = advances;
-    } else if (key === "scheduler") {
-      schedulerMonitor.value = await api.admin.monitorScheduler();
     } else if (key === "monthly") {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
     } else if (key === "bad_emails") {
       badEmailsData.value = await api.admin.monitorBadEmails();
-    } else if (key === "import_queue") {
-      importQueue.value = await api.admin.monitorImportQueue();
     } else if (key === "invoices") {
       invoiceMonitor.value = await api.admin.monitorInvoices();
-    } else if (key === "storage_drive" || key === "s3_storage") {
-      if (users.value.length === 0) await loadUsers();
-      storageDrive.value = await api.admin.monitorStorageDrive();
     } else if (key === "system_health") {
       systemHealth.value = await api.admin.monitorSystemHealth();
     } else if (key === "processes") {
       // Job rows carry a user id; the users list is what turns it into an email.
       if (users.value.length === 0) await loadUsers();
-      processMonitor.value = await api.admin.monitorProcesses();
+      const [processes, scheduler] = await Promise.all([
+        api.admin.monitorProcesses(),
+        api.admin.monitorScheduler(),
+      ]);
+      processMonitor.value = processes;
+      schedulerMonitor.value = scheduler;
       await loadProcessJobs();
     } else if (key === "settings") {
       adminSettings.value = await api.admin.getAdminSettings();
@@ -3578,7 +3705,7 @@ async function loadSectionData(key: string) {
   } finally {
     sectionLoading.value = false;
   }
-  if ((key === "storage_drive" || key === "s3_storage") && s3BrowseUserId.value) {
+  if (key === "documents" && s3BrowseUserId.value) {
     await loadS3Files();
   }
 }
@@ -3605,7 +3732,7 @@ async function startPolling() {
   // Scheduler polling (30s)
   if (pollingIntervals.value.has("scheduler")) clearInterval(pollingIntervals.value.get("scheduler")!);
   pollingIntervals.value.set("scheduler", setInterval(async () => {
-    if (activeSection.value === "scheduler" && schedulerMonitor.value) {
+    if (activeSection.value === "processes" && schedulerMonitor.value) {
       try {
         schedulerMonitor.value = await api.admin.monitorScheduler();
         lastRefreshed.value.set("scheduler", new Date());
@@ -3640,8 +3767,8 @@ function sectionFromQuery(): string | null {
   const raw = route.query.section;
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value || typeof value !== "string") return null;
-  if (value === "s3_storage") return "storage_drive";
-  return adminSections.some((item) => item.key === value) ? value : null;
+  const canonical = canonicalSection(value);
+  return adminSections.some((item) => item.key === canonical) ? canonical : null;
 }
 
 onMounted(async () => {
@@ -3666,6 +3793,14 @@ watch(
     if (next && next !== activeSection.value) {
       await switchSection(next);
     }
+  },
+);
+
+watch(
+  () => route.query.tab,
+  () => {
+    const next = tabFromQuery(activeSection.value);
+    if (next && next !== pageTab.value) pageTab.value = next;
   },
 );
 
@@ -3933,6 +4068,21 @@ onUnmounted(() => {
 
 .admin-section--leads .monitor-block {
   border-color: var(--border-strong);
+}
+
+.admin-page-tabs {
+  margin-top: 16px;
+}
+
+.admin-page-tabs :deep(.n-tabs-pane-wrapper) {
+  padding-top: 12px;
+}
+
+.admin-tab-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .admin-section__toolbar {
