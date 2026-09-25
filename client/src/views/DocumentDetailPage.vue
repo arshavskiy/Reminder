@@ -602,7 +602,7 @@ async function loadPreview() {
     const { url } = await res.json() as { url: string };
     previewUrl.value = url;
   } catch (e) {
-    previewError.value = `לא ניתן לטעון תצוגה מקדימה: ${e}`;
+    previewError.value = t("documentDetailMsg.previewFailed", {error: String(e)});
   }
 }
 
@@ -615,7 +615,7 @@ async function openDownload() {
     const { url } = await res.json() as { url: string };
     window.open(url, "_blank", "noopener");
   } catch (e) {
-    message.error(`לא ניתן להוריד: ${e}`);
+    message.error(t("documentDetailMsg.downloadFailed", {error: String(e)}));
   } finally {
     downloading.value = false;
   }
@@ -629,14 +629,14 @@ async function deleteDoc() {
   if (!doc.value) return;
   const currentDoc = doc.value;
   confirm({
-    title: "מחיקת מסמך",
-    content: `למחוק את המסמך "${currentDoc.file_name}"? פעולה זו אינה ניתנת לביטול.`,
-    confirmText: "מחק",
+    title: l.value.documentDetailMsg.deleteDocTitle,
+    content: t("documentDetailMsg.deleteDocConfirm", {name: currentDoc.file_name}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       deleting.value = true;
       try {
         await api.documents.delete(String(currentDoc.id));
-        message.success("המסמך נמחק");
+        message.success(l.value.documentDetailMsg.docDeleted);
         router.push("/documents");
       } catch (e) {
         message.error(String(e));
@@ -654,7 +654,7 @@ const availableTemplates = ref<DocTemplate[]>([]);
 
 const templateSelectOptions = computed(() =>
   availableTemplates.value.map((t) => ({
-    label: t.name + (t.is_default ? " · ברירת מחדל" : ""),
+    label: t.name + (t.is_default ? ` · ${l.value.documentDetailMsg.default}` : ""),
     value: String(t.id),
   })),
 );
@@ -705,7 +705,7 @@ async function rerunExtract(templateId?: string) {
       if (result.document) doc.value = result.document;
       extractionRaw.value = result.fields ?? null;
       extractionRawText.value = null;
-      message.success("המסמך נשלח לעיבוד מחדש");
+      message.success(l.value.documentDetailMsg.reprocessQueued);
       await reloadDoc();
       return;
     }
@@ -713,7 +713,7 @@ async function rerunExtract(templateId?: string) {
     if (result.document) doc.value = result.document;
     extractionRaw.value = result.fields ?? null;
     extractionRawText.value = null;
-    message.success(result.template ? `חילוץ AI הושלם · ${result.template}` : "חילוץ AI הושלם");
+    message.success(result.template ? `${l.value.documentDetailMsg.aiExtractDone} · ${result.template}` : l.value.documentDetailMsg.aiExtractDone);
     await reloadDoc();
   } catch (e) {
     message.error(String(e));
@@ -1226,7 +1226,7 @@ async function saveContractSidePanel() {
       manual_fields,
       skip_reminders: true,
     } as any);
-    message.success("התסקיר עודכן");
+    message.success(l.value.inspectionModalMsg.updated);
     await loadLinkedContracts(String(doc.value?.id ?? resolvedId()));
   } catch (e) {
     message.error(String(e));
@@ -1272,15 +1272,15 @@ function openContractDocument(contract: ContractWithClient) {
 
 function deleteLinkedContract(contract: ContractWithClient) {
   confirm({
-    title: "מחיקת תסקיר",
-    content: `למחוק את התסקיר "${contract.contract_number ?? contract.id}"? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.documentDetailMsg.deleteInspectionTitle,
+    content: t("documentDetailMsg.deleteInspectionConfirm", {name: String(contract.contract_number ?? contract.id)}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await api.contracts.delete(String(contract.id), { deleteRelatedReminders: true });
         linkedContracts.value = linkedContracts.value.filter((row) => String(row.id) !== String(contract.id));
         linkedReminders.value = linkedReminders.value.filter((row) => String(row.source_id) !== String(contract.id));
-        message.success("התסקיר נמחק");
+        message.success(l.value.documentDetailMsg.inspectionDeleted);
       } catch (e) {
         message.error(String(e));
       }
@@ -1294,14 +1294,14 @@ function remindersForContract(contractId: string | number): ReminderWithContext[
 
 function deleteLinkedReminder(reminder: ReminderWithContext) {
   confirm({
-    title: "מחיקת תזכורת",
-    content: `למחוק את התזכורת "${reminder.title}"? פעולה זו אינה הפיכה.`,
-    confirmText: "מחק",
+    title: l.value.documentDetailMsg.deleteReminderTitle,
+    content: t("documentDetailMsg.deleteReminderConfirm", {name: reminder.title}),
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       try {
         await api.reminders.delete(reminder.id);
         linkedReminders.value = linkedReminders.value.filter((row) => row.id !== reminder.id);
-        message.success("התזכורת נמחקה");
+        message.success(l.value.documentDetailMsg.reminderDeleted);
       } catch (e) {
         message.error(String(e));
       }
@@ -1315,7 +1315,7 @@ async function dismissLinkedReminder(reminder: ReminderWithContext) {
     linkedReminders.value = linkedReminders.value.map((row) =>
         row.id === reminder.id ? {...row, status: "dismissed"} : row,
     );
-    message.success("התזכורת בוטלה");
+    message.success(l.value.documentDetailMsg.reminderDismissed);
   } catch (e) {
     message.error(String(e));
   }
@@ -1329,9 +1329,9 @@ async function sendLinkedReminder(reminder: ReminderWithContext) {
       linkedReminders.value = linkedReminders.value.map((row) =>
           row.id === reminder.id ? {...row, status: "sent"} : row,
       );
-      message.success("התזכורת נשלחה");
+      message.success(l.value.documentDetailMsg.reminderSent);
     } else {
-      message.error(res.error ?? "שגיאה בשליחה");
+      message.error(res.error ?? l.value.documentDetailMsg.sendError);
     }
   } catch (e) {
     message.error(String(e));
@@ -1364,7 +1364,7 @@ async function saveFields() {
     await api.documents.updateFields(String(doc.value.id), fieldEdits.value);
     editingFields.value = false;
     fieldEdits.value = {};
-    message.success("הנתונים עודכנו — תזכורות מקושרות עודכנו אוטומטית");
+    message.success(l.value.documentDetailMsg.fieldsUpdated);
     await reloadDoc();
   } catch (e) {
     message.error(String(e));

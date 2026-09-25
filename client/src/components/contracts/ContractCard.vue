@@ -20,8 +20,8 @@
           <span :class="statusTagClass(row.status)">{{ statusLabel(row.status) }}</span>
           <span class="tag tag--neutral">{{ row.contract_type ?? "-" }}</span>
           <span v-if="row.counterparty" class="tag tag--neutral">{{ row.counterparty }}</span>
-          <span v-if="!row.document_id" class="tag tag--warn">חסר PDF</span>
-          <span v-if="!hasEmail" class="tag tag--warn">חסר אימייל</span>
+          <span v-if="!row.document_id" class="tag tag--warn">{{ l.contractCard.missingPdf }}</span>
+          <span v-if="!hasEmail" class="tag tag--warn">{{ l.contractCard.missingEmail }}</span>
           <span
             v-for="issue in (issues ?? [])"
             :key="issue.kind"
@@ -38,17 +38,17 @@
 
     <div class="card__foot">
       <div class="card__foot-col">
-        <span class="kv"><strong>לקוח:</strong> <router-link v-if="row.client_id" class="client-link" :to="`/clients/${row.client_id}`" @click.stop>{{ row.client_name ?? "-" }}</router-link><template v-else>{{ row.client_name ?? "-" }}</template></span>
-        <span class="kv"><strong>תאריך תסקיר:</strong> {{ formatDate(row.start_date) }}</span>
-        <span v-if="equipmentLabel" class="kv kv--equipment"><strong>ציוד נבדק:</strong> {{ equipmentLabel }}</span>
+        <span class="kv"><strong>{{ l.contractCard.client }}</strong> <router-link v-if="row.client_id" class="client-link" :to="`/clients/${row.client_id}`" @click.stop>{{ row.client_name ?? "-" }}</router-link><template v-else>{{ row.client_name ?? "-" }}</template></span>
+        <span class="kv"><strong>{{ l.contractCard.inspectionDate }}</strong> {{ formatDate(row.start_date) }}</span>
+        <span v-if="equipmentLabel" class="kv kv--equipment"><strong>{{ l.contractCard.equipment }}</strong> {{ equipmentLabel }}</span>
       </div>
       <div class="card__foot-col card__foot-col--end">
         <span class="kv">
-          <strong>{{ kind === "inspection" ? "בתוקף עד:" : "תפוגה:" }}</strong>
+          <strong>{{ kind === "inspection" ? l.contractCard.validUntil : l.contractCard.expiry }}</strong>
           <span :class="expiryClass(row.expiry_date)">{{ formatDate(row.expiry_date) }}</span>
         </span>
         <span v-if="row.amount" class="kv">
-          <strong>סכום:</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
+          <strong>{{ l.contractCard.amount }}</strong> {{ row.amount?.toLocaleString() }} {{ row.currency }}
         </span>
       </div>
     </div>
@@ -57,7 +57,7 @@
       <div class="reminders-header">
         <span class="reminders-title">
           <n-icon :component="NotificationsOutline" :size="14" />
-          תזכורות
+          {{ l.contractCard.reminders }}
         </span>
       </div>
       <div v-if="reminders.length" class="reminders-list">
@@ -65,7 +65,7 @@
             v-for="reminder in reminders"
             :key="reminder.id"
             class="reminder-row reminder-row--clickable"
-            title="פתח בעמוד התזכורות"
+            :title="l.contractCard.openInReminders"
             @click.stop="router.push('/reminders')"
         >
           <span class="reminder-date">{{ reminder.trigger_date }}</span>
@@ -87,7 +87,7 @@
             </button>
             <button
                 class="btn btn--ghost btn--xs icon-btn"
-                title="תצוגת תזכורת"
+                :title="l.contractCard.previewReminder"
                 type="button"
                 @click.stop="emit('preview-reminder', reminder)"
             >
@@ -96,7 +96,7 @@
             <button
                 v-if="reminder.status === 'pending'"
                 class="btn btn--ghost btn--xs icon-btn"
-                title="בטל תזכורת"
+                :title="l.contractCard.dismissReminder"
                 type="button"
                 @click.stop="emit('dismiss-reminder', reminder)"
             >
@@ -104,7 +104,7 @@
             </button>
             <button
                 class="btn btn--danger-ghost btn--xs icon-btn"
-                title="מחק תזכורת"
+                :title="l.contractCard.deleteReminder"
                 type="button"
                 @click.stop="emit('delete-reminder', reminder)"
             >
@@ -113,7 +113,7 @@
           </div>
         </div>
       </div>
-      <p v-else class="reminders-empty">אין תזכורות לתסקיר זה</p>
+      <p v-else class="reminders-empty">{{ l.contractCard.noReminders }}</p>
     </div>
   </article>
 </template>
@@ -126,6 +126,9 @@ import {useRouter} from "vue-router";
 import type {ContractWithClient, ReminderWithContext} from "@shared/types.js";
 import type {RowIssue} from "@shared/rowIssues.js";
 import {contractRowHasEmail} from "@shared/contractEmail.js";
+import {useI18n} from "../../composables/useI18n.js";
+
+const {l, t} = useI18n();
 
 const router = useRouter();
 
@@ -167,15 +170,15 @@ const sendableReminder = computed(() => {
 });
 const canCreateReminder = computed(() => Boolean(props.row.expiry_date));
 const reminderButtonTitle = computed(() => {
-  if (!props.row.expiry_date) return "חסר תאריך תוקף — לא ניתן ליצור תזכורת";
-  if (!hasEmail.value) return "צור תזכורת (חסר אימייל — לא תישלח עד שיתווסף)";
-  return "צור תזכורת לתסקיר זה";
+  if (!props.row.expiry_date) return l.value.contractCard.reminderNoExpiry;
+  if (!hasEmail.value) return l.value.contractCard.reminderNoEmail;
+  return l.value.contractCard.createReminder;
 });
 const emailDeliveryTitle = computed(() => {
   const delivery = props.row.email_delivery;
   const recipient = delivery?.recipient ? `: ${delivery.recipient}` : "";
   const reason = delivery?.reason ? ` - ${delivery.reason}` : "";
-  return `אימייל חזר${recipient}${reason}`;
+  return `${l.value.contractCard.emailBounced}${recipient}${reason}`;
 });
 
 function reminderHasEmail(reminder: ReminderWithContext): boolean {
@@ -190,8 +193,8 @@ function reminderSendable(reminder: ReminderWithContext): boolean {
 }
 
 function reminderSendTitle(reminder: ReminderWithContext): string {
-  if (!reminderHasEmail(reminder)) return "חסר אימייל — לא ניתן לשלוח";
-  return reminder.status === "sent" ? "שלח שוב" : "שלח תזכורת";
+  if (!reminderHasEmail(reminder)) return l.value.contractCard.cannotSendNoEmail;
+  return reminder.status === "sent" ? l.value.contractCard.sendAgain : l.value.contractCard.sendReminder;
 }
 
 const displayContractNumber = computed(() => {
@@ -220,7 +223,7 @@ const showReminderActions = computed(() => props.showReminderActions);
 
 const subtitle = computed(() =>
     props.row.summary ??
-    `${props.row.contract_type ?? (props.kind === "inspection" ? "תסקיר" : "חוזה")} - ${props.row.client_name ?? "-"}`
+    `${props.row.contract_type ?? (props.kind === "inspection" ? l.value.contractCard.inspection : l.value.contractCard.contract)} - ${props.row.client_name ?? "-"}`
 );
 
 // Short label for the tested equipment: prefer the structured _equipment rows
@@ -233,7 +236,7 @@ const equipmentLabel = computed<string | null>(() => {
           const model = (eq as any).models?.length ? (eq as any).models.join(", ") : eq.model;
           const serial = (eq as any).serial_numbers?.length ? (eq as any).serial_numbers.join(", ") : eq.serial_number;
           const qty = (eq as any).serial_numbers?.length > 1 ? ` (×${(eq as any).serial_numbers.length})` : "";
-          return [eq.name, eq.manufacturer, model, serial ? `מס׳ ${serial}` : null].filter(Boolean).join(" · ") + qty;
+          return [eq.name, eq.manufacturer, model, serial ? t("contractCard.serialNo", {serial}) : null].filter(Boolean).join(" · ") + qty;
         })
         .filter(Boolean);
     if (parts.length) return parts.join(" | ");
@@ -251,12 +254,12 @@ function formatDate(d: string | null | undefined): string {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    active: "פעיל",
-    draft: "טיוטה",
-    expired: "פג תוקף",
-    cancelled: "בוטל",
-    renewed: "חודש",
-    overdue: "פג תוקף",
+    active: l.value.contractCard.statusActive,
+    draft: l.value.contractCard.statusDraft,
+    expired: l.value.contractCard.statusExpired,
+    cancelled: l.value.contractCard.statusCancelled,
+    renewed: l.value.contractCard.statusRenewed,
+    overdue: l.value.contractCard.statusExpired,
   };
   return map[status] ?? status;
 }
@@ -295,12 +298,12 @@ function openDefault() {
 
 function reminderStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    pending: "ממתין",
-    sent: "נשלח",
-    snoozed: "נדחה",
-    dismissed: "בוטל",
-    no_email: "חסר אימייל",
-    error: "שגיאה",
+    pending: l.value.contractCard.reminderPending,
+    sent: l.value.contractCard.reminderSent,
+    snoozed: l.value.contractCard.reminderSnoozed,
+    dismissed: l.value.contractCard.reminderDismissed,
+    no_email: l.value.contractCard.missingEmail,
+    error: l.value.contractCard.reminderError,
   };
   return map[status] ?? status;
 }

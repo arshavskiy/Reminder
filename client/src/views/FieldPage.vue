@@ -41,36 +41,36 @@
           <span>{{ selected.manufacturer }}</span>
         </div>
         <div v-if="selected.model" class="field__meta-row">
-          <span class="field__meta-label">דגם</span>
+          <span class="field__meta-label">{{ l.fieldPage.model }}</span>
           <span>{{ selected.model }}</span>
         </div>
         <div v-if="selected.serial_number" class="field__meta-row">
-          <span class="field__meta-label">מ"ס</span>
+          <span class="field__meta-label">{{ l.fieldPage.serial }}</span>
           <span>{{ selected.serial_number }}</span>
         </div>
         <div v-if="selected.license_number" class="field__meta-row">
-          <span class="field__meta-label">מס' רישוי</span>
+          <span class="field__meta-label">{{ l.fieldPage.license }}</span>
           <span>{{ selected.license_number }}</span>
         </div>
         <div v-if="selected.capacity" class="field__meta-row">
-          <span class="field__meta-label">עומס עבודה</span>
+          <span class="field__meta-label">{{ l.fieldPage.workingLoad }}</span>
           <span>{{ selected.capacity }}</span>
         </div>
         <div v-if="selected.load_capacity_test" class="field__meta-row">
-          <span class="field__meta-label">עומס מבחן</span>
+          <span class="field__meta-label">{{ l.fieldPage.testLoad }}</span>
           <span>{{ selected.load_capacity_test }}</span>
         </div>
       </div>
 
       <div class="field__checklist">
         <div class="field__checklist-head">
-          <h3>צ׳קליסט בדיקה</h3>
+          <h3>{{ l.fieldPage.checklist }}</h3>
           <button
               :disabled="checklistSaving"
               class="field__small-btn"
               @click="saveChecklist"
           >
-            {{ checklistSaving ? "שומר..." : "שמור" }}
+            {{ checklistSaving ? l.fieldPage.saving : l.fieldPage.save }}
           </button>
         </div>
         <label v-for="item in checklistDraft" :key="item.id" class="field__check">
@@ -79,24 +79,24 @@
           <input
               v-model="item.note"
               class="field__check-note"
-              placeholder="הערה"
+              :placeholder="l.fieldPage.note"
               type="text"
           />
         </label>
       </div>
 
       <!-- Inspection history preview -->
-      <div v-if="historyLoading" class="field__loading">טוען היסטוריה...</div>
+      <div v-if="historyLoading" class="field__loading">{{ l.fieldPage.loadingHistory }}</div>
       <div v-else-if="history.length" class="field__hist">
-        <h3 class="field__hist-title">בדיקות אחרונות</h3>
+        <h3 class="field__hist-title">{{ l.fieldPage.recentInspections }}</h3>
         <div v-for="ev in history.slice(0, 5)" :key="ev.id" class="field__hist-item">
           <span :class="`field__hist-dot--${ev.status}`" class="field__hist-dot"></span>
           <div class="field__hist-body">
-            <span class="field__hist-type">{{ ev.contract_type ?? 'בדיקה' }}</span>
+            <span class="field__hist-type">{{ ev.contract_type ?? l.fieldPage.inspection }}</span>
             <span v-if="ev.expiry_date" :class="expiryClass(ev)" class="field__hist-expiry">
-              פקיעה: {{ ev.expiry_date }}
+              {{ l.fieldPage.expires }} {{ ev.expiry_date }}
               <span v-if="ev.days_until !== null">
-                ({{ ev.days_until < 0 ? `פג לפני ${Math.abs(ev.days_until)}י` : `${ev.days_until}י` }})
+                ({{ ev.days_until < 0 ? t("fieldPage.expiredDaysAgo", {days: Math.abs(ev.days_until)}) : t("fieldPage.daysLeft", {days: ev.days_until}) }})
               </span>
             </span>
           </div>
@@ -110,10 +110,10 @@
           class="field__btn field__btn--doc"
           @click="router.push(`/documents/${selected.document_id}`)"
         >
-          📄 {{ selected.document_name ?? "מסמך מקור" }}
+          📄 {{ selected.document_name ?? l.fieldPage.sourceDocument }}
         </button>
         <label :class="{ 'field__btn--uploading': photoUploading }" class="field__btn field__btn--photo">
-          {{ photoUploading ? 'מעלה...' : 'צלם תמונה' }}
+          {{ photoUploading ? l.fieldPage.uploading : l.fieldPage.takePhoto }}
           <input
             v-if="!photoUploading"
             accept="image/*"
@@ -124,14 +124,14 @@
           />
         </label>
         <button class="field__btn field__btn--report" @click="openReportModal">
-          📝 פתח תסקיר חדש
+          📝 {{ l.fieldPage.newInspection }}
         </button>
       </div>
 
       <!-- Saved photos gallery -->
       <div v-if="savedPhotos.length" class="field__gallery">
         <div v-for="(photo, i) in savedPhotos" :key="photo.key" class="field__gallery-item">
-          <img :src="photo.url" alt="תמונת ציוד" class="field__photo" @click="lightboxUrl = photo.url" />
+          <img :src="photo.url" :alt="l.fieldPage.equipmentPhoto" class="field__photo" @click="lightboxUrl = photo.url" />
           <button class="field__photo-del" :title="l.field.deletePhoto" @click="deletePhoto(i)">✕</button>
         </div>
       </div>
@@ -143,7 +143,7 @@
     </div>
 
     <!-- Offline indicator -->
-    <div v-if="!online" class="field__offline">מצב לא מקוון — מוצגים נתונים מהמטמון</div>
+    <div v-if="!online" class="field__offline">{{ l.fieldPage.offline }}</div>
 
     <HydraulicCheckModal ref="hydraulicModalRef" v-model:show="hydraulicModalVisible" />
   </div>
@@ -160,7 +160,7 @@ import type {Equipment} from "../shared/types.js";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 
 const {confirm} = useConfirm();
-const {l} = useI18n();
+const {l, t} = useI18n();
 const router = useRouter();
 const route = useRoute();
 const query = ref("");
@@ -219,11 +219,11 @@ async function select(r: Equipment) {
 
 function checklistFromEquipment(r: Equipment): NonNullable<Equipment["inspection_checklist"]> {
   return (r.inspection_checklist?.length ? r.inspection_checklist : [
-    {id: "visual", label: "בדיקה חזותית", checked: false, note: null},
-    {id: "serial", label: "אימות מספר סידורי / רישוי", checked: false, note: null},
-    {id: "load", label: "בדיקת עומס והתאמה", checked: false, note: null},
-    {id: "safety", label: "בדיקת אמצעי בטיחות", checked: false, note: null},
-    {id: "photos", label: "צילום מצב הציוד", checked: false, note: null},
+    {id: "visual", label: l.value.fieldPage.checkVisual, checked: false, note: null},
+    {id: "serial", label: l.value.fieldPage.checkSerial, checked: false, note: null},
+    {id: "load", label: l.value.fieldPage.checkLoad, checked: false, note: null},
+    {id: "safety", label: l.value.fieldPage.checkSafety, checked: false, note: null},
+    {id: "photos", label: l.value.fieldPage.checkPhotos, checked: false, note: null},
   ]).map((item) => ({...item}));
 }
 
@@ -235,7 +235,7 @@ async function saveChecklist() {
     checklistDraft.value = saved.checklist.map((item) => ({...item}));
     selected.value.inspection_checklist = saved.checklist;
   } catch {
-    alert("שגיאה בשמירת הצ׳קליסט");
+    alert(l.value.fieldPage.checklistSaveError);
   } finally {
     checklistSaving.value = false;
   }
@@ -246,8 +246,8 @@ function buildFindingsPrefill(items: NonNullable<Equipment["inspection_checklist
   const uncheckedItems = items.filter((i) => !i.checked).map((i) => i.label);
   const notes = items.filter((i) => i.note?.trim()).map((i) => `${i.label}: ${i.note!.trim()}`);
   const generalParts: string[] = [];
-  if (checked.length) generalParts.push(`נבדק: ${checked.join(", ")}`);
-  if (uncheckedItems.length) generalParts.push(`לא נבדק: ${uncheckedItems.join(", ")}`);
+  if (checked.length) generalParts.push(`${l.value.fieldPage.checked} ${checked.join(", ")}`);
+  if (uncheckedItems.length) generalParts.push(`${l.value.fieldPage.notChecked} ${uncheckedItems.join(", ")}`);
   return {general: generalParts.join("\n"), note: notes.join("\n")};
 }
 
@@ -273,7 +273,7 @@ async function onPhoto(e: Event) {
     const photo = await api.equipment.uploadPhoto(String(selected.value.id), file);
     savedPhotos.value.push(photo);
   } catch (err) {
-    alert("שגיאה בהעלאת תמונה");
+    alert(l.value.fieldPage.photoUploadError);
   } finally {
     photoUploading.value = false;
     (e.target as HTMLInputElement).value = "";
@@ -284,9 +284,9 @@ async function deletePhoto(index: number) {
   if (!selected.value) return;
   const { key } = savedPhotos.value[index];
   confirm({
-    title: "מחיקת תמונה",
-    content: "למחוק את התמונה? פעולה זו אינה הפיכה.",
-    confirmText: "מחק",
+    title: l.value.fieldPage.deletePhotoTitle,
+    content: l.value.fieldPage.deletePhotoConfirm,
+    confirmText: l.value.fieldPage.delete,
     onConfirm: async () => {
       await api.equipment.deletePhoto(String(selected.value!.id), key);
       savedPhotos.value.splice(index, 1);

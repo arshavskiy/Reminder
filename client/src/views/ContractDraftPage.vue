@@ -2,33 +2,33 @@
   <div class="contract-draft">
     <PageHeader :title="draftTitle">
       <template #breadcrumb>
-        <router-link to="/contracts">תסקירים</router-link>
+        <router-link to="/contracts">{{ l.contractDraftPage.inspections }}</router-link>
         <span class="sep">/</span>
-        <span>{{ template?.name ?? "טיוטה" }}</span>
+        <span>{{ template?.name ?? l.contractDraftPage.draft }}</span>
       </template>
       <template #actions>
-        <button class="xl-btn" @click="editContractFromDraft">ערוך</button>
+        <button class="xl-btn" @click="editContractFromDraft">{{ l.contractDraftPage.edit }}</button>
         <button :disabled="draftSaving" :class="{ 'xl-btn--loading': draftSaving }" class="xl-btn" @click="saveComposeDraft">
           <span v-if="draftSaving" class="xl-loader" aria-hidden="true"></span>
-          <span>שמור טיוטה</span>
+          <span>{{ l.contractDraftPage.saveDraft }}</span>
         </button>
         <button :disabled="printing" :class="{ 'xl-btn--loading': printing }" class="xl-btn xl-btn--primary" @click="printPdf">
           <span v-if="printing" class="xl-loader" aria-hidden="true"></span>
-          <span>🖨 הדפס</span>
+          <span>🖨 {{ l.equipmentPage.print }}</span>
         </button>
         <button :disabled="savingPdf" :class="{ 'xl-btn--loading': savingPdf }" class="xl-btn xl-btn--primary" @click="savePdf">
           <span v-if="savingPdf" class="xl-loader" aria-hidden="true"></span>
-          <span>הורד</span>
+          <span>{{ l.contractDraftPage.download }}</span>
         </button>
         <button :class="{ 'xl-btn--loading': creatingReminder }" :disabled="creatingReminder" class="xl-btn xl-btn--primary" @click="createReminder">
           <span v-if="creatingReminder" aria-hidden="true" class="xl-loader"></span>
-          <span>צור תזכורת</span>
+          <span>{{ l.contractDraftPage.createReminder }}</span>
         </button>
         <a v-if="linkedQuote && linkedQuote.status === 'issued'" :href="paymentService.pdf(linkedQuote._id)" target="_blank" rel="noopener" class="xl-btn">
-          <span>הצעת מחיר PDF</span>
+          <span>{{ l.contractDraftPage.quotePdf }}</span>
         </a>
         <router-link v-else-if="linkedQuote" :to="`/quotes/${linkedQuote._id}`" class="xl-btn">
-          <span>הצעת מחיר (טיוטה)</span>
+          <span>{{ l.contractDraftPage.quoteDraft }}</span>
         </router-link>
       </template>
     </PageHeader>
@@ -37,15 +37,15 @@
 
     <div v-if="loading" class="route-draft-loading">
       <n-spin :show="true" size="large">
-        <div class="route-draft-loading__text">טוען טיוטת תסקיר...</div>
+        <div class="route-draft-loading__text">{{ l.contractDraftPage.loading }}</div>
       </n-spin>
     </div>
 
     <div v-else-if="template" class="compose-wrap">
       <div class="compose-preview">
         <div class="pane-label pane-label--with-status">
-          <span>תצוגה מקדימה</span>
-          <span v-if="draftSavedAt" class="compose-draft-status">טיוטה נשמרה {{ formatDraftTime(draftSavedAt) }}</span>
+          <span>{{ l.contractDraftPage.preview }}</span>
+          <span v-if="draftSavedAt" class="compose-draft-status">{{ l.contractDraftPage.draftSaved }} {{ formatDraftTime(draftSavedAt) }}</span>
         </div>
         <div class="compose-scroll">
           <div :style="{ width: Math.max(composeTotalWidth, 780) + 'px' }" class="doc-paper">
@@ -98,22 +98,22 @@
         </div>
 
         <div v-if="linkedQuote" class="quote-preview-block">
-          <div class="pane-label">תצוגה מקדימה — הצעת מחיר</div>
+          <div class="pane-label">{{ l.contractDraftPage.quotePreview }}</div>
           <iframe
               v-if="linkedQuote.status === 'issued'"
               :src="paymentService.pdf(linkedQuote._id)"
-              :title="`הצעת מחיר ${linkedQuote.number || ''}`"
+              :title="`${l.inspectionModalMsg.quote} ${linkedQuote.number || ''}`"
               class="quote-preview-frame"
           />
           <div v-else class="quote-preview-empty">
-            הצעת המחיר עדיין בטיוטה ולא הופקה כ-PDF.
-            <router-link :to="`/quotes/${linkedQuote._id}`">פתח את הטיוטה</router-link>
+            {{ l.contractDraftPage.quoteNotIssued }}
+            <router-link :to="`/quotes/${linkedQuote._id}`">{{ l.contractDraftPage.openDraft }}</router-link>
           </div>
         </div>
       </div>
 
       <div class="compose-form">
-        <div class="pane-label">שדות למילוי</div>
+        <div class="pane-label">{{ l.contractDraftPage.fieldsToFill }}</div>
         <div class="compose-fields">
           <div
             v-for="f in composeFields"
@@ -151,7 +151,7 @@
             <div v-if="f.error" class="compose-field-error">{{ f.error }}</div>
             <div v-else class="compose-field-hint">{{ f.hint }}</div>
           </div>
-          <div v-if="!composeFields.length" class="compose-empty">אין שדות</div>
+          <div v-if="!composeFields.length" class="compose-empty">{{ l.contractDraftPage.noFields }}</div>
         </div>
       </div>
     </div>
@@ -169,6 +169,9 @@ import {paymentService, type PaymentRequest} from "../services/paymentService.js
 import type {PrintTemplate, PrintTemplateCell} from "@shared/types.js";
 
 import {useAuthStore} from "../stores/auth.js";
+import {useI18n} from "../composables/useI18n.js";
+
+const {l, t} = useI18n();
 
 const authStore = useAuthStore();
 type ComposeFieldKind = "text" | "multiline" | "date" | "email" | "phone" | "number" | "integer" | "report_number";
@@ -200,7 +203,7 @@ const creatingReminder = ref(false);
 const linkedQuote = ref<PaymentRequest | null>(null);
 
 const routeContractId = computed(() => typeof route.params.contractId === "string" ? route.params.contractId : "");
-const draftTitle = computed(() => `${template.value?.name ?? "תסקיר"} — מילוי שדות`);
+const draftTitle = computed(() => t("contractDraftPage.title", {name: template.value?.name ?? l.value.contractCard.inspection}));
 const composeTotalWidth = computed(() => template.value?.cols.reduce((sum, col) => sum + col.w, 0) ?? 0);
 
 const composeFields = computed(() => {
@@ -222,7 +225,7 @@ onMounted(loadDraft);
 
 async function loadDraft() {
   if (!routeContractId.value) {
-    loadError.value = "חסר מזהה חוזה";
+    loadError.value = l.value.contractDraftPage.missingContractId;
     loading.value = false;
     return;
   }
@@ -303,7 +306,7 @@ function composeFieldMeta(bind: string): ComposeFieldMeta {
   const base = baseComposeBind(bind);
   const kind = composeFieldKind(base);
   return {
-    label: composeFieldLabels[base] ?? base,
+    label: composeFieldLabels.value[base] ?? base,
     kind,
     required: composeRequiredFields.has(base),
     multiline: kind === "multiline",
@@ -313,24 +316,24 @@ function composeFieldMeta(bind: string): ComposeFieldMeta {
   };
 }
 
-const composeFieldLabels: Record<string, string> = {
-  document_number: "מספר תסקיר",
-  contract_number: "מספר חוזה",
-  report_number: "מספר תסקיר",
-  prev_report_number: "מספר תסקיר קודם",
-  start_date: "תאריך בדיקה",
-  expiry_date: "בתוקף עד",
-  contact_person: "איש קשר",
-  client_name: "שם לקוח",
-  client_company: "שם הלקוח/תופש",
-  inspection_type: "סוג בדיקה",
-  client_phone: "טלפון",
-  client_email: "מייל",
-  client_address: "יישוב",
-  zip_code: "מיקוד",
-  license_number: "מספר רישוי",
-  serial_number: "מס׳ סידורי",
-};
+const composeFieldLabels = computed<Record<string, string>>(() => ({
+  document_number: l.value.contractDraftPage.f_document_number,
+  contract_number: l.value.contractDraftPage.f_contract_number,
+  report_number: l.value.contractDraftPage.f_report_number,
+  prev_report_number: l.value.contractDraftPage.f_prev_report_number,
+  start_date: l.value.contractDraftPage.f_start_date,
+  expiry_date: l.value.contractDraftPage.f_expiry_date,
+  contact_person: l.value.contractDraftPage.f_contact_person,
+  client_name: l.value.contractDraftPage.f_client_name,
+  client_company: l.value.contractDraftPage.f_client_company,
+  inspection_type: l.value.contractDraftPage.f_inspection_type,
+  client_phone: l.value.contractDraftPage.f_client_phone,
+  client_email: l.value.contractDraftPage.f_client_email,
+  client_address: l.value.contractDraftPage.f_client_address,
+  zip_code: l.value.contractDraftPage.f_zip_code,
+  license_number: l.value.contractDraftPage.f_license_number,
+  serial_number: l.value.contractDraftPage.f_serial_number,
+}));
 
 const composeRequiredFields = new Set([
   "document_number",
@@ -379,10 +382,10 @@ function composeFieldInputMode(bind: string): "text" | "email" | "tel" | "numeri
 function composeFieldHint(kind: ComposeFieldKind): string {
   if (kind === "date") return "DD/MM/YYYY";
   if (kind === "email") return "name@example.com";
-  if (kind === "phone") return "ספרות, רווחים, + או -";
-  if (kind === "report_number") return "ספרות או מספר מפקח/מספר";
-  if (kind === "integer") return "ספרות בלבד";
-  if (kind === "number") return "מספר, אפשר עם יחידה";
+  if (kind === "phone") return l.value.contractDraftPage.hintPhone;
+  if (kind === "report_number") return l.value.contractDraftPage.hintReportNumber;
+  if (kind === "integer") return l.value.contractDraftPage.hintInteger;
+  if (kind === "number") return l.value.contractDraftPage.hintNumber;
   return "";
 }
 
@@ -390,13 +393,13 @@ function validateComposeField(bind: string, value: string): string {
   const base = baseComposeBind(bind);
   const meta = composeFieldMeta(base);
   const raw = value.trim();
-  if (!raw) return meta.required ? "שדה חובה" : "";
-  if (meta.kind === "date" && !isValidComposeDate(raw)) return "תאריך לא תקין";
-  if (meta.kind === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return "אימייל לא תקין";
-  if (meta.kind === "phone" && !/^\+?[\d\s().-]{7,}$/.test(raw)) return "טלפון לא תקין";
-  if (meta.kind === "report_number" && !/^\d+(?:\/\d+)?$/.test(raw)) return "יש להזין ספרות או מספר מפקח/מספר";
-  if (meta.kind === "integer" && !/^\d+$/.test(raw)) return "יש להזין ספרות בלבד";
-  if (meta.kind === "number" && !/^\d+(?:[.,]\d+)?(?:\s*\S+)?$/.test(raw)) return "מספר לא תקין";
+  if (!raw) return meta.required ? l.value.contractDraftPage.required : "";
+  if (meta.kind === "date" && !isValidComposeDate(raw)) return l.value.contractDraftPage.invalidDate;
+  if (meta.kind === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return l.value.contractDraftPage.invalidEmail;
+  if (meta.kind === "phone" && !/^\+?[\d\s().-]{7,}$/.test(raw)) return l.value.contractDraftPage.invalidPhone;
+  if (meta.kind === "report_number" && !/^\d+(?:\/\d+)?$/.test(raw)) return l.value.contractDraftPage.invalidReportNumber;
+  if (meta.kind === "integer" && !/^\d+$/.test(raw)) return l.value.contractDraftPage.invalidInteger;
+  if (meta.kind === "number" && !/^\d+(?:[.,]\d+)?(?:\s*\S+)?$/.test(raw)) return l.value.contractDraftPage.invalidNumber;
   return "";
 }
 
@@ -404,7 +407,7 @@ function validateComposeBeforeAction(actionLabel: string): boolean {
   const errors = composeFields.value.filter((field) => field.error);
   if (!errors.length) return true;
   const names = errors.slice(0, 3).map((field) => field.label).join(", ");
-  message.error(`אי אפשר ${actionLabel}: יש לתקן ${names}${errors.length > 3 ? "..." : ""}`);
+  message.error(t("contractDraftPage.cannotAction", {action: actionLabel, fields: `${names}${errors.length > 3 ? "..." : ""}`}));
   return false;
 }
 
@@ -565,7 +568,7 @@ async function saveComposeDraft() {
     const saved = await api.printTemplates.saveDraft(template.value._id, stringRecord(collectComposeData()), draftMeta.value);
     draftMeta.value = saved.meta ?? draftMeta.value;
     draftSavedAt.value = saved.updated_at;
-    message.success("הטיוטה נשמרה");
+    message.success(l.value.contractDraftPage.draftSavedToast);
   } catch (error: any) {
     message.error(error.message ?? String(error));
   } finally {
@@ -575,7 +578,7 @@ async function saveComposeDraft() {
 
 async function printPdf() {
   if (!template.value?._id) return;
-  if (!validateComposeBeforeAction("להדפיס PDF")) return;
+  if (!validateComposeBeforeAction(l.value.contractDraftPage.actionPrint)) return;
   printing.value = true;
   try {
     const blob = await api.printTemplates.renderPdf(template.value._id, collectComposeData());
@@ -591,7 +594,7 @@ async function printPdf() {
 
 async function savePdf() {
   if (!template.value?._id) return;
-  if (!validateComposeBeforeAction("לשמור PDF")) return;
+  if (!validateComposeBeforeAction(l.value.contractDraftPage.actionSavePdf)) return;
   savingPdf.value = true;
   try {
     const data = collectComposeData();
@@ -605,7 +608,7 @@ async function savePdf() {
     }
     if (!(saved.blob instanceof Blob)) throw new Error("PDF save did not return a file");
     downloadBlob(saved.blob, generatedPdfFileName(data, template.value.name));
-    message.success(saved.savedToS3 ? "PDF נשמר ב-S3, קושר למסמכים והורד" : "PDF נשמר במסמכים והורד. S3 לא זמין או לא הוגדר");
+    message.success(saved.savedToS3 ? l.value.contractDraftPage.pdfSavedS3 : l.value.contractDraftPage.pdfSavedLocal);
   } catch (error: any) {
     message.error(error.message ?? String(error));
   } finally {
@@ -615,13 +618,13 @@ async function savePdf() {
 
 async function createReminder() {
   if (!routeContractId.value) return;
-  if (!validateComposeBeforeAction("ליצור תזכורת")) return;
+  if (!validateComposeBeforeAction(l.value.contractDraftPage.actionCreateReminder)) return;
   creatingReminder.value = true;
   try {
     await saveComposeDraft();
     const result = await api.contracts.createReminder(routeContractId.value);
     const count = result.reminders?.length ?? 0;
-    message.success(count ? `נוצרו ${count} תזכורות לחוזה` : "לא נוצרו תזכורות (בדוק תאריך תוקף)");
+    message.success(count ? t("contractDraftPage.remindersCreated", {count}) : l.value.contractDraftPage.noRemindersCreated);
   } catch (error: any) {
     message.error(error?.message ?? String(error));
   } finally {
