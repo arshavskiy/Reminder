@@ -1006,7 +1006,7 @@ function inlineReceiptIssueDate(receiptDate: string | null, emailDateHeader: str
   return new Date().toISOString().slice(0, 10);
 }
 
-async function importInlineReceiptMessage(
+export async function importInlineReceiptMessage(
   accessToken: string,
   userId: string,
   messageId: string,
