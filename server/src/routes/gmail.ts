@@ -2047,6 +2047,15 @@ const INVOICE_GMAIL_QUERY = `has:attachment {${[
   "קבלות",
   "דרישת תשלום",
   "חשבון תקופתי",
+  // Russian: cash receipt, receipt, invoice, VAT invoice, e-tickets, itinerary receipt.
+  "чек",
+  "кассовый чек",
+  "квитанция",
+  "счет",
+  "счёт",
+  "счет-фактура",
+  "электронные билеты",
+  "маршрутная квитанция",
 ].map(formatGmailSearchTerm).join(" ")}}`;
 
 export function buildGmailQuery(

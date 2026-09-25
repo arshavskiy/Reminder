@@ -15,13 +15,13 @@ describe("Gmail query tier limits", () => {
   it("builds the default invoice import query on the server", () => {
     // Basic has no invoice backfill, so no time window is appended.
     expect(buildGmailQuery(undefined, invoiceTemplate, "basic")).toBe(
-      'has:attachment {"חשבונית" "invoice" "receipt" "bill" "חשבונית מס" "קבלה" "דרישת תשלום" "חשבון תקופתי"}',
+      'has:attachment {"חשבונית" "חשבוניות" "invoice" "receipt" "receipts" "bill" "חשבונית מס" "קבלה" "קבלות" "דרישת תשלום" "חשבון תקופתי" "чек" "кассовый чек" "квитанция" "счет" "счёт" "счет-фактура" "электронные билеты" "маршрутная квитанция"}',
     );
   });
 
   it("does not expose an admin time cap on the server default invoice query", () => {
     expect(buildGmailQuery(undefined, invoiceTemplate, "admin")).toBe(
-      'has:attachment {"חשבונית" "invoice" "receipt" "bill" "חשבונית מס" "קבלה" "דרישת תשלום" "חשבון תקופתי"}',
+      'has:attachment {"חשבונית" "חשבוניות" "invoice" "receipt" "receipts" "bill" "חשבונית מס" "קבלה" "קבלות" "דרישת תשלום" "חשבון תקופתי" "чек" "кассовый чек" "квитанция" "счет" "счёт" "счет-фактура" "электронные билеты" "маршрутная квитанция"}',
     );
   });
 
