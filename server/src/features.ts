@@ -13,6 +13,7 @@ export interface FeatureDefinition {
 }
 
 export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
+  {key: "pages.discovery", scope: "pages", label_he: "גילוי תזכורות", label_en: "Discover reminders", description_he: "גילוי תזכורות בדואר ושמירת הודעות וקבצי מקור.", default_enabled: false, sort_order: 45},
   {
     key: "pages.dashboard",
     scope: "pages",
@@ -69,6 +70,8 @@ export const DEFAULT_FEATURES_NESTED: Record<string, Record<string, boolean>> = 
 })();
 
 export async function seedFeatureDefinitions(): Promise<void> {
+  // Retire the initial discovery key so settings show only the supported entry.
+  await col("features").deleteMany({ key: "pages.discover_reminders" });
   for (const feature of FEATURE_DEFINITIONS) {
     await col("features").updateOne(
       {key: feature.key},

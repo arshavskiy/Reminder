@@ -293,6 +293,7 @@ const ALL_COLLECTIONS = [
   "clients",
   "contracts",
   "invoices",
+  "reminder_discoveries",
   "reminders",
   "tasks",
   "extractions",
@@ -330,6 +331,8 @@ async function ensureCollections(db: Db): Promise<void> {
 async function applyIndexes(db: Db): Promise<void> {
   // users
   await db.collection("users").createIndex({ google_sub: 1 }, { unique: true, sparse: true });
+  await db.collection("reminder_discoveries").createIndex({ user_id: 1, account: 1, messageId: 1 }, { unique: true });
+  await db.collection("reminder_discoveries").createIndex({ user_id: 1, due_date: 1 });
   await db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ verification_token: 1 }, { sparse: true });

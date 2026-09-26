@@ -1,6 +1,12 @@
 import express from "express";
 import { writeFileSync } from "fs";
 import { join } from "path";
+import { randomUUID } from "crypto";
+import { ObjectId } from "mongodb";
+import { col } from "../db/db";
+import { isFeatureEnabledForUser } from "../features";
+import { getSpacesSignedUrl } from "../storage/spaces";
+import { discoveries, discoveryId, discoverySummary, persistDiscovery, plainEmailHtml, saveDiscoveryPdf } from "../gmail/discoveryStore";
 import { HTTPException, requireAuth } from "../auth/middleware";
 import { logger } from "../logger";
 import { htmlToPlainText, scanInlineEmailForObligation, subjectRequestsAttachmentDate } from "../gmail/inlineObligationScan";
@@ -25,13 +31,56 @@ const MAX_HISTORY_MONTHS = 36;
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 
 export function registerGmailObligationRoutes(app: express.Application) {
+  app.use("/api/gmail/obligation", async (req, res, next) => {
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      if (!await isFeatureEnabledForUser(ctx.userId, "pages.discovery")) {
+        res.status(403).json({ error: "feature_disabled" }); return;
+      }
+      res.locals.discoveryUserId = ctx.userId;
+      next();
+    } catch (err) { res.status((err as HTTPException).status ?? 401).json({ error: "unauthorized" }); }
+  });
+  app.get("/api/gmail/obligation/saved", async (_req, res) => {
+    try {
+      const rows = await discoveries().find({ user_id: res.locals.discoveryUserId }).sort({ due_date: 1 }).toArray();
+      res.json({ proposals: rows.map(discoverySummary) });
+    } catch { res.status(500).json({ error: "discovery_load_failed" }); }
+  });
+  app.get("/api/gmail/obligation/saved/:id", async (req, res) => {
+    try {
+      const row = await discoveries().findOne({ _id: req.params.id, user_id: res.locals.discoveryUserId });
+      if (!row) { res.status(404).json({ error: "not_found" }); return; }
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ ...discoverySummary(row), preview_html: row.preview_html });
+    } catch { res.status(500).json({ error: "discovery_load_failed" }); }
+  });
+  app.put("/api/gmail/obligation/saved/:id", async (req, res) => {
+    if (!["new", "dismissed", "created"].includes(req.body.status)) { res.status(400).json({ error: "invalid_status" }); return; }
+    try {
+      const result = await discoveries().updateOne({ _id: req.params.id, user_id: res.locals.discoveryUserId }, { $set: { status: req.body.status, updated_at: new Date() } });
+      if (!result.matchedCount) { res.status(404).json({ error: "not_found" }); return; }
+      res.json({ ok: true });
+    } catch { res.status(500).json({ error: "discovery_update_failed" }); }
+  });
+  app.get("/api/gmail/obligation/saved/:id/pdf/:fileId", async (req, res) => {
+    try {
+      const row = await discoveries().findOne({ _id: req.params.id, user_id: res.locals.discoveryUserId });
+      const file = row?.pdfs.find(pdf => pdf.id === req.params.fileId);
+      if (!file) { res.status(404).json({ error: "not_found" }); return; }
+      res.setHeader("Cache-Control", "no-store");
+      if (file.spaces_key) { res.redirect(await getSpacesSignedUrl(file.spaces_key, 300, file.filename, true)); return; }
+      if (!file.local_path) { res.status(404).json({ error: "source_unavailable" }); return; }
+      res.download(file.local_path, file.filename);
+    } catch { if (!res.headersSent) res.status(500).json({ error: "source_unavailable" }); }
+  });
   /**
-   * GET /api/gmail/obligation/scan?langs=he,en&months=3
+   * POST /api/gmail/obligation/scan?langs=he,en&months=3
    * langs is 1–3 packs (en, he today). Omitted langs means Hebrew.
    * Reads the message body and, when the subject matches, the first attached PDF
-   * together. Does not save a document or a reminder.
+   * together. Saves discoveries and their sources; reminders require review.
    */
-  app.get("/api/gmail/obligation/scan", async (req, res) => {
+  app.post("/api/gmail/obligation/scan", async (req, res) => {
     let userId: string;
     let plan: string;
     try {
@@ -70,9 +119,11 @@ export function registerGmailObligationRoutes(app: express.Application) {
         return;
       }
 
+      const accountRow = await col<{ gmail_email?: string }>("users").findOne({ _id: new ObjectId(userId) });
+      const account = accountRow?.gmail_email ?? "default";
       const proposals = [];
       for (const id of listed.ids) {
-        const hit = await scanMessage(listed.accessToken, id);
+        const hit = await scanMessage(listed.accessToken, id, userId, account);
         if (hit) proposals.push(hit);
       }
       proposals.sort((a, b) => a.due_date.localeCompare(b.due_date));
@@ -144,10 +195,11 @@ export async function listMessageIds(
   };
 }
 
-async function scanMessage(accessToken: string, id: string) {
+async function scanMessage(accessToken: string, id: string, userId: string, account: string) {
   const response = await gmailFetch(accessToken, `messages/${id}?format=full`);
   if (!response.ok) return null;
   const message = await response.json() as { payload?: MimePart; internalDate?: string };
+  await loadExternalBodies(accessToken, id, message.payload);
   const headers = message.payload?.headers ?? [];
   const header = (name: string) => headers.find((item) => item.name.toLowerCase() === name.toLowerCase())?.value ?? "";
   const subject = header("Subject");
@@ -169,8 +221,21 @@ async function scanMessage(accessToken: string, id: string) {
     sentOn: sentOnFromInternal(message.internalDate),
   });
   if (!proposal) return null;
-  const dateSource = emailText && pdfText ? "email_and_pdf" : pdfText ? "pdf" : "body";
-  return packed(id, subject, from, header("Date"), message.internalDate, body.hasAttachment || Boolean(pdfText), proposal, dateSource, attachmentName);
+  const recordId = discoveryId(userId, account, id);
+  const existing = await discoveries().findOne({ _id: recordId, user_id: userId });
+  const pdfs = [];
+  for (const attachment of listPdfAttachments(message.payload)) {
+    const bytes = await pdfAttachmentBytes(accessToken, id, attachment);
+    if (!bytes) throw new Error("discovery_pdf_download_failed");
+    pdfs.push(await saveDiscoveryPdf(recordId, attachment.attachmentId, attachment.filename, bytes));
+  }
+  const previewHtml = body.html ?? plainEmailHtml(body.plain ?? "");
+  if (Buffer.byteLength(previewHtml) + Buffer.byteLength(body.plain ?? "") > 12 * 1024 * 1024) throw new Error("discovery_email_too_large");
+  return persistDiscovery({
+    _id: recordId, user_id: userId, account, messageId: id, subject, from, date: header("Date"),
+    ...proposal, attachment_name: attachmentName, preview_html: previewHtml, plain_text: body.plain,
+    pdfs: pdfs.length ? pdfs : existing?.pdfs ?? [],
+  });
 }
 
 function messagePlain(plain: string | null, html: string | null): string {
@@ -185,30 +250,6 @@ function sentOnFromInternal(internalDate: string | undefined): string | undefine
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-function packed(
-  messageId: string,
-  subject: string,
-  from: string,
-  date: string,
-  internalDate: string | undefined,
-  hasAttachment: boolean,
-  proposal: NonNullable<ReturnType<typeof scanInlineEmailForObligation>>,
-  dateSource: "body" | "pdf" | "email_and_pdf",
-  attachmentName: string | null,
-) {
-  return {
-    messageId,
-    subject,
-    from,
-    date,
-    internalDate: internalDate ?? "",
-    hasAttachment,
-    date_source: dateSource,
-    attachment_name: attachmentName,
-    ...proposal,
-  };
-}
-
 interface MimePart {
   mimeType?: string;
   filename?: string;
@@ -217,10 +258,23 @@ interface MimePart {
   parts?: MimePart[];
 }
 
+async function loadExternalBodies(accessToken: string, messageId: string, part: MimePart | undefined): Promise<void> {
+  if (!part) return;
+  if (!part.filename && (part.mimeType === "text/html" || part.mimeType === "text/plain") && !part.body?.data && part.body?.attachmentId) {
+    const response = await gmailFetch(accessToken, `messages/${messageId}/attachments/${part.body.attachmentId}`);
+    if (!response.ok) throw new Error("discovery_email_download_failed");
+    const body = await response.json() as { data?: string };
+    if (!body.data) throw new Error("discovery_email_download_failed");
+    part.body.data = body.data;
+  }
+  for (const child of part.parts ?? []) await loadExternalBodies(accessToken, messageId, child);
+}
+
 interface PdfAttachment {
   attachmentId: string;
   filename: string;
   size: number;
+  data?: string;
 }
 
 function listPdfAttachments(part: MimePart | undefined): PdfAttachment[] {
@@ -231,8 +285,8 @@ function listPdfAttachments(part: MimePart | undefined): PdfAttachment[] {
     const mime = (node.mimeType ?? "").toLowerCase();
     const attachmentId = node.body?.attachmentId;
     const isPdf = mime === "application/pdf" || name.toLowerCase().endsWith(".pdf");
-    if (attachmentId && isPdf) {
-      found.push({ attachmentId, filename: name || "attachment.pdf", size: node.body?.size ?? 0 });
+    if (isPdf && (attachmentId || node.body?.data)) {
+      found.push({ attachmentId: attachmentId ?? `inline-${found.length}`, filename: name || "attachment.pdf", size: node.body?.size ?? 0, data: node.body?.data });
     }
     for (const child of node.parts ?? []) walk(child);
   }
@@ -240,15 +294,21 @@ function listPdfAttachments(part: MimePart | undefined): PdfAttachment[] {
   return found;
 }
 
-async function pdfAttachmentText(accessToken: string, messageId: string, pdf: PdfAttachment): Promise<string | null> {
+async function pdfAttachmentBytes(accessToken: string, messageId: string, pdf: PdfAttachment): Promise<Buffer | null> {
+  if (pdf.data) return Buffer.from(pdf.data, "base64url");
   const response = await gmailFetch(accessToken, `messages/${messageId}/attachments/${pdf.attachmentId}`);
   if (!response.ok) return null;
   const data = await response.json() as { data?: string };
   if (!data.data) return null;
-  const bytes = Buffer.from(data.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+  return Buffer.from(data.data, "base64url");
+}
+
+async function pdfAttachmentText(accessToken: string, messageId: string, pdf: PdfAttachment): Promise<string | null> {
+  const bytes = await pdfAttachmentBytes(accessToken, messageId, pdf);
+  if (!bytes) return null;
   if (bytes.length > MAX_PDF_BYTES) return null;
   const safeName = pdf.filename.replace(/[^a-zA-Z0-9._֐-׿ -]/g, "_").slice(0, 80) || "attachment.pdf";
-  const tmpPath = join(tempDir("gmail-tmp"), `obligation-${Date.now()}-${safeName}`);
+  const tmpPath = join(tempDir("gmail-tmp"), `obligation-${randomUUID()}-${safeName}`);
   writeFileSync(tmpPath, bytes);
   try {
     const parsed = await parsePdf(tmpPath);
