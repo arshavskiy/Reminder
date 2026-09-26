@@ -395,14 +395,16 @@ export function registerDocumentRoutes(app: express.Application) {
       const skipReminders = req.query.skipReminders === "true";
       const skipCloudStorage = req.query.skipCloudStorage === "true";
       const reprocessDuplicates = req.query.reprocessDuplicates === "true";
+      const liteImport   = req.query.liteImport   === "true";
         const templateId = req.query.templateId as string | undefined;
         const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
         const quotaCategory = quotaCategoryFromTemplate(template);
         const pipelineOptions = {
-          skipAi,
-          skipEntities,
+          skipAi:       liteImport || skipAi,
+          skipEntities: liteImport || skipEntities,
           skipReminders,
-          skipCloudStorage,
+          skipCloudStorage: liteImport || skipCloudStorage,
+          liteImport,
           templateId: templateId || undefined,
           reprocessDuplicate: reprocessDuplicates,
             quotaCategory,

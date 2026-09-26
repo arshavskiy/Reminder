@@ -17,7 +17,7 @@ import {normalizeEmail} from "./emailNormalizer";
 import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
 import {generateTemplateFromText, saveGeneratedTemplate} from "../templates/generateTemplate";
 import {buildPromptForTemplate} from "../templates/buildPrompt";
-import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
+import {generateContractReminders, generateTaskReminders, createPersonalReminder} from "../reminders/scheduler";
 import {deleteFromSpaces, fileExistsInSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import {syncDocumentToDrive} from "../storage/gdrive";
 import {isProcessPaused} from "../ops/processControl";
@@ -64,6 +64,7 @@ export interface PipelineOptions {
   quotaCategory?: DocumentImportQuotaCategory;
   skipQuotaCheck?: boolean;
   skipCloudStorage?: boolean; // never upload to S3/Drive regardless of the account's storage settings
+  liteImport?: boolean; // reminder-only: skip AI/entities, create reminder from OCR date + filename
 }
 
 type DocumentProcessingJobStatus = "queued" | "running" | "completed" | "failed" | "retry_wait";
@@ -1156,7 +1157,7 @@ export async function processDocument(
         return;
       }
     }
-    await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
+    await finishDocumentProcessing(documentId, filePath, mimeType, push, userId, pipeline);
     return;
   }
 
@@ -1203,6 +1204,38 @@ export async function processDocument(
       exec_ms: 0,
       created_at: new Date(),
     } as any);
+
+    // ── Lite import: create a personal reminder from OCR date, skip everything else
+    if (pipeline?.liteImport && userId) {
+      const ocrExpiry = firstInvoiceString(preservedOcr, ["expiry_date"]);
+      const docRow = await col("documents").findOne(docFilter, { projection: { file_name: 1 } } as any) as any;
+      const label = docRow?.file_name?.replace(/\.[^.]+$/, "") ?? "מסמך";
+      if (ocrExpiry && !pipeline.skipReminders) {
+        await createPersonalReminder(userId, label, ocrExpiry, {
+          reminderCategory: documentKind === "unknown" ? null : documentKind,
+          syncCalendar: true,
+        });
+        await col("documents").updateOne(docFilter, {
+          $set: { lite_import: true, updated_at: new Date() },
+        });
+        logger.info("lite_import_reminder_created", {
+          document_id: documentId,
+          user_id: userId,
+          expiry_date: ocrExpiry,
+          label,
+        });
+      } else {
+        await col("documents").updateOne(docFilter, {
+          $set: { lite_import: true, updated_at: new Date() },
+        });
+        logger.info("lite_import_no_expiry", {
+          document_id: documentId,
+          user_id: userId,
+        });
+      }
+      await finishDocumentProcessing(documentId, filePath, mimeType, push, userId, pipeline);
+      return;
+    }
 
     // Create client / contract / reminders from OCR data only as a fallback.
     if (!aiWillRun && !pipeline?.skipEntities && (preservedOcr.expiry_date || preservedOcr.contact_name || preservedOcr.contact_phone)) {
@@ -1640,7 +1673,7 @@ export async function processDocument(
     }
   }
 
-  await finishDocumentProcessing(documentId, filePath, mimeType, push, userId);
+  await finishDocumentProcessing(documentId, filePath, mimeType, push, userId, pipeline);
 }
 
 async function finishDocumentProcessing(
@@ -1649,6 +1682,7 @@ async function finishDocumentProcessing(
   mimeType: string,
   push?: PushFn,
   userId?: string,
+  pipeline?: PipelineOptions,
 ): Promise<void> {
   await col("documents").updateOne(
     { _id: new ObjectId(documentId) } as any,
@@ -1659,9 +1693,7 @@ async function finishDocumentProcessing(
       logger.warn("document_thumbnail_generation_failed", { document_id: documentId, user_id: userId ?? null, error: err });
     });
   }
-  if (userId) {
-    // Awaited so the local cache cleanup below cannot delete the file out from
-    // under the Drive upload's read stream. Failures stay non-fatal.
+  if (userId && !pipeline?.skipCloudStorage) {
     await syncDocumentToDrive(documentId, userId).catch((err) => {
       logger.error("drive_sync_post_processing_failed", {document_id: documentId, user_id: userId, error: err});
     });

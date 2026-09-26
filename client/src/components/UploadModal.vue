@@ -110,31 +110,38 @@
         <!-- Pipeline toggles -->
         <div class="pipeline-toggles">
           <div class="pipeline-toggles__title">{{ l.uploadModal.processingOptionsTitle }}</div>
-          <label class="toggle-row">
-            <n-select
-                v-model:value="selectedTemplateId"
-                :options="templateOptions"
-                clearable
-                :placeholder="l.uploadModal.autoTemplate"
-                size="small"
-                style="width: 100%"
-            />
+          <label class="toggle-row toggle-row--lite">
+            <n-switch v-model:value="liteImport" size="small" />
+            <span class="toggle-row__label">{{ l.uploadModal.liteImport }}</span>
+            <span class="toggle-row__hint">{{ l.uploadModal.liteImportHint }}</span>
           </label>
-          <label class="toggle-row">
-            <n-switch v-model:value="doAi" size="small" />
-            <span class="toggle-row__label">{{ l.uploadModal.extractAi }}</span>
-            <span class="toggle-row__hint">{{ l.uploadModal.extractAiHint }}</span>
-          </label>
-          <label :class="{ 'toggle-row--disabled': !doAi }" class="toggle-row">
-            <n-switch v-model:value="doEntities" :disabled="!doAi" size="small" />
-            <span class="toggle-row__label">{{ l.uploadModal.createClientsContracts }}</span>
-            <span class="toggle-row__hint">{{ l.uploadModal.createClientsContractsHint }}</span>
-          </label>
-          <label :class="{ 'toggle-row--disabled': !doEntities }" class="toggle-row">
-            <n-switch v-model:value="doReminders" :disabled="!doEntities" size="small" />
-            <span class="toggle-row__label">{{ l.uploadModal.createReminders }}</span>
-            <span class="toggle-row__hint">{{ l.uploadModal.createRemindersHint }}</span>
-          </label>
+          <template v-if="!liteImport">
+            <label class="toggle-row">
+              <n-select
+                  v-model:value="selectedTemplateId"
+                  :options="templateOptions"
+                  clearable
+                  :placeholder="l.uploadModal.autoTemplate"
+                  size="small"
+                  style="width: 100%"
+              />
+            </label>
+            <label class="toggle-row">
+              <n-switch v-model:value="doAi" size="small" />
+              <span class="toggle-row__label">{{ l.uploadModal.extractAi }}</span>
+              <span class="toggle-row__hint">{{ l.uploadModal.extractAiHint }}</span>
+            </label>
+            <label :class="{ 'toggle-row--disabled': !doAi }" class="toggle-row">
+              <n-switch v-model:value="doEntities" :disabled="!doAi" size="small" />
+              <span class="toggle-row__label">{{ l.uploadModal.createClientsContracts }}</span>
+              <span class="toggle-row__hint">{{ l.uploadModal.createClientsContractsHint }}</span>
+            </label>
+            <label :class="{ 'toggle-row--disabled': !doEntities }" class="toggle-row">
+              <n-switch v-model:value="doReminders" :disabled="!doEntities" size="small" />
+              <span class="toggle-row__label">{{ l.uploadModal.createReminders }}</span>
+              <span class="toggle-row__hint">{{ l.uploadModal.createRemindersHint }}</span>
+            </label>
+          </template>
         </div>
       </div>
     </div>
@@ -472,6 +479,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
 const files = ref<File[]>([]);
 const fields = ref<ExtractionField[]>([]);
+const liteImport = ref(false);
 const doAi = ref(true);
 const doEntities = ref(false);
 const doReminders = ref(false);
@@ -595,10 +603,11 @@ function createTemplate() {
 function submit() {
   if (!files.value.length) return;
   emit("upload", [...files.value], [...fields.value], {
-    doAi: doAi.value,
-    doEntities: doEntities.value && doAi.value,
-    doReminders: doReminders.value && doEntities.value,
-    templateId: selectedTemplateId.value ?? undefined,
+    doAi: !liteImport.value && doAi.value,
+    doEntities: !liteImport.value && doEntities.value && doAi.value,
+    doReminders: liteImport.value || (doReminders.value && doEntities.value),
+    liteImport: liteImport.value,
+    templateId: liteImport.value ? undefined : (selectedTemplateId.value ?? undefined),
   });
 }
 
@@ -911,6 +920,12 @@ defineExpose({ addFiles, openRescan });
   user-select: none;
 }
 .toggle-row--disabled { opacity: 0.45; }
+.toggle-row--lite {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-card-alt, var(--bg-card));
+  margin-bottom: 6px;
+}
 .toggle-row__label {
   font-size: 13px;
   font-weight: 500;

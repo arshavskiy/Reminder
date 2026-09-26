@@ -1071,7 +1071,7 @@ async function openRescanModal() {
 async function onModalUpload(
   files: File[],
   fields: { key: string; label_he: string; type: string }[],
-  options: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string }
+  options: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string; liteImport?: boolean }
 ) {
   await uploadFiles(files, options);
   showUploadModal.value = false;
@@ -1735,7 +1735,7 @@ onUnmounted(() => {
 // ── File handling ─────────────────────────────────────────────────────────────
 async function uploadFiles(
   files: File[],
-  options?: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string }
+  options?: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string; liteImport?: boolean }
 ) {
   uploading.value = true;
   try {

@@ -834,12 +834,13 @@ export const api = {
     import: (filePath: string) => post<{ id: string }>("/documents/import", { filePath }),
     upload: async (
       files: File[],
-      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean },
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean; liteImport?: boolean },
       templateId?: string | number
     ) => {
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
       const params = new URLSearchParams();
+      if (options?.liteImport) params.set("liteImport", "true");
       if (options?.doAi === false) params.set("skipAi", "true");
       if (options?.doEntities === false) params.set("skipEntities", "true");
       if (options?.doReminders === false) params.set("skipReminders", "true");
@@ -861,12 +862,13 @@ export const api = {
     },
     uploadOne: async (
       file: File,
-      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean },
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean; liteImport?: boolean },
       templateId?: string | number
     ): Promise<{ id: string; duplicate: boolean }> => {
       const fd = new FormData();
       fd.append("files", file);
       const params = new URLSearchParams();
+      if (options?.liteImport) params.set("liteImport", "true");
       if (options?.doAi === false) params.set("skipAi", "true");
       if (options?.doEntities === false) params.set("skipEntities", "true");
       if (options?.doReminders === false) params.set("skipReminders", "true");
