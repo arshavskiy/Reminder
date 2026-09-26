@@ -1396,6 +1396,10 @@ function rowProps(row: ReminderWithContext) {
   };
 }
 
+const hasInspectionData = computed(() =>
+  (store.rows ?? []).some((r: ReminderWithContext) => r.contract_number || r.document_name)
+);
+
 const baseColumns = computed(() => [
   {
     title: l.value.common.name,
@@ -1470,7 +1474,7 @@ const baseColumns = computed(() => [
           : h("span", row.client_name ?? "—"),
       ]),
   },
-  {
+  ...(hasInspectionData.value ? [{
     title: l.value.reminders.inspection,
     key: "contract_number",
     width: 180,
@@ -1482,7 +1486,7 @@ const baseColumns = computed(() => [
       columnTextSort(reminderInspectionKey(a), reminderInspectionKey(b)),
     render: (row: ReminderWithContext) =>
       h("span", { class: "reminder-source-cell" }, row.contract_number || row.document_name || "—"),
-  },
+  }] : []),
   {
     title: l.value.reminders.dateColumn,
     key: "trigger_date",

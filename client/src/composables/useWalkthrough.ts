@@ -63,7 +63,7 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
     {
       selector: ".app-nav__list",
       title: "תפריט צד",
-      text: "לחצו על פריט כדי לעבור לעמוד. פריט עם חץ נפתח בריחוף: תסקירים (תסקירים, הצעות מחיר, יומן פעילות), תזכורות (תזכורות ויומן פעילות), וציוד (ציוד ויצרנים). אפשר לכווץ את התפריט לאייקונים.",
+      text: "לחצו על פריט כדי לעבור לעמוד. פריט עם חץ נפתח בריחוף: תסקירים (תסקירים, דוחות, לקוחות, ציוד, שטח, הצעות מחיר, יומן פעילות), תזכורות (תזכורות ויומן פעילות). אפשר לכווץ את התפריט לאייקונים.",
       placement: "left",
     },
     {
@@ -181,7 +181,7 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
     {
       selector: ".page__head",
       title: "ציוד",
-      text: "ניהול ציוד. בתפריט הצד תחת ציוד יש שני עמודים: ציוד ויצרנים.",
+      text: "ניהול ציוד. בעמוד זה יש שתי לשוניות: ציוד ויצרנים. ניתן להגיע לעמוד דרך תפריט תסקירים.",
       placement: "bottom",
     },
     {
@@ -244,7 +244,7 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".app-nav__list",
       title: "Side menu",
-      text: "Click an item to open that page. An item with a chevron opens on hover: Inspections (inspections, quotes, activity log), Reminders (reminders and activity log), and Equipment (equipment and manufacturers). You can collapse the menu to icons.",
+      text: "Click an item to open that page. An item with a chevron opens on hover: Inspections (inspections, reports, clients, equipment, field, quotes, activity log), Reminders (reminders and activity log). You can collapse the menu to icons.",
       placement: "right",
     },
     {
@@ -362,7 +362,7 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
     {
       selector: ".page__head",
       title: "Equipment",
-      text: "Manage equipment. Under Equipment in the side menu there are two pages: Equipment and Manufacturers.",
+      text: "Manage equipment. This page has two tabs: Equipment and Manufacturers. Access it from the Inspections submenu.",
       placement: "bottom",
     },
     {

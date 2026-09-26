@@ -12,7 +12,7 @@
           {{ l.common.back }}
         </button>
         <button
-          v-if="row && row.status !== 'dismissed'"
+          v-if="row && row.status !== 'dismissed' && hasDeliveryTarget"
           class="btn btn--ghost"
           type="button"
           :disabled="sending || (!isPersonal && !form.emailTo.trim()) || (isPersonal && !form.alsoEmailSelf)"
@@ -65,10 +65,7 @@
             <n-form-item :label="isPersonal ? l.reminders.targetDate : l.reminders.dateColumn" required>
               <n-date-picker v-model:value="form.targetMs" type="date" style="width: 100%" />
             </n-form-item>
-            <n-form-item v-if="!isPersonal" :label="l.reminders.detailSendDate">
-              <n-date-picker v-model:value="form.triggerMs" type="date" style="width: 100%" />
-            </n-form-item>
-            <n-form-item v-if="isPersonal" :label="l.notifications.quickAddRemindBeforeLabel">
+            <n-form-item :label="l.reminders.daysBefore">
               <n-input-number
                 v-model:value="form.advanceDays"
                 :min="0"
@@ -78,41 +75,19 @@
                 style="width: 100%"
               />
             </n-form-item>
+            <n-form-item :label="l.reminders.detailSendDate">
+              <n-date-picker v-model:value="form.triggerMs" type="date" style="width: 100%" />
+            </n-form-item>
           </n-form>
         </section>
 
-        <section class="rd-card">
+        <section v-if="isPersonal" class="rd-card">
           <h2>{{ l.reminders.detailDelivery }}</h2>
           <n-form label-placement="top">
-            <template v-if="isPersonal">
-              <n-form-item>
-                <n-checkbox v-model:checked="form.alsoEmailSelf">{{ l.reminders.alsoEmailSelf }}</n-checkbox>
-              </n-form-item>
-              <p class="rd-hint">{{ l.reminders.personalReminderHint }}</p>
-            </template>
-            <template v-else>
-              <n-form-item :label="l.common.client">
-                <n-select
-                  v-model:value="form.clientId"
-                  :options="clientOptions"
-                  filterable
-                  clearable
-                  :placeholder="l.reminders.detailPickClient"
-                  :virtual-scroll="false"
-                />
-              </n-form-item>
-              <n-form-item :label="l.reminders.recipientEmail" :required="Boolean(form.clientId)">
-                <n-input v-model:value="form.emailTo" :placeholder="l.reminders.recipientEmailOptional" />
-              </n-form-item>
-              <n-form-item v-if="canSelectEmailTemplates" :label="l.reminders.detailEmailTemplate">
-                <n-select
-                  v-model:value="form.emailTemplateId"
-                  :options="emailTemplateOptions"
-                  clearable
-                  :virtual-scroll="false"
-                />
-              </n-form-item>
-            </template>
+            <n-form-item>
+              <n-checkbox v-model:checked="form.alsoEmailSelf">{{ l.reminders.alsoEmailSelf }}</n-checkbox>
+            </n-form-item>
+            <p class="rd-hint">{{ l.reminders.personalReminderHint }}</p>
           </n-form>
         </section>
 
@@ -163,7 +138,7 @@
         </section>
 
         <div class="rd-footer">
-          <button class="btn btn--ghost" type="button" @click="openPreview">
+          <button v-if="hasDeliveryTarget" class="btn btn--ghost" type="button" @click="openPreview">
             <n-icon :component="EyeOutline" :size="16" class="btn-icon" />
             {{ l.common.preview }}
           </button>
@@ -271,6 +246,7 @@ const form = reactive({
 
 const canSelectEmailTemplates = computed(() => featuresStore.hasFeature(FEATURES.pages.emailTemplates));
 const isPersonal = computed(() => row.value?.source_type === "personal");
+const hasDeliveryTarget = computed(() => isPersonal.value || Boolean(form.clientId) || Boolean(form.emailTo.trim()));
 
 const typeLabel = computed(() => {
   const t = row.value?.source_type;
@@ -464,6 +440,14 @@ onMounted(async () => {
 
 watch(() => route.params.id, () => {
   if (route.params.id) void load();
+});
+
+watch([() => form.targetMs, () => form.advanceDays], ([target, days]) => {
+  if (target && days != null && days > 0) {
+    const d = new Date(target);
+    d.setDate(d.getDate() - days);
+    form.triggerMs = d.getTime();
+  }
 });
 </script>
 

@@ -191,15 +191,11 @@ import {NIcon, NPopover, NTooltip} from "naive-ui";
 import {
   ChevronBackOutline,
   ChevronForwardOutline,
-  ConstructOutline,
   DiamondOutline,
   DocumentTextOutline,
   HomeOutline,
   MailOutline,
-  MapOutline,
   NotificationsOutline,
-  PeopleOutline,
-  StatsChartOutline,
   WalletOutline,
 } from "@vicons/ionicons5";
 import type {Component} from "vue";
@@ -282,6 +278,30 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.documents,
         },
         {
+          label: nav.reports,
+          key: "reports",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.reports,
+        },
+        {
+          label: nav.clients,
+          key: "clients",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.clients,
+        },
+        {
+          label: nav.equipment,
+          key: "equipment",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.equipment,
+        },
+        {
+          label: nav.field,
+          key: "field",
+          minPlan: "business" as const,
+          feature: FEATURES.pages.field,
+        },
+        {
           label: nav.quotes,
           key: "quotes",
           feature: FEATURES.pages.contracts,
@@ -337,50 +357,6 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.invoices,
         },
       ],
-    },
-    {
-      label: nav.reports,
-      key: "reports",
-      icon: StatsChartOutline,
-      minPlan: "expired" as const,
-      feature: FEATURES.pages.reports,
-    },
-    {
-      label: nav.clients,
-      key: "clients",
-      icon: PeopleOutline,
-      minPlan: "expired" as const,
-      feature: FEATURES.pages.clients,
-    },
-    {
-      label: nav.equipment,
-      key: "equipment",
-      icon: ConstructOutline,
-      minPlan: "expired" as const,
-      feature: FEATURES.pages.equipment,
-      children: [
-        {
-          label: localeStore.catalog.equipment.tabEquipment,
-          key: "equipment",
-          query: {section: "equipment"},
-          minPlan: "expired" as const,
-          feature: FEATURES.pages.equipment,
-        },
-        {
-          label: localeStore.catalog.equipment.tabManufacturers,
-          key: "equipment",
-          query: {section: "manufacturers"},
-          minPlan: "expired" as const,
-          feature: FEATURES.pages.equipment,
-        },
-      ],
-    },
-    {
-      label: nav.field,
-      key: "field",
-      icon: MapOutline,
-      minPlan: "business" as const,
-      feature: FEATURES.pages.field,
     },
     {
       label: nav.gmail,
