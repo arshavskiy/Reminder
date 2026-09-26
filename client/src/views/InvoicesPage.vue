@@ -140,6 +140,16 @@
         {{ option.label }}
         <span class="pill__badge">{{ option.count }}</span>
       </button>
+      <button
+        v-if="duplicatesCount > 0"
+        type="button"
+        class="pill pill--compact pill--warn"
+        :class="{ 'pill--active': filters.duplicatesOnly }"
+        @click="toggleDuplicates"
+      >
+        {{ l.common.duplicates }}
+        <span class="pill__badge">{{ duplicatesCount }}</span>
+      </button>
       <div class="toolbar__view-toggle">
         <n-tooltip placement="top">
           <template #trigger>
@@ -768,6 +778,7 @@ const types = ref<string[]>([]);
 const categories = ref<string[]>([]);
 const suppliers = ref<string[]>([]);
 const currencies = ref<string[]>([]);
+const duplicatesCount = ref(0);
 const filters = reactive({
   q: "",
   status: null as string | null,
@@ -777,6 +788,7 @@ const filters = reactive({
   category: null as string | null,
   currency: null as string | null,
   suppliers: [] as string[],
+  duplicatesOnly: false,
 });
 const businessModal = reactive({
   show: false,
@@ -893,6 +905,7 @@ async function load(force = false) {
       category: filters.category ?? undefined,
       currency: filters.currency ?? undefined,
       supplier: supplierFilterParam(),
+      duplicatesOnly: filters.duplicatesOnly ? "1" : undefined,
       sortBy: sortBy.value,
       sortDir: sortDir.value,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
@@ -905,6 +918,7 @@ async function load(force = false) {
     totalAll.value = result.totalAll;
     visibleLimit.value = result.visibleLimit;
     counts.value = result.counts;
+    duplicatesCount.value = result.duplicatesCount ?? 0;
     documentCategoryCounts.value = result.documentCategoryCounts ?? {};
     types.value = result.types;
     categories.value = result.categories;
@@ -944,6 +958,16 @@ function pruneSelectedInvoices() {
   if (selectedInvoiceIds.value.size === 0) return;
   const visible = new Set(rows.value.map((row) => row.id));
   selectedInvoiceIds.value = new Set([...selectedInvoiceIds.value].filter((id) => visible.has(id)));
+}
+
+function confirmDeleteInvoice(row: ImportedInvoice) {
+  confirm({
+    title: l.value.invoicesMsg.deleteTitle,
+    content: t("invoicesMsg.deleteConfirm", {count: 1}),
+    confirmText: l.value.fieldPage.delete,
+    type: "warning",
+    onConfirm: () => deleteSelectedInvoices([row.id]),
+  });
 }
 
 function confirmDeleteSelected() {
@@ -1021,6 +1045,11 @@ async function uploadInvoiceFiles(files: File[]) {
 
 function setStatus(value: string) {
   filters.status = filters.status === value ? null : (value || null);
+  load(true);
+}
+
+function toggleDuplicates() {
+  filters.duplicatesOnly = !filters.duplicatesOnly;
   load(true);
 }
 
@@ -1623,6 +1652,11 @@ function invoiceActionOptions(row: ImportedInvoice) {
       label: c.common.archive,
       key: "archive",
       icon: renderActionIcon(ArchiveOutline),
+    },
+    {
+      label: c.fieldPage.delete,
+      key: "delete",
+      icon: renderActionIcon(TrashOutline),
       props: { style: "color: var(--color-error, #d03050)" },
     },
   ];
@@ -1632,6 +1666,7 @@ async function handleInvoiceAction(key: string, row: ImportedInvoice) {
   if (key === "open") return openDocument(row);
   if (key === "download") return download(row);
   if (key === "archive") return updateInvoiceStatus(row, "archived");
+  if (key === "delete") return confirmDeleteInvoice(row);
   if (key === "business:custom") return openBusinessModal(row);
   if (key.startsWith("business:")) return updateInvoiceMeta(row, { client_name: key.slice("business:".length) });
   if (key.startsWith("category:")) return updateInvoiceMeta(row, { expense_category: key.slice("category:".length) });
@@ -1899,6 +1934,18 @@ function replaceRow(updated: ImportedInvoice) {
 .pill--active .pill__badge {
   background: color-mix(in srgb, var(--brand-color) 22%, transparent);
   color: inherit;
+}
+
+.pill--warn {
+  color: var(--color-warning, #e8a838);
+}
+.pill--warn.pill--active {
+  color: var(--color-warning, #e8a838);
+  border-color: var(--color-warning, #e8a838);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning, #e8a838) 55%, transparent);
+}
+.pill--warn.pill--active .pill__badge {
+  background: color-mix(in srgb, var(--color-warning, #e8a838) 22%, transparent);
 }
 
 .pill__badge {

@@ -61,6 +61,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const category = String(req.query.category ?? "").trim();
     const currency = String(req.query.currency ?? "").trim().toUpperCase();
     const suppliers = parseMultiQuery(req.query.supplier);
+    const duplicatesOnly = String(req.query.duplicatesOnly ?? "") === "1";
     const sortBy = normalizeInvoiceSortBy(req.query.sortBy);
     const sortDir = normalizeSortDir(req.query.sortDir);
     const fromTs = parseDateTs(req.query.dateFrom);
@@ -96,10 +97,12 @@ export function registerInvoiceRoutes(app: express.Application) {
       if (!q) return true;
       return invoiceMatchesQuery(row, q);
     });
+    const duplicateIds = findDuplicateIds(facetRows);
     const rows = facetRows
       .filter((row) => {
         if (status && row.status !== status) return false;
         if (documentCategory && row.document_category !== documentCategory) return false;
+        if (duplicatesOnly && !duplicateIds.has(row.id)) return false;
         return true;
       })
       .sort((left, right) => compareInvoiceRows(left, right, sortBy, sortDir));
@@ -119,6 +122,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       offset: safeOffset,
       visibleLimit,
       counts,
+      duplicatesCount: duplicateIds.size,
       documentCategoryCounts: countBy(visibleFacetRows, (row) => row.document_category),
       types: uniqueSorted(visibleFacetRows.map((row) => row.type).filter(isNonEmptyString)),
       categories: uniqueSorted(visibleFacetRows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
@@ -1122,6 +1126,22 @@ function normalizeCurrencyCode(value: unknown): string {
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function findDuplicateIds(rows: ReturnType<typeof presentInvoice>[]): Set<string> {
+  const groups = new Map<string, string[]>();
+  for (const row of rows) {
+    if (row.amount == null || !row.issue_date) continue;
+    const key = `${row.amount}|${row.issue_date}`;
+    const group = groups.get(key);
+    if (group) group.push(row.id);
+    else groups.set(key, [row.id]);
+  }
+  const ids = new Set<string>();
+  for (const group of groups.values()) {
+    if (group.length > 1) for (const id of group) ids.add(id);
+  }
+  return ids;
 }
 
 function uniqueSorted(values: string[]): string[] {
