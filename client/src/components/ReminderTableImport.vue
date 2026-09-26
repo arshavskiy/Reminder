@@ -1,20 +1,88 @@
 <template>
   <div class="table-import-root" :class="{'table-import-root--card': variant === 'card'}">
-  <button v-if="variant === 'card'" type="button" class="table-import-card" @click="show = true">
-    <span class="table-import-card__top">
-      <n-icon :component="GridOutline" :size="22" />
-      <span class="table-import-card__label">{{ l.reminderTableImport.cardLabel }}</span>
-    </span>
-    <span class="table-import-card__hint">{{ l.reminderTableImport.cardHint }}</span>
-  </button>
-  <slot v-else name="trigger" :open="() => (show = true)">
-    <button type="button" class="btn btn--ghost" @click="show = true">
-      <n-icon :component="GridOutline" class="btn-icon" />
-      {{ l.reminderTableImport.triggerButton }}
-    </button>
-  </slot>
-  <n-modal v-model:show="show" preset="card" :title="l.reminderTableImport.modalTitle" :style="{width: '900px', maxWidth: 'calc(100vw - 32px)'}" :mask-closable="!busy" :closable="!busy">
-    <div class="table-import" :dir="dir">
+    <!-- Non-embedded: trigger button + modal wrapper -->
+    <template v-if="variant !== 'embedded'">
+      <button v-if="variant === 'card'" type="button" class="table-import-card" @click="show = true">
+        <span class="table-import-card__top">
+          <n-icon :component="GridOutline" :size="22" />
+          <span class="table-import-card__label">{{ l.reminderTableImport.cardLabel }}</span>
+        </span>
+        <span class="table-import-card__hint">{{ l.reminderTableImport.cardHint }}</span>
+      </button>
+      <slot v-else name="trigger" :open="() => (show = true)">
+        <button type="button" class="btn btn--ghost" @click="show = true">
+          <n-icon :component="GridOutline" class="btn-icon" />
+          {{ l.reminderTableImport.triggerButton }}
+        </button>
+      </slot>
+      <n-modal v-model:show="show" preset="card" :title="l.reminderTableImport.modalTitle" :style="{width: '900px', maxWidth: 'calc(100vw - 32px)'}" :mask-closable="!busy" :closable="!busy">
+        <div class="table-import" :dir="dir">
+          <p class="table-import__intro">{{ l.reminderTableImport.intro }}</p>
+          <ol class="table-import__steps" :aria-label="l.reminderTableImport.stepsAria">
+            <li :class="{'is-active': !preview}"><span>1</span> {{ l.reminderTableImport.step1 }}</li>
+            <li :class="{'is-active': preview && !confirmed}"><span>2</span> {{ l.reminderTableImport.step2 }}</li>
+            <li :class="{'is-active': confirmed}"><span>3</span> {{ l.reminderTableImport.step3 }}</li>
+          </ol>
+          <section class="table-import__templates" :aria-label="l.reminderTableImport.templatesAria">
+            <div class="table-import__section-heading"><strong>{{ l.reminderTableImport.templatesHeading }}</strong><span>{{ l.reminderTableImport.templatesSub }}</span></div>
+            <div class="table-import__links">
+              <a href="/templates/remindocr-import-20.xlsx" download="remindocr-import-20.xlsx"><n-icon :component="DocumentOutline" :size="22" /><span><strong>{{ l.reminderTableImport.templateExcel }}</strong><small>{{ l.reminderTableImport.templateExcelSub }}</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
+              <a href="/templates/remindocr-import-20-he.csv" download="remindocr-import-20-he.csv"><n-icon :component="DocumentTextOutline" :size="22" /><span><strong>{{ l.reminderTableImport.templateCsvHe }}</strong><small>{{ l.reminderTableImport.templateCsvHeSub }}</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
+              <a href="/templates/remindocr-import-20-en.csv" download="remindocr-import-20-en.csv"><n-icon :component="DocumentTextOutline" :size="22" /><span><strong>{{ l.reminderTableImport.templateCsvEn }}</strong><small>{{ l.reminderTableImport.templateCsvEnSub }}</small></span><n-icon :component="DownloadOutline" :size="18" /></a>
+            </div>
+          </section>
+          <div class="table-import__upload" :class="{'is-dragging': dragging}" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="dropFile">
+            <n-icon :component="CloudUploadOutline" :size="34" class="table-import__upload-icon" />
+            <strong>{{ file?.name || l.reminderTableImport.dropHint }}</strong>
+            <span>{{ file ? l.reminderTableImport.dropHintHasFile : l.reminderTableImport.dropHintNoFile }}</span>
+            <n-button :disabled="busy" secondary type="primary" @click="fileInput?.click()">{{ file ? l.reminderTableImport.replaceFile : l.reminderTableImport.chooseFile }}</n-button>
+            <small dir="ltr">{{ l.reminderTableImport.fileLimits }}</small>
+            <input ref="fileInput" class="table-import__file-input" type="file" accept=".csv,.xls,.xlsx" :disabled="busy" :aria-label="l.reminderTableImport.fileInputAria" @change="selectFile" />
+          </div>
+          <div class="table-import__requirements"><n-icon :component="InformationCircleOutline" :size="18" /><p>{{ t('reminderTableImport.requirements', {name: l.reminderTableImport.requiredName, expiry: l.reminderTableImport.requiredExpiry, format: 'YYYY-MM-DD'}) }}</p></div>
+          <n-alert v-if="error" type="error" role="alert">{{ error }}</n-alert>
+          <n-alert v-if="success" type="success" role="status">{{ success }}</n-alert>
+          <n-spin :show="busy">
+            <template v-if="preview">
+              <div class="table-import__summary"><strong>{{ l.reminderTableImport.previewTitle }}</strong><span>{{ t('reminderTableImport.previewSummary', {rows: preview.rows.length, reminders: preview.reminderCount, newReminders: preview.newReminderCount}) }}</span></div>
+              <div class="table-import__messages">
+                <n-alert v-for="warning in preview.warnings" :key="warning" type="warning">{{ warning }}</n-alert>
+                <n-alert v-for="issue in preview.errors" :key="issue" type="error">{{ issue }}</n-alert>
+              </div>
+              <div class="table-import__scroll reminders-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ l.reminderTableImport.colRow }}</th>
+                      <th>{{ l.reminderTableImport.colName }}</th>
+                      <th>{{ l.reminderTableImport.colClient }}</th>
+                      <th>{{ l.reminderTableImport.colExpiry }}</th>
+                      <th>{{ l.reminderTableImport.colReminderDates }}</th>
+                      <th>{{ l.reminderTableImport.colRecipients }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in preview.rows" :key="`${row.sheet}:${row.row}`">
+                      <td class="reminder-source-cell">{{ row.sheet }}:{{ row.row }}</td>
+                      <td><span class="reminder-name-cell">{{ row.name }}</span></td>
+                      <td><span class="reminder-client-link">{{ row.fields.clientName || "—" }}</span></td>
+                      <td><span class="reminder-date-cell__date" dir="ltr">{{ row.expiry }}</span></td>
+                      <td class="reminder-muted-cell" dir="ltr">{{ row.dates.join(", ") }}</td>
+                      <td class="reminder-email-cell">{{ row.recipients.join("; ") || l.reminderTableImport.noEmail }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <details class="table-import__details"><summary>{{ l.reminderTableImport.detailsSummary }}</summary><p>{{ l.reminderTableImport.detailsBody1 }}</p><p>{{ l.reminderTableImport.detailsBody2 }}</p></details>
+            </template>
+          </n-spin>
+          <div class="table-import__footer"><span>{{ confirmed ? l.reminderTableImport.footerConfirmed : l.reminderTableImport.footerPending }}</span><div><n-button :disabled="busy" @click="closeImport">{{ confirmed ? l.reminderTableImport.close : l.reminderTableImport.cancel }}</n-button><n-button v-if="!confirmed" type="primary" :loading="busy" :disabled="busy || !preview || preview.errors.length > 0 || !preview.rows.length" @click="confirm">{{ preview ? t('reminderTableImport.importN', {count: preview.rows.length}) : l.reminderTableImport.importToSystem }}</n-button></div></div>
+        </div>
+      </n-modal>
+    </template>
+
+    <!-- Embedded variant: content only, no trigger or modal -->
+    <div v-else class="table-import" :dir="dir">
       <p class="table-import__intro">{{ l.reminderTableImport.intro }}</p>
       <ol class="table-import__steps" :aria-label="l.reminderTableImport.stepsAria">
         <li :class="{'is-active': !preview}"><span>1</span> {{ l.reminderTableImport.step1 }}</li>
@@ -74,9 +142,8 @@
           <details class="table-import__details"><summary>{{ l.reminderTableImport.detailsSummary }}</summary><p>{{ l.reminderTableImport.detailsBody1 }}</p><p>{{ l.reminderTableImport.detailsBody2 }}</p></details>
         </template>
       </n-spin>
-      <div class="table-import__footer"><span>{{ confirmed ? l.reminderTableImport.footerConfirmed : l.reminderTableImport.footerPending }}</span><div><n-button :disabled="busy" @click="show = false">{{ confirmed ? l.reminderTableImport.close : l.reminderTableImport.cancel }}</n-button><n-button v-if="!confirmed" type="primary" :loading="busy" :disabled="busy || !preview || preview.errors.length > 0 || !preview.rows.length" @click="confirm">{{ preview ? t('reminderTableImport.importN', {count: preview.rows.length}) : l.reminderTableImport.importToSystem }}</n-button></div></div>
+      <div class="table-import__footer"><span>{{ confirmed ? l.reminderTableImport.footerConfirmed : l.reminderTableImport.footerPending }}</span><div><n-button :disabled="busy" @click="closeImport">{{ confirmed ? l.reminderTableImport.close : l.reminderTableImport.cancel }}</n-button><n-button v-if="!confirmed" type="primary" :loading="busy" :disabled="busy || !preview || preview.errors.length > 0 || !preview.rows.length" @click="confirm">{{ preview ? t('reminderTableImport.importN', {count: preview.rows.length}) : l.reminderTableImport.importToSystem }}</n-button></div></div>
     </div>
-  </n-modal>
   </div>
 </template>
 
@@ -88,11 +155,15 @@ import {GridOutline, CloudUploadOutline, DownloadOutline, DocumentOutline, Docum
 import {api} from "../services/apiService";
 import {useI18n} from "../composables/useI18n.js";
 type Preview = {rows: {row: number; sheet: string; name: string; expiry: string; dates: string[]; recipients: string[]; fields: Record<string, string>}[]; errors: string[]; warnings: string[]; reminderCount: number; newReminderCount: number};
-withDefaults(defineProps<{variant?: "button" | "card"}>(), {variant: "button"});
-const emit = defineEmits<{imported: []}>();
+const props = withDefaults(defineProps<{variant?: "button" | "card" | "embedded"}>(), {variant: "button"});
+const emit = defineEmits<{imported: []; close: []}>();
 const {l, t, dir} = useI18n();
 const show = ref(false);
 useDevModal("reminderTableImport", show);
+function closeImport() {
+  if (props.variant === "embedded") emit("close");
+  else show.value = false;
+}
 const busy = ref(false);
 const file = ref<File | null>(null);
 const preview = ref<Preview | null>(null);

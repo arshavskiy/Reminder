@@ -26,14 +26,10 @@
         >
           + {{ l.reminders.newReminder }}
         </button>
-        <ReminderTableImport v-if="reminderCreatesAllowed" @imported="onTableImported">
-          <template #trigger="{ open }">
-            <button class="rbtn rbtn--ghost" type="button" @click="open">
-              <n-icon :component="GridOutline" class="btn-icon"/>
-              {{ l.reminders.importExcel }}
-            </button>
-          </template>
-        </ReminderTableImport>
+        <button v-if="reminderCreatesAllowed" class="rbtn rbtn--ghost" type="button" @click="showImportModal = true">
+          <n-icon :component="DocumentTextOutline" class="btn-icon"/>
+          {{ l.uploadModal.importRemindersTitle }}
+        </button>
         <div class="bulk-action-anchor">
           <button
             class="rbtn rbtn--ghost"
@@ -401,6 +397,7 @@
       :reminder-id="previewReminderId"
       :reminder-title="previewReminderTitle"
     />
+    <ExtractRemindersModal v-model="showImportModal" @reminders-saved="onTableImported" />
   </div>
 </template>
 
@@ -408,7 +405,7 @@
 import {computed, h, onMounted, ref, type Component} from "vue";
 import {useRouter} from "vue-router";
 import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTimePicker, NTooltip, useMessage,} from "naive-ui";
-import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, EllipsisVerticalOutline, EyeOutline, GridOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
+import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, DocumentTextOutline, EllipsisVerticalOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useSettingsStore} from "../stores/settings.js";
 import {useClientsStore} from "../stores/clients.js";
@@ -418,7 +415,7 @@ import {api} from "../services/apiService.js";
 import {categoryLabel} from "../utils/reminderCategoryLabels.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {useDevModal} from "../composables/useDevModal.js";
-import ReminderTableImport from "../components/ReminderTableImport.vue";
+import ExtractRemindersModal from "../components/ExtractRemindersModal.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue";
 import {FEATURES} from "../shared/features.js";
@@ -1025,6 +1022,7 @@ async function doCreate() {
 const showEditDate = ref(false);
 useDevModal("reminders.editDate", showEditDate);
 const showReminderPreview = ref(false);
+const showImportModal = ref(false);
 const previewReminderId = ref<number | string | null>(null);
 const previewReminderTitle = ref<string | null>(null);
 const savingDate = ref(false);
@@ -1361,7 +1359,8 @@ function formatReminderDate(value: string | null | undefined): string {
   if (!value) return "—";
   const part = value.includes("T") ? value.split("T")[0] : value;
   const [y, m, d] = part.split("-");
-  return y && m && d ? `${d}/${m}/${y}` : value;
+  if (!y || !m || !d) return value;
+  return locale.value === "en" ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
 }
 
 function daysUntil(value: string | null | undefined): number | null {
@@ -1505,6 +1504,15 @@ const baseColumns = computed(() => [
       h("div", { class: "reminder-date-cell" }, [
         h("span", { class: "reminder-date-cell__date" }, formatReminderDate(row.trigger_date)),
       ]),
+  },
+  {
+    title: l.value.reminders.daysBefore,
+    key: "advance_days",
+    width: 90,
+    minWidth: 90,
+    sorter: (a: ReminderWithContext, b: ReminderWithContext) => (a.advance_days ?? 0) - (b.advance_days ?? 0),
+    render: (row: ReminderWithContext) =>
+      h("span", row.advance_days != null ? String(row.advance_days) : "—"),
   },
   {
     title: l.value.common.status,
