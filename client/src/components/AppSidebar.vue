@@ -196,6 +196,7 @@ import {
   HomeOutline,
   MailOutline,
   NotificationsOutline,
+  SearchOutline,
   WalletOutline,
 } from "@vicons/ionicons5";
 import type {Component} from "vue";
@@ -336,6 +337,12 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.reminders,
         },
       ],
+    },
+    {
+      label: localeStore.locale === "en" ? "Discover reminders" : "גילוי תזכורות",
+      key: "discover-reminders",
+      icon: SearchOutline,
+      feature: FEATURES.pages.discovery,
     },
     {
       label: nav.invoices,

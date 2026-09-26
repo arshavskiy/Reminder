@@ -20,6 +20,32 @@ import {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+const bodyLabels = {
+  he: { contact: "איש קשר", phone: "טלפון", nextCheck: "בדיקה הבאה", targetDate: "תאריך יעד", docType: "סוג מסמך", source: "מקור", daysBefore: "ימים לפני", fallbackTitle: "תזכורת" },
+  en: { contact: "Contact", phone: "Phone", nextCheck: "Next check", targetDate: "Target date", docType: "Document type", source: "Source", daysBefore: "days before", fallbackTitle: "Reminder" },
+} as const;
+
+const docTypeHeToEn: Record<string, string> = {
+  "תסקיר בדיקה": "Inspection Report",
+  "תסקיר": "Inspection Report",
+  "חוזה": "Contract",
+  "חוזה שכירות": "Lease Agreement",
+  "חשבונית": "Invoice",
+  "אישור": "Certificate",
+  "תעודה": "Certificate",
+  "תעודת אחריות": "Warranty Certificate",
+  "תעודת אחריות מוגבלת": "Limited Warranty",
+  "פוליסת ביטוח": "Insurance Policy",
+  "פוליסת ביטוח רכב פרטי": "Private Vehicle Insurance",
+  "ביטוח": "Insurance",
+  "רישיון": "License",
+  "היתר": "Permit",
+  "הסכם": "Agreement",
+  "חוזה שכירות רכב": "Vehicle Lease",
+  "הצעת מחיר": "Quote",
+  "קבלה": "Receipt",
+};
+
 export interface ReminderPreview {
   title: string;
   trigger_date: string;       // ISO YYYY-MM-DD
@@ -57,6 +83,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
       return;
     }
 
+    const locale = (req.query.locale as string) === "en" ? "en" : "he";
     const settings = getSettings();
     const advanceDays: number[] = settings.reminderAdvanceDays?.length
       ? settings.reminderAdvanceDays
@@ -73,7 +100,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
       let displayName = file.originalname;
       try {
         const decoded = Buffer.from(file.originalname, "latin1").toString("utf8");
-        if (!decoded.includes("")) displayName = decoded;
+        if (!decoded.includes("�")) displayName = decoded;
       } catch { /* keep original */ }
 
       const tmpPath = join(tmpDir, `extract_${Date.now()}${ext}`);
@@ -81,7 +108,7 @@ export function registerExtractRemindersRoutes(app: express.Application) {
 
       try {
         const previews = await extractRemindersFromFile(
-          tmpPath, ext, displayName, advanceDays, userId
+          tmpPath, ext, displayName, advanceDays, userId, locale
         );
         allPreviews.push(...previews);
       } catch (err) {
@@ -127,6 +154,8 @@ export function registerExtractRemindersRoutes(app: express.Application) {
           throw err;
       }
 
+    const locale = (req.query.locale as string) === "en" ? "en" : "he";
+    const lb = bodyLabels[locale];
     const { col } = await import("../db/db.js");
     const now = new Date();
     const inserted: string[] = [];
@@ -144,15 +173,16 @@ export function registerExtractRemindersRoutes(app: express.Application) {
         client_id: null,
         document_id: null,
         trigger_date: preview.trigger_date,
+        expiry_date: preview.expiry_date ?? null,
         advance_days: preview.advance_days,
         title: preview.title,
         body: [
-          preview.contact_name ? `איש קשר: ${preview.contact_name}` : null,
-          preview.contact_phone ? `טלפון: ${preview.contact_phone}` : null,
-          preview.next_check_date ? `בדיקה הבאה: ${preview.next_check_date}` : null,
-          preview.expiry_date ? `תאריך יעד: ${preview.expiry_date}` : null,
-          preview.document_type ? `סוג מסמך: ${preview.document_type}` : null,
-          `מקור: ${preview.source_file}`,
+          preview.contact_name ? `${lb.contact}: ${preview.contact_name}` : null,
+          preview.contact_phone ? `${lb.phone}: ${preview.contact_phone}` : null,
+          preview.next_check_date ? `${lb.nextCheck}: ${preview.next_check_date}` : null,
+          preview.expiry_date ? `${lb.targetDate}: ${preview.expiry_date}` : null,
+          preview.document_type ? `${lb.docType}: ${preview.document_type}` : null,
+          `${lb.source}: ${preview.source_file}`,
         ].filter(Boolean).join("\n"),
         email_to: emailTo.length ? JSON.stringify(emailTo) : null,
         email_template_id: null,
@@ -178,7 +208,8 @@ async function extractRemindersFromFile(
   ext: string,
   displayName: string,
   advanceDays: number[],
-  userId: string
+  userId: string,
+  locale: "en" | "he" = "he"
 ): Promise<ReminderPreview[]> {
   // ── 1. Extract raw text ──────────────────────────────────────────────────
   let rawText = "";
@@ -202,18 +233,19 @@ async function extractRemindersFromFile(
 
   // ── 2. XLSX: may contain multiple rows — extract row-by-row via AI ───────
   if (ext === ".xlsx") {
-    return extractFromXlsx(rawText, displayName, advanceDays);
+    return extractFromXlsx(rawText, displayName, advanceDays, locale);
   }
 
   // ── 3. Single-document extraction ─────────────────────────────────────────
-  return extractFromSingleDoc(rawText, displayName, advanceDays, userId);
+  return extractFromSingleDoc(rawText, displayName, advanceDays, userId, locale);
 }
 
 async function extractFromSingleDoc(
   rawText: string,
   displayName: string,
   advanceDays: number[],
-  userId: string
+  userId: string,
+  locale: "en" | "he" = "he"
 ): Promise<ReminderPreview[]> {
   // Try template-based extraction first; fall back to generic
   let expiryDate: string | null = null;
@@ -252,16 +284,21 @@ async function extractFromSingleDoc(
 
   if (!expiryDate) return [];
 
+  if (locale === "en" && documentType) {
+    documentType = docTypeHeToEn[documentType] ?? documentType;
+  }
+
   return buildPreviews(
     expiryDate, contactName, contactEmail, contactPhone,
-    documentType, displayName, advanceDays, confidence
+    documentType, displayName, advanceDays, confidence, null, locale
   );
 }
 
 async function extractFromXlsx(
   rawText: string,
   displayName: string,
-  advanceDays: number[]
+  advanceDays: number[],
+  locale: "en" | "he" = "he"
 ): Promise<ReminderPreview[]> {
   // Ask AI to find ALL date-bearing rows in the spreadsheet at once.
   // Returns an array of objects rather than a single record.
@@ -274,6 +311,10 @@ async function extractFromXlsx(
     : new OpenAI({ apiKey: settings.openAiKey });
 
   const model = settings.aiBackend === "ollama" ? settings.ollamaModel : settings.openAiModel;
+
+  const titleExample = locale === "en"
+    ? 'a concise English description of what the reminder is for (e.g. "Insurance renewal - Company X").'
+    : 'a concise Hebrew description of what the reminder is for (e.g. "חידוש ביטוח - חברת X").';
 
   const systemPrompt = `You are a spreadsheet data extraction assistant.
 The user provides text extracted from an Excel file.
@@ -292,7 +333,7 @@ Return ONLY valid JSON: an array of objects, each with these fields:
 Rules:
 - Normalize ALL dates to ISO 8601 (YYYY-MM-DD). Israeli DD/MM/YYYY → YYYY-MM-DD.
 - Only include rows where expiry_date is not null and is a future-oriented date.
-- title: a concise Hebrew description of what the reminder is for (e.g. "חידוש ביטוח - חברת X").
+- title: ${titleExample}
 - If the spreadsheet has column headers, use them to understand what each column means.
 - Skip rows where the date is clearly in the past AND no future action is needed.
 - Return [] if nothing found.`;
@@ -329,7 +370,8 @@ Rules:
         displayName,
         advanceDays,
         row.confidence ?? "medium",
-        row.title ?? null
+        row.title ?? null,
+        locale
       );
       previews.push(...p);
     }
@@ -348,13 +390,14 @@ function buildPreviews(
   sourceFile: string,
   advanceDays: number[],
   confidence: "high" | "medium" | "low",
-  customTitle?: string | null
+  customTitle?: string | null,
+  locale: "en" | "he" = "he"
 ): ReminderPreview[] {
   const today = new Date().toISOString().slice(0, 10);
-  if (expiryDate < today) return []; // past expiry — nothing to remind
+  if (expiryDate < today) return [];
 
   const previews: ReminderPreview[] = [];
-  const baseTitle = customTitle ?? buildTitle(documentType, contactName, expiryDate);
+  const baseTitle = customTitle ?? buildTitle(documentType, contactName, expiryDate, locale);
 
   for (const days of advanceDays) {
     const expiry = new Date(expiryDate);
@@ -363,9 +406,7 @@ function buildPreviews(
     const triggerDate = triggerRaw < today ? today : triggerRaw;
 
     previews.push({
-      title: days === 0
-        ? baseTitle
-        : `${baseTitle} (${days} ימים לפני)`,
+      title: baseTitle,
       trigger_date: triggerDate,
       expiry_date: expiryDate,
       next_check_date: expiryDate,
@@ -385,12 +426,13 @@ function buildPreviews(
 function buildTitle(
   documentType: string | null,
   contactName: string | null,
-  expiryDate: string
+  expiryDate: string,
+  locale: "en" | "he" = "he"
 ): string {
   const parts: string[] = [];
   if (documentType) parts.push(documentType);
   if (contactName) parts.push(`- ${contactName}`);
-  if (!parts.length) parts.push("תזכורת");
+  if (!parts.length) parts.push(bodyLabels[locale].fallbackTitle);
   parts.push(`| ${expiryDate}`);
   return parts.join(" ");
 }

@@ -37,10 +37,22 @@ function normalisePhone(raw: string): string {
 }
 
 // Also handle YYYY/MM/DD (reversed bidi date format)
+const EN_MONTHS: Record<string, string> = {
+  january: "01", february: "02", march: "03", april: "04",
+  may: "05", june: "06", july: "07", august: "08",
+  september: "09", october: "10", november: "11", december: "12",
+};
+
 function normalizeDateExtended(raw: string): string | null {
   if (!raw) return null;
   const ymd = raw.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
   if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+  // English: "April 30, 2027" or "April 30 2027"
+  const enDate = raw.match(/^(\w+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (enDate) {
+    const m = EN_MONTHS[enDate[1].toLowerCase()];
+    if (m) return `${enDate[3]}-${m}-${enDate[2].padStart(2, "0")}`;
+  }
   return normalizeDate(raw);
 }
 
@@ -64,6 +76,10 @@ const EXPIRY_PATTERNS: RegExp[] = [
   /(\d{4}[./]\d{1,2}[./]\d{1,2})\s*:\s*תאריך\s+פקיעה/,
   /(\d{4}[./]\d{1,2}[./]\d{1,2})\s*:\s*תוקף\s+עד/,
   /(\d{4}-\d{2}-\d{2})\s*:\s*בתוקף\s+עד/,
+  // English patterns
+  /(?:expir(?:y|ation)\s+date|valid\s+(?:until|through|thru)|lease\s+end(?:\s+date)?|policy\s+expir(?:y|ation)|warranty\s+expir(?:y|ation)(?:\s+date)?|end\s+date)\s*:?\s*(\w+\s+\d{1,2},?\s+\d{4})/i,
+  /(?:expir(?:y|ation)\s+date|valid\s+(?:until|through|thru)|lease\s+end(?:\s+date)?|end\s+date)\s*:?\s*(\d{1,2}[./]\d{1,2}[./]\d{4})/i,
+  /(?:expir(?:y|ation)\s+date|valid\s+(?:until|through|thru)|lease\s+end(?:\s+date)?|end\s+date)\s*:?\s*(\d{4}-\d{2}-\d{2})/i,
 ];
 
 function extractExpiryDate(text: string): string | null {

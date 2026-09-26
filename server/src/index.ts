@@ -31,6 +31,7 @@ import {registerTemplateRoutes} from "./routes/templates";
 import {registerEquipmentRoutes} from "./routes/equipment";
 import {registerAuthRoutes} from "./routes/auth";
 import {registerGmailRoutes, startGmailImportJobWorker} from "./routes/gmail";
+import {registerGmailObligationRoutes} from "./routes/gmailObligations";
 import {registerCalendarRoutes} from "./routes/calendar";
 import {registerGdriveRoutes, startDriveExportJobWorker} from "./routes/gdrive";
 import {registerInvoiceRoutes} from "./routes/invoices";
@@ -207,6 +208,7 @@ app.use("/api/gmail", requireAnyFeature(["pages.gmail"]));
 // which refused every non-admin account regardless of what it had paid for.
 app.use("/api/invoices", requirePlans(["trial", "business"]));
 registerGmailRoutes(app);
+registerGmailObligationRoutes(app);
 registerCalendarRoutes(app);
 registerGdriveRoutes(app);
 registerInvoiceRoutes(app);

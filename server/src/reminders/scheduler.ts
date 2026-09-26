@@ -813,22 +813,7 @@ export async function createPersonalReminder(
   }
 
   if (created) {
-    const dueIds = await flushDuePersonalReminders(userId);
-    if (calendarReminderId && !dueIds.includes(calendarReminderId)) {
-      await col("notifications").insertOne({
-        user_id: userId,
-        kind: "personal_reminder",
-        reminder_id: calendarReminderId,
-        title: label,
-        body: `יעד: ${targetDate}`,
-        created_at: new Date(),
-        read_at: null,
-      } as any);
-      await col("reminders").updateOne(
-        { _id: toObjectId(calendarReminderId), status: { $in: ["pending", "no_email", "error"] } } as any,
-        { $set: { status: "triggered", triggered_at: new Date(), updated_at: new Date() } },
-      );
-    }
+    await flushDuePersonalReminders(userId);
   }
 
   return { created };

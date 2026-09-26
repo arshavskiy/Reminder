@@ -2695,7 +2695,8 @@ async function saveTemplateEntities(
   }
 
   const clientCompany = getStr("client_company");
-  const contactPerson = getStr("contact_person") ?? getStr("client_name");
+  const contactPerson = getStr("contact_person") ?? getStr("client_name")
+    ?? getStr("registered_owner") ?? getStr("owner") ?? getStr("insured") ?? getStr("tenant");
   const displayName = clientCompany ?? contactPerson;
   const entityType: "company" | "person" = clientCompany ? "company" : "person";
 
@@ -2740,9 +2741,11 @@ async function saveTemplateEntities(
   }
 
   const docNumber =
-    getStr("contract_number") ?? getStr("report_number") ?? getStr("invoice_number");
+    getStr("contract_number") ?? getStr("report_number") ?? getStr("invoice_number")
+    ?? getStr("warranty_id") ?? getStr("policy_number") ?? getStr("document_number");
   const startDate =
-    getStr("start_date") ?? getStr("inspection_date") ?? getStr("issue_date");
+    getStr("start_date") ?? getStr("inspection_date") ?? getStr("issue_date")
+    ?? getStr("purchase_date") ?? getStr("effective_date");
   const rawExpiryDate = template.expiry_field ? getStr(template.expiry_field) : null;
   const inspectionInterval = getNum("inspection_interval_months") ?? getNum("date_diff_months") ?? inspectionIntervalMonths(startDate, rawExpiryDate);
   const today2 = new Date().toISOString().slice(0, 10);
@@ -2779,7 +2782,8 @@ async function saveTemplateEntities(
     );
     const contractId = (upsertResult as any)?._id?.toString() ?? documentId;
     if (expiryDate && !skipReminders && !isOriginalOverdue2) {
-      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId);
+      const contactEmail = getStr("client_email") ?? getStr("contact_email") ?? getStr("email");
+      await generateContractReminders(contractId, clientId, documentId, expiryDate, userId, contactEmail);
     }
   }
 

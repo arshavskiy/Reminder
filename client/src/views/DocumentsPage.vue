@@ -253,14 +253,6 @@
       />
     </div>
 
-    <!-- Drop strip with inline upload + results modal -->
-    <div v-if="importLocked" class="drop-strip drop-strip--disabled">
-      <span>{{ importLockLabel }}</span>
-      <button class="btn btn--ghost btn--xs" type="button" @click="goToSubscription">
-        {{ l.profile.upgradePlan }}
-      </button>
-    </div>
-    <DocumentDropStrip v-else @quota-reached="onQuotaReached" @uploaded="store.fetch(undefined, true)" />
 
     <n-alert
       v-if="rescanStore.hasSession && !showUploadModal"
@@ -765,7 +757,6 @@ import StatusBadge from "../components/StatusBadge.vue";
 import PageHeader from "../components/PageHeader.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import UploadModal from "../components/UploadModal.vue";
-import DocumentDropStrip from "../components/DocumentDropStrip.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
 import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
@@ -864,10 +855,6 @@ const showLimitModal = ref(false);
 useDevModal("documents.rescanAll", showRescanAllConfirm);
 useDevModal("documents.limit", showLimitModal);
 
-function onQuotaReached() {
-  showLimitModal.value = true;
-  store.fetch(undefined, true);
-}
 const viewMode = ref<"grid" | "list">("list");
 const rescanAlertTitle = computed(() => {
   const upload = rescanStore.kind === "upload";
@@ -1070,7 +1057,6 @@ async function openRescanModal() {
 
 async function onModalUpload(
   files: File[],
-  fields: { key: string; label_he: string; type: string }[],
   options: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string; liteImport?: boolean }
 ) {
   await uploadFiles(files, options);
@@ -2353,36 +2339,6 @@ async function bulkExtractAi() {
 .quota-bar__text { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; }
 .quota-bar__limit { color: #e88080; font-weight: 600; }
 
-/* ── Drop strip ──────────────────────────────────────────────────────────── */
-.drop-strip {
-  border: 1px dashed rgba(24, 160, 88, 0.42);
-  border-radius: 12px;
-  padding: 22px 16px;
-  text-align: center;
-  margin-bottom: 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  background:
-    linear-gradient(135deg, rgba(24, 160, 88, 0.10), rgba(32, 128, 240, 0.06)),
-    var(--bg-card);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.12s;
-}
-.drop-strip:hover {
-  border-color: var(--brand-color);
-  color: var(--text-primary);
-}
-.drop-strip--active {
-  border-color: var(--brand-color);
-  background:
-    linear-gradient(135deg, rgba(99,226,183,0.18), rgba(32,128,240,0.10)),
-    var(--bg-card);
-  color: var(--text-primary);
-  transform: translateY(-1px);
-}
-.drop-strip--disabled { border-color: #e88080; background: rgba(232,128,128,0.05); color: #e88080; }
 
 /* ── Settings popover ────────────────────────────────────────────────────── */
 .settings-pop { padding: 6px 4px; }

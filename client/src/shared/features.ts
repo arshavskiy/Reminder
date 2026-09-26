@@ -5,6 +5,7 @@ export const FEATURES = {
     invoices: "pages.invoices",
     contracts: "pages.contracts",
     reminders: "pages.reminders",
+    discovery: "pages.discovery",
     reports: "pages.reports",
     clients: "pages.clients",
     equipment: "pages.equipment",
@@ -44,6 +45,8 @@ export const DEFAULT_FEATURES: Record<FeatureKey, boolean> = Object.fromEntries(
     ...Object.values(FEATURES.dashboard),
   ].map((key) => [key, true])
 ) as Record<FeatureKey, boolean>;
+
+DEFAULT_FEATURES[FEATURES.pages.discovery] = false;
 
 // Gmail inbox page is plan-gated to business in the router/nav; feature default matches server catalog.
 // DEFAULT_FEATURES[FEATURES.pages.gmail] = true;

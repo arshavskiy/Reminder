@@ -15,13 +15,21 @@
         "
         class="dash__intake"
       >
-        <DocumentDropStrip v-if="documentImportAllowed" compact class="dash__drop" @quota-reached="onQuotaReached" @uploaded="store.fetch(true)" />
-        <div v-else class="drop-strip drop-strip--disabled dash__drop">
-          <span>{{ PLAN_GATE_MESSAGES.documentImport }}</span>
-          <button class="rbtn-sm" type="button" @click="goToSubscription">
-            {{ l.profile.upgradePlan }}
-          </button>
-        </div>
+        <button v-if="documentImportAllowed" class="dash__upload-btn" type="button" @click="showUploadModal = true">
+          <span class="dash__upload-btn__icon">
+            <n-icon :component="CloudUploadOutline" :size="20"/>
+          </span>
+          <span class="dash__upload-btn__text">{{ l.common.upload }}</span>
+        </button>
+        <n-tooltip v-else>
+          <template #trigger>
+            <button class="rbtn-sm rbtn-sm--disabled" type="button" @click="goToSubscription">
+              <n-icon :component="CloudUploadOutline" class="btn-icon"/>
+              {{ l.common.upload }}
+            </button>
+          </template>
+          {{ l.profile.upgradePlan }}
+        </n-tooltip>
         <div class="dash__intake-actions">
           <n-tooltip v-if="canCreateInspection && hasFeature(FEATURES.pages.contracts)" :disabled="writesAllowed">
             <template #trigger>
@@ -39,17 +47,15 @@
             </template>
             {{ l.profile.upgradePlan }}
           </n-tooltip>
-          <ReminderTableImport
-              v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
-            @imported="onTableImported"
+          <button
+            v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
+            class="rbtn-sm"
+            type="button"
+            @click="showExtractModal = true"
           >
-            <template #trigger="{ open }">
-              <button class="rbtn-sm" type="button" @click="open">
-                <n-icon :component="GridOutline" class="btn-icon" />
-                {{ l.dashboard.importReminders }}
-              </button>
-            </template>
-          </ReminderTableImport>
+            <n-icon :component="DocumentTextOutline" class="btn-icon" />
+            {{ l.uploadModal.importRemindersTitle }}
+          </button>
         </div>
       </div>
 
@@ -124,6 +130,19 @@
       <QuoteCreateModal
           v-model:show="showQuoteCreateModal"
           @created="store.fetch(true)"
+      />
+
+      <UploadModal
+        ref="uploadModalRef"
+        v-model="showUploadModal"
+        :uploading="dashUploading"
+        :rescan="rescanModalState"
+        @upload="onDashUpload"
+      />
+
+      <ExtractRemindersModal
+        v-model="showExtractModal"
+        @reminders-saved="onTableImported"
       />
 
       <!-- ── Module cards ──────────────────────────────────────────────── -->
@@ -218,7 +237,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
+import {computed, onMounted, onUnmounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NIcon, NSpin, NSwitch, NTooltip, useMessage} from "naive-ui";
 import {
@@ -227,8 +246,8 @@ import {
   ClipboardOutline,
   CloudUploadOutline,
   ConstructOutline,
+  DocumentTextOutline,
   ExtensionPuzzleOutline,
-  GridOutline,
   MailOutline,
   PeopleOutline,
   SettingsOutline,
@@ -244,6 +263,7 @@ import {
   resolveUserPlan,
   type PlanId
 } from "../shared/pricingPlans.js";
+import {useRescanModalStore} from "../stores/rescanModal.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
 import type {ExpiryCalendarItem} from "../services/apiService.js";
@@ -252,8 +272,9 @@ import type {DocTemplate} from "../shared/types.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
-import DocumentDropStrip from "../components/DocumentDropStrip.vue";
-import ReminderTableImport from "../components/ReminderTableImport.vue";
+import UploadModal from "../components/UploadModal.vue";
+import type { UploadOptions } from "../components/UploadModal.vue";
+import ExtractRemindersModal from "../components/ExtractRemindersModal.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
 import QuoteCreateModal from "../components/QuoteCreateModal.vue";
@@ -262,7 +283,7 @@ import {useOnboarding} from "../composables/useOnboarding.js";
 import {useI18n} from "../composables/useI18n.js";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
-const {l, href, locale, canCreateInspection} = useI18n();
+const {l, t, href, locale, canCreateInspection} = useI18n();
 function onTableImported() {
   calendarNextTestsOnly.value = false;
   store.fetch(true);
@@ -290,8 +311,94 @@ const needsOnboarding = computed(() => {
   return Boolean(authStore.user && !(authStore.user as any).onboarding_completed);
 });
 
-function onQuotaReached() {
-  message.warning(l.value.dashboard.quotaWarning);
+const rescanStore = useRescanModalStore();
+const showUploadModal = ref(false);
+const showExtractModal = ref(false);
+const dashUploading = ref(false);
+const uploadModalRef = ref<InstanceType<typeof UploadModal> | null>(null);
+let rescanPollTimer: ReturnType<typeof setInterval> | null = null;
+
+const rescanModalState = computed(() => ({
+  queued: rescanStore.queued,
+  remaining: rescanStore.remaining,
+  done: rescanStore.done,
+  kind: rescanStore.kind,
+  rows: rescanStore.rows,
+}));
+
+async function onDashUpload(
+  files: File[],
+  options: UploadOptions,
+) {
+  dashUploading.value = true;
+  try {
+    const { ids, duplicates } = await api.documents.upload(files, options, options.templateId);
+    rescanStore.start({ queued: ids.length, ids, duplicates, kind: "upload" });
+    store.fetch(true);
+    uploadModalRef.value?.openRescan();
+    startUploadPolling(ids);
+  } catch (e: any) {
+    if (e?.message === "document_limit_reached" || e?.message === "document_monthly_limit_reached") {
+      message.warning(l.value.dashboard.quotaWarning);
+    } else {
+      message.error(String(e));
+    }
+  } finally {
+    dashUploading.value = false;
+  }
+}
+
+function stopRescanPolling() {
+  if (rescanPollTimer) {
+    clearInterval(rescanPollTimer);
+    rescanPollTimer = null;
+  }
+}
+
+function startUploadPolling(uploadIds: string[]) {
+  stopRescanPolling();
+  const watchIds = new Set(uploadIds.map(String));
+  if (!watchIds.size) return;
+
+  let attempts = 0;
+  rescanPollTimer = setInterval(async () => {
+    attempts += 1;
+    try {
+      const { rows } = await api.documents.list({ limit: uploadIds.length + 10 }, true);
+      const watched = rows.filter((row: any) => watchIds.has(String(row.id)));
+      const duplicateSet = new Set(rescanStore.duplicateIds);
+      rescanStore.updateRows(watched.map((row: any) => ({
+        id: row.id,
+        file_name: row.file_name,
+        processing_status: row.processing_status,
+        reminder_status: row.reminder_status ?? null,
+        reminder_date: row.reminder_date ?? null,
+        document_type: row.document_type ?? null,
+        error_message: row.error_message ?? null,
+      })));
+      const running = watched.filter((row: any) => row.processing_status === "queued" || row.processing_status === "processing");
+      rescanStore.setRemaining(running.length);
+
+      if (running.length === 0 && watched.length > 0) {
+        stopRescanPolling();
+        rescanStore.markDone();
+        store.fetch(true);
+        const completed = watched.filter((row: any) => row.processing_status === "done").length;
+        const failed = watched.filter((row: any) => row.processing_status === "error").length;
+        if (failed) {
+          message.warning(t("documentsMsg.uploadDoneErrors", { completed, failed }));
+        } else {
+          message.success(t("documentsMsg.uploadDone", { completed }));
+        }
+      } else if (attempts >= 40) {
+        stopRescanPolling();
+        rescanStore.markBackground();
+        message.info(l.value.documentsMsg.scanStillRunning);
+      }
+    } catch {
+      if (attempts >= 3) stopRescanPolling();
+    }
+  }, 3000);
 }
 const stats = computed(() => store.stats);
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
@@ -335,6 +442,8 @@ onMounted(async () => {
   }
   continuePendingGmailInspectionImport();
 });
+
+onUnmounted(() => stopRescanPolling());
 
 async function loadCalendarPreference() {
   try {
@@ -687,29 +796,6 @@ const data_cards = computed(() => modules.value);
   margin-bottom: 16px;
 }
 
-.dash__drop :deep(> div),
-.dash__intake :deep(.drop-strip) {
-  margin-bottom: 0;
-}
-.dash__drop {
-  min-width: 0;
-  display: flex;
-}
-.dash__drop :deep(.drop-strip) {
-  box-sizing: border-box;
-}
-
-.dash__drop.drop-strip--disabled {
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border: 1px dashed #e88080;
-  border-radius: 12px;
-  background: rgba(232, 128, 128, 0.05);
-  color: #e88080;
-  font-size: 13px;
-}
 .dash__intake-actions {
   display: flex;
   flex-direction: row;
@@ -748,21 +834,53 @@ const data_cards = computed(() => modules.value);
 }
 .rbtn-sm:active { transform: scale(0.97); }
 .rbtn-sm :deep(.n-icon) { color: var(--brand-color); }
+.rbtn-sm--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border-color);
+}
+
+.dash__upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1.5px solid var(--brand-color);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(24, 160, 88, 0.14), rgba(32, 128, 240, 0.08)), var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(24, 160, 88, 0.12);
+  transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
+}
+.dash__upload-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(24, 160, 88, 0.18);
+  border-color: var(--brand-color);
+}
+.dash__upload-btn:active { transform: scale(0.97); }
+.dash__upload-btn__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--brand-color);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(24, 160, 88, 0.22);
+}
+.dash__upload-btn__text {
+  letter-spacing: 0.02em;
+}
 
 @media (max-width: 720px) {
   .dash__intake {
     flex-direction: column;
-  }
-
-  .dash__drop {
-    width: 100%;
-    flex: 1 1 auto;
-  }
-
-  .dash__drop :deep(> div),
-  .dash__drop :deep(.drop-strip) {
-    width: 100%;
-    box-sizing: border-box;
   }
 
   .dash__intake-actions {

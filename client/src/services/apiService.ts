@@ -22,6 +22,23 @@ import type {
   UserSettings,
 } from "../../src/shared/types.js";
 
+export interface ObligationSuggestion {
+  id: string;
+  status: "new" | "created" | "dismissed";
+  pdfs: { id: string; filename: string; size: number }[];
+  messageId: string;
+  subject: string;
+  from: string;
+  kind: "warranty" | "renewal" | "payment_due" | "maintenance" | "due_task";
+  title: string;
+  entity_name: string;
+  due_date: string;
+  evidence_quote: string;
+  confidence: "high" | "medium";
+  warning?: "immediate";
+  attachment_name: string | null;
+}
+
 export interface GmailAttachment {
   attachmentId: string;
   filename: string;
@@ -1349,6 +1366,11 @@ export const api = {
   },
 
   gmail: {
+    scanObligations: (langs: string[], months: number) => post<{ scanned: number; proposals: ObligationSuggestion[] }>(`/gmail/obligation/scan${qs({ langs: langs.join(","), months })}`),
+    discoveries: () => get<{ proposals: ObligationSuggestion[] }>("/gmail/obligation/saved", true),
+    discovery: (id: string) => get<ObligationSuggestion & { preview_html: string }>(`/gmail/obligation/saved/${encodeURIComponent(id)}`, true),
+    updateDiscovery: (id: string, status: "new" | "created" | "dismissed") => put<{ ok: boolean }>(`/gmail/obligation/saved/${encodeURIComponent(id)}`, { status }),
+    discoveryPdfUrl: (id: string, fileId: string) => `${BASE}/gmail/obligation/saved/${encodeURIComponent(id)}/pdf/${encodeURIComponent(fileId)}`,
     status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
       authUrl: (returnTo?: string, purpose?: "gmail" | "drive" | "all") => get<{
           url: string

@@ -13,12 +13,6 @@
       <span style="font-size: 15px; font-weight: 600">{{ modalTitle }}</span>
     </template>
 
-    <!-- Mode tabs -->
-    <n-tabs v-if="activeTab !== 'rescan'" v-model:value="activeTab" size="small" style="margin-bottom: 16px" type="line">
-      <n-tab name="upload">{{ l.uploadModal.tabUpload }}</n-tab>
-      <n-tab name="extract">{{ l.uploadModal.tabExtract }}</n-tab>
-    </n-tabs>
-
     <!-- ══════════════════════════════════════════════════════ TAB: UPLOAD ══ -->
     <div v-if="activeTab === 'upload'" class="upload-layout">
       <!-- ── Left col: drop zone + file queue ─────────────────────────────── -->
@@ -63,50 +57,8 @@
 
       <div class="upload-divider" />
 
-      <!-- ── Right col: extraction fields ─────────────────────────────────── -->
+      <!-- ── Right col: processing options ──────────────────────────────── -->
       <div class="upload-col upload-col--fields">
-        <div class="fields-header">
-          <span class="fields-title">{{ l.uploadModal.fieldsTitle }}</span>
-          <n-tag :bordered="false" size="small" type="info">{{ l.uploadModal.optional }}</n-tag>
-        </div>
-        <p class="fields-hint">{{ l.uploadModal.fieldsHint }}</p>
-
-        <div class="fields-list">
-          <div v-if="!fields.length" class="fields-empty">
-            <div class="fields-empty__icon">✨</div>
-            <div class="fields-empty__text">{{ l.uploadModal.fieldsEmptyText }}</div>
-            <div class="fields-empty__sub">{{ l.uploadModal.fieldsEmptySub }}</div>
-          </div>
-
-          <div v-for="(f, i) in fields" :key="i" class="field-row">
-            <n-input
-              v-model:value="f.key"
-              class="field-row__key"
-              :placeholder="l.uploadModal.fieldKeyPlaceholder"
-              size="small"
-              style="direction: ltr; font-family: monospace"
-            />
-            <n-input
-              v-model:value="f.label_he"
-              class="field-row__label"
-              :placeholder="l.uploadModal.fieldLabelPlaceholder"
-              size="small"
-            />
-            <n-select
-              v-model:value="f.type"
-              :options="typeOptions"
-              :virtual-scroll="false"
-              class="field-row__type"
-              size="small"
-            />
-            <n-button circle quaternary size="tiny" @click="fields.splice(i, 1)">✕</n-button>
-          </div>
-        </div>
-
-        <n-button dashed size="small" style="margin-top: 8px; width: 100%" @click="addField">
-          {{ l.uploadModal.addField }}
-        </n-button>
-
         <!-- Pipeline toggles -->
         <div class="pipeline-toggles">
           <div class="pipeline-toggles__title">{{ l.uploadModal.processingOptionsTitle }}</div>
@@ -147,129 +99,6 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════ TAB: EXTRACT ══ -->
-    <div v-else-if="activeTab === 'extract'" class="extract-tab">
-      <!-- Step 1: file picker -->
-      <div v-if="extractStep === 'pick'" class="extract-pick">
-        <div
-          :class="{ 'drop-zone--over': extractDragOver, 'drop-zone--has-files': extractFiles.length > 0 }"
-          class="drop-zone"
-          @click="extractInput?.click()"
-          @dragover.prevent="extractDragOver = true"
-          @dragleave.prevent="extractDragOver = false"
-          @drop.prevent="onExtractDrop"
-        >
-          <input
-            ref="extractInput"
-            accept=".pdf,.docx,.xlsx,.txt,.png,.jpg,.jpeg,.tif,.tiff"
-            class="hidden"
-            multiple
-            type="file"
-            @change="onExtractInputChange"
-          />
-          <div v-if="!extractFiles.length" class="drop-zone__empty">
-            <div class="drop-zone__icon">🔍</div>
-            <div class="drop-zone__main">{{ l.uploadModal.dropExtractMain }}</div>
-            <div class="drop-zone__or">{{ l.uploadModal.or }}</div>
-            <n-button ghost size="small" type="primary" @click.stop="extractInput?.click()">{{ l.uploadModal.chooseFiles }}</n-button>
-            <div class="drop-zone__hint">{{ l.uploadModal.dropExtractHint }}</div>
-          </div>
-          <div v-else class="drop-zone__add-more" @click.stop="extractInput?.click()">
-            <span>{{ l.uploadModal.addMoreFiles }}</span>
-          </div>
-        </div>
-
-        <div v-if="extractFiles.length" class="file-list" style="margin-top: 10px">
-          <div v-for="(f, i) in extractFiles" :key="i" class="file-item">
-            <span class="file-item__icon">{{ fileIcon(f.name) }}</span>
-            <span :title="f.name" class="file-item__name">{{ f.name }}</span>
-            <span class="file-item__size">{{ formatSize(f.size) }}</span>
-            <n-button circle quaternary size="tiny" @click="extractFiles.splice(i, 1)">✕</n-button>
-          </div>
-        </div>
-
-        <div class="extract-hint-box">
-          <div class="extract-hint-box__icon">💡</div>
-          <div>
-            <strong>{{ l.uploadModal.extractHintTitle }}</strong> — {{ l.uploadModal.extractHintBody }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 2: loading -->
-      <div v-else-if="extractStep === 'loading'" class="extract-loading">
-        <n-spin size="large" />
-        <div style="margin-top: 16px; font-size: 14px; color: var(--text-muted)">
-          {{ t('uploadModal.extracting', { count: extractFiles.length }) }}
-        </div>
-      </div>
-
-      <!-- Step 3: preview results -->
-      <div v-else-if="extractStep === 'preview'" class="extract-preview">
-        <div v-if="!extractPreviews.length" class="fields-empty" style="margin: 32px 0">
-          <div class="fields-empty__icon">😕</div>
-          <div class="fields-empty__text">{{ l.uploadModal.noRemindersFound }}</div>
-          <div class="fields-empty__sub">{{ l.uploadModal.noRemindersFoundSub }}</div>
-        </div>
-
-        <div v-else>
-          <div class="preview-summary">
-            <span class="preview-summary__count">{{ t('uploadModal.remindersSelected', { selected: confirmedCount, total: extractPreviews.length }) }}</span>
-            <div style="display: flex; gap: 8px">
-              <n-button quaternary size="tiny" @click="selectAll(true)">{{ l.uploadModal.selectAll }}</n-button>
-              <n-button quaternary size="tiny" @click="selectAll(false)">{{ l.uploadModal.clearAll }}</n-button>
-            </div>
-          </div>
-
-          <div class="preview-list">
-            <div
-              v-for="(p, i) in extractPreviews"
-              :key="i"
-              :class="{ 'preview-card--selected': p.selected, 'preview-card--duplicate': p.advance_days !== extractPreviews.filter(x => x.expiry_date === p.expiry_date)[0]?.advance_days }"
-              class="preview-card"
-              @click="p.selected = !p.selected"
-            >
-              <div class="preview-card__check">
-                <n-checkbox v-model:checked="p.selected" @click.stop />
-              </div>
-              <div class="preview-card__body">
-                <div class="preview-card__title">{{ p.title }}</div>
-                <div class="preview-card__meta">
-                  <span class="preview-card__badge preview-card__badge--date">📅 {{ l.uploadModal.sendDate }}: {{ p.trigger_date }}</span>
-                  <span v-if="p.next_check_date" class="preview-card__badge preview-card__badge--next">{{ l.uploadModal.nextCheckDate }}: {{ p.next_check_date }}</span>
-                  <span v-if="p.expiry_date" class="preview-card__badge preview-card__badge--expiry">⏰ {{ l.uploadModal.expiryDate }}: {{ p.expiry_date }}</span>
-                  <span v-if="p.document_type" class="preview-card__badge">{{ p.document_type }}</span>
-                  <span :class="`preview-card__badge--conf-${p.confidence}`" class="preview-card__badge preview-card__badge--conf">{{ confidenceLabel(p.confidence) }}</span>
-                </div>
-                <div v-if="p.contact_name || p.contact_email || p.contact_phone" class="preview-card__contact">
-                  <span v-if="p.contact_name">👤 {{ p.contact_name }}</span>
-                  <span v-if="p.contact_phone">📞 {{ p.contact_phone }}</span>
-                  <span v-if="p.contact_email">✉️ {{ p.contact_email }}</span>
-                </div>
-                <div class="preview-card__source">{{ l.uploadModal.sourceFile }}: {{ p.source_file }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="extractErrors.length" class="extract-errors">
-            <div v-for="e in extractErrors" :key="e.file" class="extract-error-row">
-              ❌ {{ e.file }}: {{ e.error }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 4: saved confirmation -->
-      <div v-else-if="extractStep === 'saved'" class="extract-saved">
-        <div style="font-size: 48px; text-align: center; margin-bottom: 12px">✅</div>
-        <div style="font-size: 16px; font-weight: 600; text-align: center">
-          {{ t('uploadModal.savedCount', { count: savedCount }) }}
-        </div>
-        <div style="font-size: 13px; color: var(--text-muted); text-align: center; margin-top: 6px">
-          {{ l.uploadModal.savedHint }}
-        </div>
-      </div>
-    </div>
-
     <!-- ══════════════════════════════════════════════════ TAB: RESCAN ═══ -->
     <div v-else class="rescan-tab">
       <div class="rescan-hero">
@@ -367,41 +196,6 @@
         </div>
       </div>
 
-      <!-- Extract tab footer -->
-      <div v-else-if="activeTab === 'extract'" class="modal-footer">
-        <n-button @click="cancel">{{ l.common.cancel }}</n-button>
-        <div class="modal-footer__actions">
-          <!-- Step: pick -->
-          <template v-if="extractStep === 'pick'">
-            <n-button
-              :disabled="!extractFiles.length"
-              type="primary"
-              @click="runExtract"
-            >
-              {{ l.uploadModal.extractReminders }}
-            </n-button>
-          </template>
-
-          <!-- Step: preview -->
-          <template v-else-if="extractStep === 'preview'">
-            <n-button @click="extractStep = 'pick'">{{ l.uploadModal.back }}</n-button>
-            <n-button
-              :disabled="confirmedCount === 0 || savingExtract"
-              :loading="savingExtract"
-              type="primary"
-              @click="saveExtracted"
-            >
-              {{ t('uploadModal.saveNReminders', { count: confirmedCount }) }}
-            </n-button>
-          </template>
-
-          <!-- Step: saved -->
-          <template v-else-if="extractStep === 'saved'">
-            <n-button type="primary" @click="cancel">{{ l.common.close }}</n-button>
-          </template>
-        </div>
-      </div>
-
       <!-- Rescan footer -->
       <div v-else class="modal-footer">
         <n-button @click="cancel">{{ rescanRunning ? l.uploadModal.continueInBackground : l.common.close }}</n-button>
@@ -415,37 +209,21 @@
 
 <script lang="ts" setup>
 import {computed, onMounted, ref, watch} from "vue";
-import {NButton, NCheckbox, NInput, NModal, NProgress, NSelect, NSpin, NSwitch, NTab, NTabs, NTag} from "naive-ui";
+import {NButton, NModal, NProgress, NSelect, NSpin, NSwitch} from "naive-ui";
 import {api} from "../services/apiService.js";
 import {useI18n} from "../composables/useI18n.js";
 
 const {l, t} = useI18n();
 
-const API = import.meta.env.VITE_API_BASE ?? "";
-
-interface ExtractionField { key: string; label_he: string; type: string }
-
 export interface UploadOptions {
   doAi: boolean;
   doEntities: boolean;
   doReminders: boolean;
-  templateId?: number
+  templateId?: string;
+  liteImport?: boolean;
 }
 
-interface ReminderPreview {
-  title: string;
-  trigger_date: string;
-  expiry_date: string | null;
-  next_check_date: string | null;
-  advance_days: number;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  document_type: string | null;
-  source_file: string;
-  confidence: "high" | "medium" | "low";
-  selected: boolean;
-}
+
 interface RescanRow {
   id: string | number;
   file_name: string;
@@ -466,8 +244,8 @@ interface RescanState {
 
 const props = defineProps<{ uploading: boolean; rescan?: RescanState | null }>();
 const emit = defineEmits<{
-  (e: "upload", files: File[], fields: ExtractionField[], options: UploadOptions): void;
-  (e: "reminders-saved", count: number): void;
+  (e: "upload", files: File[], options: UploadOptions): void;
+
   (e: "view-document", id: string): void;
   (e: "create-template", file: File): void;
 }>();
@@ -478,7 +256,6 @@ const visible = defineModel<boolean>({ required: true });
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
 const files = ref<File[]>([]);
-const fields = ref<ExtractionField[]>([]);
 const liteImport = ref(false);
 const doAi = ref(true);
 const doEntities = ref(false);
@@ -497,18 +274,7 @@ onMounted(async () => {
   }
 });
 
-// ── Extract tab state ───────────────────────────────────────────────────────
-const activeTab = ref<"upload" | "extract" | "rescan">("upload");
-const extractInput = ref<HTMLInputElement | null>(null);
-const extractDragOver = ref(false);
-const extractFiles = ref<File[]>([]);
-const extractStep = ref<"pick" | "loading" | "preview" | "saved">("pick");
-const extractPreviews = ref<ReminderPreview[]>([]);
-const extractErrors = ref<{ file: string; error: string }[]>([]);
-const savingExtract = ref(false);
-const savedCount = ref(0);
-
-const confirmedCount = computed(() => extractPreviews.value.filter((p) => p.selected).length);
+const activeTab = ref<"upload" | "rescan">("upload");
 const isUploadSession = computed(() => props.rescan?.kind === "upload");
 const modalTitle = computed(() => activeTab.value === "rescan" ? (isUploadSession.value ? l.value.uploadModal.titleReprocessUpload : l.value.uploadModal.titleRescan) : l.value.uploadModal.titleUpload);
 const rescanRunning = computed(() => activeTab.value === "rescan" && !!props.rescan && !props.rescan.done);
@@ -536,35 +302,15 @@ const rescanSubtitle = computed(() => {
   return t("uploadModal.rescanStats", { assigned: rescanAssigned.value, missing: rescanMissing.value, errors: rescanFailed.value });
 });
 
-const typeOptions = computed(() => [
-  { label: l.value.uploadModal.typeText,     value: "text" },
-  { label: l.value.uploadModal.typeNumber,   value: "number" },
-  { label: l.value.uploadModal.typeDate,     value: "date" },
-  { label: l.value.uploadModal.typePhone,    value: "phone" },
-  { label: l.value.uploadModal.typeEmail,    value: "email" },
-  { label: l.value.uploadModal.typeCurrency, value: "currency" },
-  { label: l.value.uploadModal.typeList,     value: "list" },
-]);
 
 watch(visible, (v) => {
   if (v) resetAll();
 });
 
 function resetAll() {
-  files.value = []; fields.value = []; dragOver.value = false;
+  files.value = []; dragOver.value = false;
   doAi.value = true; doEntities.value = true; doReminders.value = true;
   activeTab.value = "upload";
-  resetExtract();
-}
-
-function resetExtract() {
-  extractFiles.value = [];
-  extractStep.value = "pick";
-  extractPreviews.value = [];
-  extractErrors.value = [];
-  extractDragOver.value = false;
-  savingExtract.value = false;
-  savedCount.value = 0;
 }
 
 // ── Upload tab handlers ─────────────────────────────────────────────────────
@@ -586,10 +332,6 @@ function addFiles(incoming: File[]) {
   }
 }
 
-function addField() {
-  fields.value.push({ key: "", label_he: "", type: "text" });
-}
-
 function cancel() {
   visible.value = false;
 }
@@ -602,90 +344,13 @@ function createTemplate() {
 
 function submit() {
   if (!files.value.length) return;
-  emit("upload", [...files.value], [...fields.value], {
+  emit("upload", [...files.value], {
     doAi: !liteImport.value && doAi.value,
     doEntities: !liteImport.value && doEntities.value && doAi.value,
     doReminders: liteImport.value || (doReminders.value && doEntities.value),
     liteImport: liteImport.value,
     templateId: liteImport.value ? undefined : (selectedTemplateId.value ?? undefined),
   });
-}
-
-// ── Extract tab handlers ────────────────────────────────────────────────────
-function onExtractInputChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  addExtractFiles(Array.from(input.files ?? []));
-  input.value = "";
-}
-
-function onExtractDrop(e: DragEvent) {
-  extractDragOver.value = false;
-  addExtractFiles(Array.from(e.dataTransfer?.files ?? []));
-}
-
-function addExtractFiles(incoming: File[]) {
-  const existing = new Set(extractFiles.value.map((f) => f.name + f.size));
-  for (const f of incoming) {
-    if (!existing.has(f.name + f.size)) extractFiles.value.push(f);
-  }
-}
-
-async function runExtract() {
-  if (!extractFiles.value.length) return;
-  extractStep.value = "loading";
-
-  const fd = new FormData();
-  for (const f of extractFiles.value) fd.append("files", f);
-
-  try {
-    const resp = await fetch(`${API}/api/extract/reminders`, {
-      method: "POST",
-      credentials: "include",
-      body: fd,
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error ?? t("uploadModal.extractionFailed"));
-
-    extractPreviews.value = (data.reminders ?? []).map((r: any) => ({
-      ...r,
-      next_check_date: r.next_check_date ?? r.expiry_date ?? null,
-      selected: true,
-    }));
-    extractErrors.value = data.errors ?? [];
-    extractStep.value = "preview";
-  } catch (err) {
-    extractErrors.value = [{ file: l.value.uploadModal.allFiles, error: String(err) }];
-    extractStep.value = "preview";
-  }
-}
-
-function selectAll(val: boolean) {
-  extractPreviews.value.forEach((p) => (p.selected = val));
-}
-
-async function saveExtracted() {
-  const toSave = extractPreviews.value.filter((p) => p.selected);
-  if (!toSave.length) return;
-  savingExtract.value = true;
-
-  try {
-    const resp = await fetch(`${API}/api/extract/reminders/save`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reminders: toSave }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error ?? t("uploadModal.saveFailed"));
-
-    savedCount.value = data.saved ?? toSave.length;
-    extractStep.value = "saved";
-    emit("reminders-saved", savedCount.value);
-  } catch (err) {
-    extractErrors.value = [{ file: l.value.uploadModal.saveErrorLabel, error: String(err) }];
-  } finally {
-    savingExtract.value = false;
-  }
 }
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
@@ -702,10 +367,6 @@ function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function confidenceLabel(c: string) {
-  return c === "high" ? l.value.uploadModal.confidenceHigh : c === "medium" ? l.value.uploadModal.confidenceMedium : l.value.uploadModal.confidenceLow;
 }
 
 function openRescan() {
@@ -848,24 +509,6 @@ defineExpose({ addFiles, openRescan });
 .file-item__size { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
 
 /* ── Fields column ───────────────────────────────────────────────────────── */
-.fields-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.fields-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.fields-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
-
-.fields-list {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 280px;
-  overflow-y: auto;
-}
-
 .fields-empty {
   flex: 1;
   display: flex;
@@ -882,24 +525,8 @@ defineExpose({ addFiles, openRescan });
 .fields-empty__text { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
 .fields-empty__sub { font-size: 11px; color: var(--text-muted); }
 
-.field-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-.field-row__key { width: 110px; flex-shrink: 0; }
-.field-row__label { flex: 1; min-width: 0; }
-.field-row__type { width: 90px; flex-shrink: 0; }
-
 /* ── Pipeline toggles ────────────────────────────────────────────────────── */
 .pipeline-toggles {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -937,61 +564,6 @@ defineExpose({ addFiles, openRescan });
   color: var(--text-muted);
 }
 
-/* ── Extract tab ─────────────────────────────────────────────────────────── */
-.extract-tab {
-  min-height: 360px;
-  display: flex;
-  flex-direction: column;
-}
-
-.extract-pick {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.extract-hint-box {
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin-top: 4px;
-}
-.extract-hint-box__icon { font-size: 18px; flex-shrink: 0; }
-
-.extract-loading {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 60px 0;
-}
-
-.extract-preview {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.preview-summary__count {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 .preview-list {
   display: flex;
   flex-direction: column;
@@ -1020,8 +592,6 @@ defineExpose({ addFiles, openRescan });
   border-color: var(--brand-color);
   background: rgba(99, 226, 183, 0.06);
 }
-
-.preview-card__check { padding-top: 2px; flex-shrink: 0; }
 
 .preview-card__body {
   flex: 1;
@@ -1059,48 +629,6 @@ defineExpose({ addFiles, openRescan });
 .preview-card__badge--date { color: var(--info-color, #3b82f6); border-color: currentColor; }
 .preview-card__badge--next { color: #22c55e; border-color: currentColor; }
 .preview-card__badge--expiry { color: var(--warning-color, #f59e0b); border-color: currentColor; }
-
-.preview-card__badge--conf { font-weight: 600; }
-.preview-card__badge--conf-high { color: #22c55e; border-color: #22c55e; }
-.preview-card__badge--conf-medium { color: #f59e0b; border-color: #f59e0b; }
-.preview-card__badge--conf-low { color: #94a3b8; border-color: #94a3b8; }
-
-.preview-card__contact {
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-muted);
-  flex-wrap: wrap;
-}
-
-.preview-card__source {
-  font-size: 10px;
-  color: var(--text-muted);
-  opacity: 0.7;
-}
-
-.extract-errors {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.extract-error-row {
-  font-size: 12px;
-  color: var(--error-color, #ef4444);
-  padding: 6px 10px;
-  background: rgba(239, 68, 68, 0.06);
-  border-radius: 6px;
-}
-
-.extract-saved {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 0;
-}
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .modal-footer {
@@ -1261,23 +789,6 @@ defineExpose({ addFiles, openRescan });
     padding: 24px 14px;
   }
 
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-  }
-
-  .field-row__key,
-  .field-row__label,
-  .field-row__type {
-    width: 100%;
-  }
-
-  .field-row__key,
-  .field-row__label,
-  .field-row__type {
-    grid-column: 1 / -1;
-  }
-
   .toggle-row {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -1290,20 +801,6 @@ defineExpose({ addFiles, openRescan });
   .toggle-row__hint {
     flex-basis: 100%;
     padding-inline-start: 46px;
-  }
-
-  .extract-tab {
-    min-height: 0;
-  }
-
-  .extract-hint-box {
-    align-items: flex-start;
-  }
-
-  .preview-summary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
   }
 
   .preview-list {
