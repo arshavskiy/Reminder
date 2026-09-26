@@ -283,6 +283,9 @@
           <div class="data-card__head">
             <span class="data-card__title">{{ l.documents.detail.extracted }}</span>
             <div class="data-card__head-actions">
+              <n-tag v-if="doc?.lite_import" :bordered="false" size="small" type="warning">
+                {{ l.documents.detail.liteImport }}
+              </n-tag>
               <n-tag v-if="docTemplate?.name" :bordered="false" size="small" type="info">
                 {{ docTemplate.name }}
               </n-tag>
@@ -1035,6 +1038,10 @@ async function reloadDoc() {
 
 async function loadDocTemplate() {
   if (!doc.value) {
+    docTemplate.value = null;
+    return;
+  }
+  if ((doc.value as any).lite_import) {
     docTemplate.value = null;
     return;
   }

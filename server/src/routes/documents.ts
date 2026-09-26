@@ -104,6 +104,7 @@ export function registerDocumentRoutes(app: express.Application) {
     const baseFilter: Record<string, any> = {
       user_id: userId,
       document_kind: { $nin: MAIN_DOCUMENTS_EXCLUDED_KINDS },
+      lite_import: { $ne: true },
       invoice_saved: { $ne: true },
       invoice_rejected: { $ne: true },
       // Matches both the legacy `gmail/invoices/...` layout and the tenant-first

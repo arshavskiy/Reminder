@@ -347,29 +347,29 @@ export async function pickTemplate(rawText: string, userId?: string): Promise<Do
   }
   if (best && best.score > 0) return best.tpl;
 
-  return all.find((t) => userId && t.user_id === userId && t.is_default) ??
-    all.find((t) => t.is_default) ??
-    all.find((t) => userId && t.user_id === userId) ??
-    all[0];
+  return null;
 }
 
 /** Exported for tests — higher = stronger match. */
 export function scoreTemplateMatch(rawText: string, tpl: DocTemplate): number {
   if (!rawText) return 0;
   let score = 0;
+  let hits = 0;
   for (const kw of tpl.match_keywords ?? []) {
     const needle = String(kw ?? "").trim();
     if (!needle) continue;
-    // Skip ultra-generic 2–3 char tokens that collide across document types.
     if (needle.length < 4) continue;
     if (rawText.includes(needle)) {
       score += Math.max(2, Math.min(needle.length, 28));
+      hits++;
     }
   }
   const name = String(tpl.name ?? "").trim();
   if (name.length >= 4 && rawText.includes(name)) {
     score += Math.max(10, Math.min(name.length, 28));
+    hits++;
   }
+  if (hits < 2) return 0;
   return score;
 }
 
