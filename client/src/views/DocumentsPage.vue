@@ -1070,7 +1070,6 @@ async function openRescanModal() {
 
 async function onModalUpload(
   files: File[],
-  fields: { key: string; label_he: string; type: string }[],
   options: { doAi: boolean; doEntities: boolean; doReminders: boolean; templateId?: string; liteImport?: boolean }
 ) {
   await uploadFiles(files, options);

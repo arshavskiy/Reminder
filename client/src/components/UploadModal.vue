@@ -63,50 +63,8 @@
 
       <div class="upload-divider" />
 
-      <!-- ── Right col: extraction fields ─────────────────────────────────── -->
+      <!-- ── Right col: processing options ──────────────────────────────── -->
       <div class="upload-col upload-col--fields">
-        <div class="fields-header">
-          <span class="fields-title">{{ l.uploadModal.fieldsTitle }}</span>
-          <n-tag :bordered="false" size="small" type="info">{{ l.uploadModal.optional }}</n-tag>
-        </div>
-        <p class="fields-hint">{{ l.uploadModal.fieldsHint }}</p>
-
-        <div class="fields-list">
-          <div v-if="!fields.length" class="fields-empty">
-            <div class="fields-empty__icon">✨</div>
-            <div class="fields-empty__text">{{ l.uploadModal.fieldsEmptyText }}</div>
-            <div class="fields-empty__sub">{{ l.uploadModal.fieldsEmptySub }}</div>
-          </div>
-
-          <div v-for="(f, i) in fields" :key="i" class="field-row">
-            <n-input
-              v-model:value="f.key"
-              class="field-row__key"
-              :placeholder="l.uploadModal.fieldKeyPlaceholder"
-              size="small"
-              style="direction: ltr; font-family: monospace"
-            />
-            <n-input
-              v-model:value="f.label_he"
-              class="field-row__label"
-              :placeholder="l.uploadModal.fieldLabelPlaceholder"
-              size="small"
-            />
-            <n-select
-              v-model:value="f.type"
-              :options="typeOptions"
-              :virtual-scroll="false"
-              class="field-row__type"
-              size="small"
-            />
-            <n-button circle quaternary size="tiny" @click="fields.splice(i, 1)">✕</n-button>
-          </div>
-        </div>
-
-        <n-button dashed size="small" style="margin-top: 8px; width: 100%" @click="addField">
-          {{ l.uploadModal.addField }}
-        </n-button>
-
         <!-- Pipeline toggles -->
         <div class="pipeline-toggles">
           <div class="pipeline-toggles__title">{{ l.uploadModal.processingOptionsTitle }}</div>
@@ -423,7 +381,6 @@ const {l, t} = useI18n();
 
 const API = import.meta.env.VITE_API_BASE ?? "";
 
-interface ExtractionField { key: string; label_he: string; type: string }
 
 export interface UploadOptions {
   doAi: boolean;
@@ -466,7 +423,7 @@ interface RescanState {
 
 const props = defineProps<{ uploading: boolean; rescan?: RescanState | null }>();
 const emit = defineEmits<{
-  (e: "upload", files: File[], fields: ExtractionField[], options: UploadOptions): void;
+  (e: "upload", files: File[], options: UploadOptions): void;
   (e: "reminders-saved", count: number): void;
   (e: "view-document", id: string): void;
   (e: "create-template", file: File): void;
@@ -478,7 +435,6 @@ const visible = defineModel<boolean>({ required: true });
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
 const files = ref<File[]>([]);
-const fields = ref<ExtractionField[]>([]);
 const liteImport = ref(false);
 const doAi = ref(true);
 const doEntities = ref(false);
@@ -536,22 +492,13 @@ const rescanSubtitle = computed(() => {
   return t("uploadModal.rescanStats", { assigned: rescanAssigned.value, missing: rescanMissing.value, errors: rescanFailed.value });
 });
 
-const typeOptions = computed(() => [
-  { label: l.value.uploadModal.typeText,     value: "text" },
-  { label: l.value.uploadModal.typeNumber,   value: "number" },
-  { label: l.value.uploadModal.typeDate,     value: "date" },
-  { label: l.value.uploadModal.typePhone,    value: "phone" },
-  { label: l.value.uploadModal.typeEmail,    value: "email" },
-  { label: l.value.uploadModal.typeCurrency, value: "currency" },
-  { label: l.value.uploadModal.typeList,     value: "list" },
-]);
 
 watch(visible, (v) => {
   if (v) resetAll();
 });
 
 function resetAll() {
-  files.value = []; fields.value = []; dragOver.value = false;
+  files.value = []; dragOver.value = false;
   doAi.value = true; doEntities.value = true; doReminders.value = true;
   activeTab.value = "upload";
   resetExtract();
@@ -586,10 +533,6 @@ function addFiles(incoming: File[]) {
   }
 }
 
-function addField() {
-  fields.value.push({ key: "", label_he: "", type: "text" });
-}
-
 function cancel() {
   visible.value = false;
 }
@@ -602,7 +545,7 @@ function createTemplate() {
 
 function submit() {
   if (!files.value.length) return;
-  emit("upload", [...files.value], [...fields.value], {
+  emit("upload", [...files.value], {
     doAi: !liteImport.value && doAi.value,
     doEntities: !liteImport.value && doEntities.value && doAi.value,
     doReminders: liteImport.value || (doReminders.value && doEntities.value),
@@ -848,24 +791,6 @@ defineExpose({ addFiles, openRescan });
 .file-item__size { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
 
 /* ── Fields column ───────────────────────────────────────────────────────── */
-.fields-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.fields-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.fields-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
-
-.fields-list {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 280px;
-  overflow-y: auto;
-}
-
 .fields-empty {
   flex: 1;
   display: flex;
@@ -882,24 +807,8 @@ defineExpose({ addFiles, openRescan });
 .fields-empty__text { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
 .fields-empty__sub { font-size: 11px; color: var(--text-muted); }
 
-.field-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-.field-row__key { width: 110px; flex-shrink: 0; }
-.field-row__label { flex: 1; min-width: 0; }
-.field-row__type { width: 90px; flex-shrink: 0; }
-
 /* ── Pipeline toggles ────────────────────────────────────────────────────── */
 .pipeline-toggles {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1259,23 +1168,6 @@ defineExpose({ addFiles, openRescan });
   .fields-empty {
     min-height: 150px;
     padding: 24px 14px;
-  }
-
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-  }
-
-  .field-row__key,
-  .field-row__label,
-  .field-row__type {
-    width: 100%;
-  }
-
-  .field-row__key,
-  .field-row__label,
-  .field-row__type {
-    grid-column: 1 / -1;
   }
 
   .toggle-row {
