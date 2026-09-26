@@ -529,6 +529,7 @@ export interface DocTemplate {
   cached_system_prompt: string | null;  // pre-built AI system prompt; null = regenerate
   is_default: number;
   is_builtin: number;
+  auto_generated?: number;
   extract_equipment?: boolean;
   created_at: string;
   updated_at: string;

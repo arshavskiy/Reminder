@@ -15,6 +15,8 @@ import {extractCertificate} from "./certificateExtractor";
 import {extractFromOcr} from "./ocrExtractor";
 import {normalizeEmail} from "./emailNormalizer";
 import {classifyDocumentKind, documentTypeFromTemplate, getOrBuildSystemPrompt, loadTemplate, pickTemplate} from "../templates/seedTemplates";
+import {generateTemplateFromText, saveGeneratedTemplate} from "../templates/generateTemplate";
+import {buildPromptForTemplate} from "../templates/buildPrompt";
 import {generateContractReminders, generateTaskReminders} from "../reminders/scheduler";
 import {deleteFromSpaces, fileExistsInSpaces, getSpacesSignedUrl, spacesEnabled, uploadToSpaces} from "../storage/spaces";
 import {syncDocumentToDrive} from "../storage/gdrive";
@@ -1514,47 +1516,125 @@ export async function processDocument(
           return;
         }
       } else {
-        const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
-        await col("extractions").insertOne({
-          document_id: documentId,
-          backend: extraction.backend,
-          model: extraction.model,
-          result_json: parseJsonObject(extraction.rawJson, extraction.result),
-          raw_text: rawText,
-          parsed_ok: extraction.result ? 1 : 0,
-          error: extraction.error ?? null,
-          exec_ms: extraction.execMs,
-          created_at: new Date(),
-        } as any);
-
-        if (extraction.result) {
-          const preservedGenericResult = mergePreservingManualDocumentFields(
-              docRow,
-              extraction.result as unknown as Record<string, unknown>,
-          ) as unknown as typeof extraction.result;
-          Object.assign(extraction.result, preservedGenericResult);
-          logger.info("generic_extraction_completed", {
-            document_id: documentId,
-            user_id: userId ?? null,
-            document_type: extraction.result.document_type ?? null,
-        has_client: Boolean(extraction.result.client_company ?? extraction.result.client_name),
-        has_expiry_date: Boolean(extraction.result.expiry_date),
-        confidence: extraction.result.confidence ?? null,
-        exec_ms: extraction.execMs,
-      });
-      extraction.result.expiry_date = forwardPastNextActionDate(extraction.result.expiry_date);
-      if (!pipeline?.skipEntities) {
-            push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
-            await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders, rawText);
+        // No template matched — try to auto-generate one from the document text.
+        let autoTemplate: DocTemplate | null = null;
+        if (userId) {
+          try {
+            push?.({ type: "document:progress", documentId: documentId as any, stage: "generating_template", progress: 55 });
+            const genRun = await generateTemplateFromText(rawText);
+            if (genRun.template) {
+              autoTemplate = await saveGeneratedTemplate(genRun.template, userId);
+            }
+          } catch (genErr) {
+            logger.warn("auto_template_generation_failed", {
+              document_id: documentId,
+              user_id: userId,
+              error: String(genErr),
+            });
           }
-        } else if (extraction.error) {
-          const msg = `AI extraction failed: ${extraction.error}`;
-          await col("documents").updateOne(docFilter, {
-            $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
-          });
-          notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
-          push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
-          return;
+        }
+
+        if (autoTemplate) {
+          const systemPrompt = autoTemplate.cached_system_prompt
+            ?? buildPromptForTemplate(autoTemplate as any);
+          const run = await extractWithTemplate(rawText, autoTemplate as any, documentId, docRow?.file_name, undefined, systemPrompt);
+          const normalizedFields = normalizeExtractionFieldsForTemplate(rawText, autoTemplate as any, run.fields, undefined);
+
+          await col("extractions").insertOne({
+            document_id: documentId,
+            backend: run.backend,
+            model: run.model,
+            result_json: parseJsonObject(run.rawJson, normalizedFields),
+            raw_text: rawText,
+            parsed_ok: normalizedFields ? 1 : 0,
+            error: run.error ?? null,
+            exec_ms: run.execMs,
+            created_at: new Date(),
+          } as any);
+
+          if (normalizedFields) {
+            const preservedFields = mergePreservingManualDocumentFields(docRow, normalizedFields);
+            logger.info("auto_template_extraction_completed", {
+              document_id: documentId,
+              user_id: userId,
+              template_id: autoTemplate.id,
+              template_name: autoTemplate.name,
+              fields_extracted: Object.keys(preservedFields).length,
+              exec_ms: run.execMs,
+            });
+            await col("documents").updateOne(docFilter, {
+              $set: {
+                extracted_fields: JSON.stringify(preservedFields),
+                template_id: autoTemplate.id,
+                document_type: documentTypeFromTemplate(autoTemplate as any),
+                document_kind: documentTypeFromTemplate(autoTemplate as any),
+                updated_at: new Date(),
+              },
+            });
+            if (!pipeline?.skipEntities) {
+              push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+              await saveTemplateEntities(
+                documentId,
+                autoTemplate as any,
+                preservedFields as unknown as DynamicExtraction,
+                userId,
+                pipeline?.skipReminders,
+                rawText,
+              );
+            }
+          } else if (run.error) {
+            const msg = `AI extraction with auto-generated template failed: ${run.error}`;
+            await col("documents").updateOne(docFilter, {
+              $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
+            });
+            notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
+            push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
+            return;
+          }
+        } else {
+          // Fallback to generic extraction when template generation failed.
+          const extraction = await extractDocument(rawText, documentId, docRow?.file_name);
+          await col("extractions").insertOne({
+            document_id: documentId,
+            backend: extraction.backend,
+            model: extraction.model,
+            result_json: parseJsonObject(extraction.rawJson, extraction.result),
+            raw_text: rawText,
+            parsed_ok: extraction.result ? 1 : 0,
+            error: extraction.error ?? null,
+            exec_ms: extraction.execMs,
+            created_at: new Date(),
+          } as any);
+
+          if (extraction.result) {
+            const preservedGenericResult = mergePreservingManualDocumentFields(
+                docRow,
+                extraction.result as unknown as Record<string, unknown>,
+            ) as unknown as typeof extraction.result;
+            Object.assign(extraction.result, preservedGenericResult);
+            logger.info("generic_extraction_completed", {
+              document_id: documentId,
+              user_id: userId ?? null,
+              document_type: extraction.result.document_type ?? null,
+              has_client: Boolean(extraction.result.client_company ?? extraction.result.client_name),
+              has_expiry_date: Boolean(extraction.result.expiry_date),
+              confidence: extraction.result.confidence ?? null,
+              exec_ms: extraction.execMs,
+            });
+            extraction.result.expiry_date = forwardPastNextActionDate(extraction.result.expiry_date);
+            if (!pipeline?.skipEntities) {
+              push?.({ type: "document:progress", documentId: documentId as any, stage: "saving_entities", progress: 75 });
+              await saveExtractionEntities(documentId, extraction.result, userId, pipeline?.skipReminders, rawText);
+            }
+          } else if (extraction.error) {
+            const msg = `AI extraction failed: ${extraction.error}`;
+            await col("documents").updateOne(docFilter, {
+              $set: retryableDocumentError(msg, retryReasonFromError(msg, "ai_extraction_failed")),
+            });
+            notifyExtractionFailed({ fileName: docRow?.file_name ?? documentId, error: msg });
+            push?.({ type: "document:done", documentId: documentId as any, status: "error", error: msg });
+            return;
+          }
         }
       }
     }

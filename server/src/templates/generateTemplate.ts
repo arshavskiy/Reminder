@@ -6,8 +6,11 @@
 // to extract data, we use a sample document to design a template.
 
 import OpenAI from "openai";
+import {ObjectId} from "mongodb";
 import {getSettings} from "../settings";
 import type {DocTemplate, TemplateField} from "../../src/shared/types.js";
+import {col} from "../db/db";
+import {buildPromptForTemplate} from "./buildPrompt";
 import {logger} from "../logger";
 
 const SYSTEM_PROMPT = `You are a Hebrew business-document analyst. The user will give you a sample document's raw text (in Hebrew, possibly with bidi/encoding artifacts from a PDF). Your job: design a reusable extraction template for documents of THIS KIND.
@@ -161,4 +164,37 @@ export function toDraft(g: GeneratedTemplate): Omit<DocTemplate, "id" | "created
     is_default: 0,
     is_builtin: 0,
   };
+}
+
+export async function saveGeneratedTemplate(
+  generated: GeneratedTemplate,
+  userId: string,
+): Promise<DocTemplate> {
+  const draft = toDraft(generated);
+  const prompt = buildPromptForTemplate(draft as DocTemplate);
+  const now = new Date();
+  const doc = {
+    ...draft,
+    user_id: userId,
+    auto_generated: 1,
+    cached_system_prompt: prompt,
+    created_at: now,
+    updated_at: now,
+  };
+  const result = await col("doc_templates").insertOne(doc as any);
+  logger.info("auto_template_saved", {
+    template_id: result.insertedId.toString(),
+    user_id: userId,
+    name: draft.name,
+    document_kind: draft.document_kind,
+    field_count: draft.fields.length,
+    keyword_count: draft.match_keywords.length,
+  });
+  return {
+    ...draft,
+    id: result.insertedId.toString(),
+    auto_generated: 1,
+    created_at: now.toISOString(),
+    updated_at: now.toISOString(),
+  } as DocTemplate;
 }
