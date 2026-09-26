@@ -84,6 +84,7 @@ const he = {
     dateRangeAria: "טווח תאריכים מהיר",
     invoicesNav: "ניווט חשבוניות",
     expenses: "הוצאות",
+    graph: "גרף הוצאות",
     deselectAll: "בטל הכל",
     downloadSelected: "הורד נבחרים",
     mergePdf: "מיזוג ל-PDF אחד",
@@ -886,6 +887,7 @@ const he = {
   },
   invoices: {
     title: "חשבוניות",
+    tabLabel: "טבלת הוצאות",
     subtitle: "חשבוניות שיובאו מ-Gmail — צפייה, סינון וניהול",
     assignClient: "הגדר לקוח",
     mergeSuppliers: "מיזוג ספקים",
@@ -911,7 +913,7 @@ const he = {
     typePaymentRequest: "דרישת תשלום",
   },
   expenses: {
-    title: "הוצאות לפי ספק",
+    title: "גרף הוצאות",
     subtitle: "גרף חודשי של הוצאות — סננו הוכחת תשלום מול דרישות תשלום",
   },
   gmail: {
@@ -2375,6 +2377,7 @@ const en = {
     dateRangeAria: "Quick date range",
     invoicesNav: "Invoice navigation",
     expenses: "Expenses",
+    graph: "Expense chart",
     deselectAll: "Deselect all",
     downloadSelected: "Download selected",
     mergePdf: "Merge into one PDF",
@@ -3177,6 +3180,7 @@ const en = {
   },
   invoices: {
     title: "Invoices",
+    tabLabel: "Expense table",
     subtitle: "Invoices imported from Gmail — view, filter, and manage",
     assignClient: "Assign client",
     mergeSuppliers: "Merge suppliers",
@@ -3202,7 +3206,7 @@ const en = {
     typePaymentRequest: "Payment request",
   },
   expenses: {
-    title: "Spend by supplier",
+    title: "Expense chart",
     subtitle: "Monthly spend chart — filter paid invoices vs payment requests",
   },
   gmail: {

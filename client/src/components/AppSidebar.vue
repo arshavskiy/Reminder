@@ -338,25 +338,11 @@ const allNav = computed<NavItem[]>(() => {
       ],
     },
     {
-      label: localeStore.catalog.common.expenses,
+      label: nav.invoices,
       key: "invoices",
       icon: WalletOutline,
       minPlan: "business" as const,
       feature: FEATURES.pages.invoices,
-      children: [
-        {
-          label: nav.invoices,
-          key: "invoices",
-          minPlan: "business" as const,
-          feature: FEATURES.pages.invoices,
-        },
-        {
-          label: localeStore.catalog.common.expenses,
-          key: "invoices/expenses",
-          minPlan: "business" as const,
-          feature: FEATURES.pages.invoices,
-        },
-      ],
     },
     {
       label: nav.gmail,

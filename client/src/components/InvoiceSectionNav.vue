@@ -27,8 +27,8 @@ const router = useRouter();
 const { l, href } = useI18n();
 
 const items = computed(() => [
-  { label: l.value.invoices.title, path: href("/invoices"), icon: ReceiptOutline },
-  { label: l.value.common.expenses, path: href("/invoices/expenses"), icon: AnalyticsOutline },
+  { label: l.value.invoices.tabLabel, path: href("/invoices"), icon: ReceiptOutline },
+  { label: l.value.common.graph, path: href("/invoices/expenses"), icon: AnalyticsOutline },
 ]);
 
 function isActive(path: string): boolean {

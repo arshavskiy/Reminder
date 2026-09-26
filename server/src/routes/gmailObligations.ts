@@ -18,7 +18,8 @@ import {
   PLAN_GATE_MESSAGES,
 } from "../plans/tierFeatures";
 
-const SCAN_PAGE_SIZE = 25;
+const SCAN_PAGE_SIZE = 500;
+const MAX_SCAN_MESSAGES = 2500;
 const DEFAULT_HISTORY_MONTHS = 3;
 const MAX_HISTORY_MONTHS = 36;
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
@@ -63,7 +64,7 @@ export function registerGmailObligationRoutes(app: express.Application) {
     }
 
     try {
-      const listed = await listMessageIds(accessToken, userId, search.q, SCAN_PAGE_SIZE);
+      const listed = await listMessageIds(accessToken, userId, search.q);
       if (listed.error) {
         res.status(listed.error.httpStatus).json({ error: listed.error.code, detail: listed.error.message });
         return;
@@ -104,34 +105,41 @@ function historyMonths(value: unknown): number {
   return Math.min(Math.floor(parsed), MAX_HISTORY_MONTHS);
 }
 
-async function listMessageIds(
+export async function listMessageIds(
   accessToken: string,
   userId: string,
   query: string,
-  pageSize: number,
 ): Promise<{
   accessToken: string;
   ids: string[];
   error: { code: string; message: string; httpStatus: number } | null;
 }> {
-  const url = `messages?q=${encodeURIComponent(query)}&maxResults=${pageSize}`;
   let token = accessToken;
-  let listRes = await gmailFetch(token, url);
-  if (listRes.status === 401) {
-    const refreshed = await retryWithRefresh(userId);
-    if (refreshed) {
-      token = refreshed;
-      listRes = await gmailFetch(token, url);
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const pageSize = Math.min(SCAN_PAGE_SIZE, MAX_SCAN_MESSAGES - ids.length);
+    const url = `messages?q=${encodeURIComponent(query)}&maxResults=${pageSize}`
+      + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+    let listRes = await gmailFetch(token, url);
+    if (listRes.status === 401) {
+      const refreshed = await retryWithRefresh(userId);
+      if (refreshed) {
+        token = refreshed;
+        listRes = await gmailFetch(token, url);
+      }
     }
-  }
-  if (!listRes.ok) {
-    const error = await gmailError(listRes);
-    return { accessToken: token, ids: [], error };
-  }
-  const data = await listRes.json() as { messages?: { id: string }[] };
+    if (!listRes.ok) {
+      const error = await gmailError(listRes);
+      return { accessToken: token, ids: [], error };
+    }
+    const data = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string };
+    ids.push(...(data.messages ?? []).slice(0, pageSize).map((message) => message.id));
+    pageToken = data.nextPageToken;
+  } while (pageToken && ids.length < MAX_SCAN_MESSAGES);
   return {
     accessToken: token,
-    ids: (data.messages ?? []).map((message) => message.id),
+    ids,
     error: null,
   };
 }
