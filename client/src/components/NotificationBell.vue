@@ -26,7 +26,7 @@
           @click="onItemClick(item)"
         >
           <span class="notif-item__title">{{ item.title }}</span>
-          <span v-if="item.body" class="notif-item__body">{{ item.body }}</span>
+          <span v-if="item.body" class="notif-item__body">{{ localizeBody(item.body) }}</span>
         </button>
       </div>
 
@@ -95,6 +95,22 @@ const quickRemindBeforeDays = ref("");
 const quickAlsoEmailSelf = ref(false);
 const quickAdding = ref(false);
 const categories = ref<{ name: string; count: number }[]>([]);
+
+const heToEnBody: Record<string, string> = {
+  "יעד:": "Target:",
+  "תאריך יעד:": "Target date:",
+  "ימים מראש": "days in advance",
+  "מסמך:": "Document:",
+};
+
+function localizeBody(body: string): string {
+  if (locale.value !== "en") return body;
+  let result = body;
+  for (const [he, en] of Object.entries(heToEnBody)) {
+    result = result.replaceAll(he, en);
+  }
+  return result;
+}
 
 const categoryOptions = computed(() => {
   const options = categories.value.map((c) => ({ label: categoryLabel(c.name, locale.value), value: c.name }));

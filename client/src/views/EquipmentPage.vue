@@ -7,6 +7,21 @@
       </div>
     </header>
 
+    <div class="eq-tabs">
+      <button
+        class="eq-tab"
+        :class="{ 'eq-tab--active': section === 'equipment' }"
+        type="button"
+        @click="router.replace({ query: { section: 'equipment' } })"
+      >{{ l.equipment.tabEquipment }}</button>
+      <button
+        class="eq-tab"
+        :class="{ 'eq-tab--active': section === 'manufacturers' }"
+        type="button"
+        @click="router.replace({ query: { section: 'manufacturers' } })"
+      >{{ l.equipment.tabManufacturers }}</button>
+    </div>
+
     <!-- ── ציוד tab body ──────────────────────────────────────────────── -->
     <template v-if="section === 'equipment'">
       <div class="subhead">
@@ -811,6 +826,41 @@ function del(r: Equipment) {
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
+}
+
+/* ── Section tabs ──────────────────────────────────────────────────────── */
+.eq-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+.eq-tab {
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.eq-tab:hover {
+  color: var(--text-primary);
+}
+.eq-tab--active {
+  color: var(--brand-color);
+  border-bottom-color: var(--brand-color);
+}
+
+/* ── Equipment actions ──────────────────────────────────────────────────── */
+.equipment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 /* ── Subhead ────────────────────────────────────────────────────────────── */
