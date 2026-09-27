@@ -528,6 +528,10 @@
                     <n-icon :component="MailOutline" :size="12" />
                     {{ l.invoicesMsg.noFile }}
                   </span>
+                  <span class="invoice-supplier-cell__meta">
+                    <span>{{ formatDate(row.issue_date) }}</span>
+                    <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
+                  </span>
                 </span>
               </td>
               <td class="invoice-col invoice-col--date">{{ formatDate(row.issue_date) }}</td>
@@ -574,12 +578,12 @@
               <td class="invoice-col invoice-col--type">
                 <span class="invoice-type-cell">
                   <MobileMappedValue :label="invoiceTypeLabel(row)" :value="row.document_category || row.type"/>
-                  <MobileMappedValue :label="cashFlowLabel(row)" :value="row.cash_flow || 'expense'"
+                  <MobileMappedValue v-if="!isMobile" :label="cashFlowLabel(row)" :value="row.cash_flow || 'expense'"
                                      class="invoice-type-cell__flow"/>
                 </span>
               </td>
               <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">
-                {{ row.currency !== 'ILS' && row.amount_ils !== null ? formatIlsAmount(row.amount_ils) : row.amount_display }}
+                {{ row.currency !== 'ILS' && row.amount_ils !== null ? (isMobile ? formatIlsAmountPlain(row.amount_ils) : formatIlsAmount(row.amount_ils)) : row.amount_display }}
                 <span v-if="row.currency !== 'ILS' && row.amount_ils !== null" class="cell-amount__ils">
                   ({{ row.amount_display }})
                 </span>
@@ -617,7 +621,9 @@
           v-model:page-size="pageSize"
           :item-count="total"
           :page-sizes="[10, 20, 50, 100]"
-          show-size-picker
+          :show-size-picker="!isMobile"
+          :page-slot="isMobile ? 5 : 9"
+          :simple="isMobile"
           @update:page="() => load(false)"
           @update:page-size="() => load(true)"
         />
@@ -754,7 +760,7 @@ import MobileMappedValue from "../components/MobileMappedValue.vue";
 import MobileFilterPanel from "../components/MobileFilterPanel.vue";
 import MobileActionButton from "../components/MobileActionButton.vue";
 import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
-import { computed, h, onMounted, reactive, ref, watch, type Component } from "vue";
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
 import {
   NPopover,
@@ -954,9 +960,20 @@ watch(() => filters.q, () => {
   searchTimer = window.setTimeout(() => load(true), 250);
 });
 
+const isMobile = ref(false);
+function updateIsMobile() {
+  isMobile.value = window.innerWidth <= 640;
+}
+
 onMounted(() => {
   load();
   refreshGmailStatus();
+  updateIsMobile();
+  window.addEventListener("resize", updateIsMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", updateIsMobile);
 });
 
 async function refreshGmailStatus() {
@@ -1237,6 +1254,10 @@ function displayDate(row: ImportedInvoice): string {
 
 function formatIlsAmount(amount: number): string {
   return new Intl.NumberFormat(intlLocale.value, { style: "currency", currency: "ILS", maximumFractionDigits: 2 }).format(amount);
+}
+
+function formatIlsAmountPlain(amount: number): string {
+  return new Intl.NumberFormat(intlLocale.value, { maximumFractionDigits: 2 }).format(amount);
 }
 
 function isoDate(value: string | null): string {
@@ -2496,6 +2517,10 @@ function replaceRow(updated: ImportedInvoice) {
   height: 14px;
 }
 
+.invoice-supplier-cell__meta {
+  display: none;
+}
+
 .invoice-vendor-mark svg {
   display: block;
 }
@@ -2576,8 +2601,8 @@ function replaceRow(updated: ImportedInvoice) {
 @media (max-width: 640px) {
   .invoice-table th,
   .invoice-table td {
-    padding: 8px;
-    font-size: 12px;
+    padding: 3px 4px;
+    font-size: 10px;
   }
   .invoices-actions {
     display: grid;
@@ -2630,15 +2655,164 @@ function replaceRow(updated: ImportedInvoice) {
   }
 
   .invoice-table__col--category {
-    width: 72px;
+    width: 48px;
   }
 
   .invoice-table__col--type {
-    width: 72px;
+    width: 48px;
   }
 
   .invoice-table {
-    min-width: 880px;
+    min-width: 340px;
+  }
+
+  .invoice-table__col--supplier {
+    width: auto;
+    min-width: 120px;
+  }
+
+  .invoice-col--category,
+  .invoice-col--type {
+    padding-inline-start: 4px;
+    padding-inline-end: 4px;
+  }
+
+  .invoice-table__col--select {
+    width: 34px;
+  }
+
+  .invoice-table__col--amount {
+    width: 90px;
+  }
+
+  .invoice-table__col--actions {
+    width: 60px;
+  }
+
+  .invoice-col--select {
+    padding-inline-end: 0;
+    padding-inline-start: 4px;
+  }
+
+  .invoice-table__col--date,
+  .invoice-table__col--client,
+  .invoice-col--date,
+  .invoice-col--client {
+    display: none;
+  }
+
+  .invoice-col--amount,
+  .invoice-col--actions {
+    padding-inline-start: 4px;
+    padding-inline-end: 4px;
+  }
+
+  .row-actions {
+    gap: 4px;
+  }
+
+  .invoice-type-cell__flow {
+    display: none;
+  }
+
+  .invoice-table .invoice-nofile-flag {
+    display: none;
+  }
+
+  .invoice-table .invoice-vendor-mark {
+    display: none;
+  }
+
+  .invoice-table .cell-amount__ils {
+    font-size: 8px;
+  }
+
+  .invoice-table .row-actions {
+    gap: 1px;
+  }
+
+  .invoice-table :deep(.icon-btn),
+  .invoice-table .icon-btn {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    padding: 0;
+  }
+
+  .invoice-table :deep(.n-icon),
+  .invoice-table .btn-icon {
+    font-size: 12px;
+  }
+
+  .invoice-table :deep(.n-checkbox-box) {
+    width: 12px;
+    height: 12px;
+  }
+
+  .invoice-table .mapped-value {
+    min-width: 18px;
+    min-height: 18px;
+  }
+
+  .invoice-table-row td {
+    line-height: 1.1;
+  }
+
+  .invoice-table .cell-strong,
+  .invoice-table .cell-amount {
+    font-weight: 500;
+  }
+
+  .invoice-table th {
+    font-weight: 600;
+  }
+
+  .invoice-supplier-cell__meta {
+    font-weight: 400;
+  }
+
+  .invoice-table-wrap {
+    margin: 0;
+  }
+
+  .invoice-pagination {
+    padding: 6px 0 0;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .invoice-pagination :deep(.n-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .invoice-supplier-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    min-width: 0;
+  }
+
+  .invoice-supplier-cell .invoice-cell-truncate {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .invoice-supplier-cell__meta {
+    display: flex;
+    flex-basis: 100%;
+    gap: 8px;
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .invoice-supplier-cell__meta .invoice-cell-truncate {
+    min-width: 0;
+    flex: 1;
   }
 }
 </style>
