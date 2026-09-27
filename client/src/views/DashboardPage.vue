@@ -62,25 +62,37 @@
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
         <div v-if="hasFeature(FEATURES.dashboard.statDocuments)" class="stat">
-          <span class="stat__num">{{ stats?.total_documents ?? 0 }}</span>
-          <span class="stat__label">{{ l.dashboard.statDocuments }}</span>
+          <n-icon :component="DocumentTextOutline" :size="18" class="stat__icon" />
+          <div>
+            <span class="stat__num">{{ stats?.total_documents ?? 0 }}</span>
+            <span class="stat__label">{{ l.dashboard.statDocuments }}</span>
+          </div>
         </div>
         <div v-if="hasFeature(FEATURES.dashboard.statClients)" class="stat">
-          <span class="stat__num">{{ stats?.total_clients ?? 0 }}</span>
-          <span class="stat__label">{{ l.dashboard.statClients }}</span>
+          <n-icon :component="PeopleOutline" :size="18" class="stat__icon" />
+          <div>
+            <span class="stat__num">{{ stats?.total_clients ?? 0 }}</span>
+            <span class="stat__label">{{ l.dashboard.statClients }}</span>
+          </div>
         </div>
         <div v-if="hasFeature(FEATURES.dashboard.statInspections)" class="stat">
-          <span class="stat__num">{{ stats?.total_inspections ?? 0 }}</span>
-          <span class="stat__label">{{ l.dashboard.statInspections }}</span>
+          <n-icon :component="ConstructOutline" :size="18" class="stat__icon" />
+          <div>
+            <span class="stat__num">{{ stats?.total_inspections ?? 0 }}</span>
+            <span class="stat__label">{{ l.dashboard.statInspections }}</span>
+          </div>
         </div>
         <div
           v-if="hasFeature(FEATURES.dashboard.statPendingReminders)"
           class="stat"
         >
-          <span class="stat__num stat__num--accent">{{
-            stats?.pending_reminders ?? 0
-          }}</span>
-          <span class="stat__label">{{ l.dashboard.statPending }}</span>
+          <n-icon :component="AlarmOutline" :size="18" class="stat__icon stat__icon--accent" />
+          <div>
+            <span class="stat__num stat__num--accent">{{
+              stats?.pending_reminders ?? 0
+            }}</span>
+            <span class="stat__label">{{ l.dashboard.statPending }}</span>
+          </div>
         </div>
         <div
           v-if="
@@ -89,10 +101,13 @@
           "
           class="stat"
         >
-          <span class="stat__num stat__num--warn">{{
-            stats?.expiring_soon
-          }}</span>
-          <span class="stat__label">{{ l.dashboard.statExpiring }}</span>
+          <n-icon :component="WarningOutline" :size="18" class="stat__icon stat__icon--warn" />
+          <div>
+            <span class="stat__num stat__num--warn">{{
+              stats?.expiring_soon
+            }}</span>
+            <span class="stat__label">{{ l.dashboard.statExpiring }}</span>
+          </div>
         </div>
       </div>
 
@@ -251,6 +266,7 @@ import {
   MailOutline,
   PeopleOutline,
   SettingsOutline,
+  WarningOutline,
 } from "@vicons/ionicons5";
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useRemindersStore} from "../stores/reminders.js";
@@ -901,9 +917,26 @@ const data_cards = computed(() => modules.value);
   border-radius: 14px;
   padding: 16px 22px;
   display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 130px;
+}
+.stat > div {
+  display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 130px;
+}
+.stat__icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--brand-color);
+  opacity: 0.85;
+}
+.stat__icon--accent {
+  color: var(--brand-color);
+}
+.stat__icon--warn {
+  color: var(--color-warning);
 }
 .stat__num {
   font-size: 28px;
@@ -1178,17 +1211,22 @@ html[data-theme="light"] .module__icon {
   }
 
   .stat {
-    min-height: 82px;
-    padding: 12px;
+    min-height: 0;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .stat__icon {
+    font-size: 15px;
   }
 
   .stat__num {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .stat__label {
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: 11px;
+    line-height: 1.3;
   }
 
   .dash__section {
