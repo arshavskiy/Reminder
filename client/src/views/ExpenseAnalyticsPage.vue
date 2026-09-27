@@ -51,32 +51,34 @@
           {{ item.label }}
         </button>
       </div>
-      <n-select
-        v-model:value="dateBasis"
-        :options="dateBasisOptions"
-        class="toolbar__type"
-        @update:value="load(true)"
-      />
-      <n-select
-        v-model:value="category"
-        :options="categoryOptions"
-        clearable
-        filterable
-        :placeholder="l.expensesMsg.category"
-        class="toolbar__type"
-        @update:value="load(true)"
-      />
-      <n-select
-        v-model:value="selectedSuppliers"
-        :options="supplierOptions"
-        clearable
-        filterable
-        multiple
-        max-tag-count="responsive"
-        :placeholder="l.expensesMsg.suppliers"
-        class="toolbar__supplier"
-        @update:value="load(true)"
-      />
+      <div class="toolbar__filters-row">
+        <n-select
+          v-model:value="dateBasis"
+          :options="dateBasisOptions"
+          class="toolbar__type"
+          @update:value="load(true)"
+        />
+        <n-select
+          v-model:value="category"
+          :options="categoryOptions"
+          clearable
+          filterable
+          :placeholder="l.expensesMsg.category"
+          class="toolbar__type"
+          @update:value="load(true)"
+        />
+        <n-select
+          v-model:value="selectedSuppliers"
+          :options="supplierOptions"
+          clearable
+          filterable
+          multiple
+          max-tag-count="responsive"
+          :placeholder="l.expensesMsg.suppliers"
+          class="toolbar__supplier"
+          @update:value="load(true)"
+        />
+      </div>
       <DateRangePresets v-model="dateRange" @change="load(true)" />
       <n-date-picker
         v-model:value="dateRange"
@@ -234,6 +236,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useLocalStorage } from "@vueuse/core";
 import { NDatePicker, NDropdown, NIcon, NSelect, NSpin, NTooltip, type SelectOption, useMessage } from "naive-ui";
 import {
   AnalyticsOutline,
@@ -258,6 +261,7 @@ import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
+import { resolveDateRangePreset } from "../shared/dateRangePresets.js";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
@@ -275,12 +279,12 @@ const tooltipCss = computed(() => (dir.value === "rtl"
 const authStore = useAuthStore();
 const chartEl = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
-const dateBasis = ref<"invoice" | "import">("invoice");
+const dateBasis = useLocalStorage<"invoice" | "import">("expenseAnalytics.dateBasis", "invoice");
 type ProofFilter = "all" | "paid" | "requested" | "income";
-const proofFilter = ref<ProofFilter>("all");
-const category = ref<string | null>(null);
-const selectedSuppliers = ref<string[]>([]);
-const dateRange = ref<[number, number] | null>(null);
+const proofFilter = ref<ProofFilter>("paid");
+const category = useLocalStorage<string | null>("expenseAnalytics.category", null);
+const selectedSuppliers = useLocalStorage<string[]>("expenseAnalytics.selectedSuppliers", []);
+const dateRange = ref<[number, number] | null>(resolveDateRangePreset("3m"));
 const months = ref<string[]>([]);
 const suppliers = ref<{ name: string; total: number; count?: number }[]>([]);
 const categories = ref<string[]>([]);
@@ -1186,7 +1190,7 @@ function providerCategoryLabel(value: string): string {
   }
 
   .expense-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .toolbar__type,
@@ -1206,8 +1210,53 @@ function providerCategoryLabel(value: string): string {
     height: 280px;
   }
 
+  .expense-metric {
+    min-height: 0;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .expense-metric__icon {
+    display: none;
+  }
+
+  .expense-metric span {
+    font-size: 11px;
+  }
+
   .expense-metric strong {
-    font-size: 20px;
+    margin-top: 2px;
+    font-size: 16px;
+  }
+
+  .toolbar {
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
+
+  .toolbar__dates {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .toolbar__filters-row {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .toolbar__filters-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toolbar__filters-row .toolbar__type,
+  .toolbar__filters-row .toolbar__supplier {
+    flex: 0 0 auto;
+    width: 140px;
+    min-width: 140px;
   }
 }
 </style>

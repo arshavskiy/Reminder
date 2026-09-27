@@ -13,6 +13,7 @@
   "dependencies": {
     "@hebcal/core": "^5.9.0",
     "@vicons/ionicons5": "^0.13.0",
+    "@vueuse/core": "^15.0.0",
     "date-fns": "^3.6.0",
     "echarts": "^6.1.0",
     "mammoth": "^1.8.0",
