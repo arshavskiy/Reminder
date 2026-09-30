@@ -109,6 +109,22 @@
             <span class="stat__label">{{ l.dashboard.statExpiring }}</span>
           </div>
         </div>
+        <template v-if="showInvoiceStats">
+          <div class="stat">
+            <n-icon :component="ReceiptOutline" :size="18" class="stat__icon" />
+            <div>
+              <span class="stat__num">{{ invoiceCounts.invoice }}</span>
+              <span class="stat__label">{{ l.invoices.title }}</span>
+            </div>
+          </div>
+          <div class="stat">
+            <n-icon :component="CheckmarkCircleOutline" :size="18" class="stat__icon" />
+            <div>
+              <span class="stat__num">{{ invoiceCounts.receipt }}</span>
+              <span class="stat__label">{{ l.common.receipts }}</span>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- ── Reminders calendar ───────────────────────────────────────── -->
@@ -258,14 +274,19 @@ import {NIcon, NSpin, NSwitch, NTooltip, useMessage} from "naive-ui";
 import {
   AddOutline,
   AlarmOutline,
+  CheckmarkCircleOutline,
   ClipboardOutline,
   CloudUploadOutline,
   ConstructOutline,
   DocumentTextOutline,
   ExtensionPuzzleOutline,
+  LocationOutline,
   MailOutline,
   PeopleOutline,
+  ReceiptOutline,
+  SearchOutline,
   SettingsOutline,
+  WalletOutline,
   WarningOutline,
 } from "@vicons/ionicons5";
 import {useDashboardStore} from "../stores/dashboard.js";
@@ -417,6 +438,26 @@ function startUploadPolling(uploadIds: string[]) {
   }, 3000);
 }
 const stats = computed(() => store.stats);
+
+// Invoice and receipt totals come from the invoices list facets, so the card
+// needs no extra dashboard endpoint. Shown only when the expenses page is
+// enabled in settings and the plan includes it.
+const showInvoiceStats = computed(() =>
+  hasFeature(FEATURES.pages.invoices) && planMeetsMinimum(resolveUserPlan(authStore.user), "business" as PlanId),
+);
+const invoiceCounts = ref({invoice: 0, receipt: 0});
+async function loadInvoiceCounts() {
+  if (!showInvoiceStats.value) return;
+  try {
+    const result = await api.invoices.list({limit: 1}, true);
+    invoiceCounts.value = {
+      invoice: result.documentCategoryCounts?.invoice ?? 0,
+      receipt: result.documentCategoryCounts?.receipt ?? 0,
+    };
+  } catch {
+    invoiceCounts.value = {invoice: 0, receipt: 0};
+  }
+}
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
 const loadingExpiryItems = ref(false);
 const calendarNextTestsOnly = ref(true);
@@ -453,6 +494,7 @@ onMounted(async () => {
     featuresStore.fetchFeatures().catch(() => {}),
     loadCalendarPreference(),
   ]);
+  loadInvoiceCounts();
   if (hasFeature(FEATURES.dashboard.calendar)) {
     refreshCalendar(false);
   }
@@ -721,6 +763,56 @@ const modules = computed(() => {
     count: () => stats.value?.pending_reminders ?? 0,
     icon: AlarmOutline,
     to: href("/reminders"),
+    show: true,
+  },
+  {
+    key: "invoices",
+    feature: FEATURES.pages.invoices,
+    minPlan: "business" as PlanId,
+    title: m.invoicesTitle,
+    desc: m.invoicesDesc,
+    icon: WalletOutline,
+    to: href("/invoices"),
+    show: true,
+  },
+  {
+    key: "discovery",
+    feature: FEATURES.pages.discovery,
+    minPlan: "expired" as PlanId,
+    title: m.discoveryTitle,
+    desc: m.discoveryDesc,
+    icon: SearchOutline,
+    to: href("/discover-reminders"),
+    show: true,
+  },
+  {
+    key: "gmail",
+    feature: FEATURES.pages.gmail,
+    minPlan: "expired" as PlanId,
+    title: m.gmailTitle,
+    desc: m.gmailDesc,
+    icon: MailOutline,
+    to: href("/gmail"),
+    show: authStore.user?.role === "admin",
+  },
+  {
+    key: "field",
+    feature: FEATURES.pages.field,
+    minPlan: "business" as PlanId,
+    title: m.fieldTitle,
+    desc: m.fieldDesc,
+    icon: LocationOutline,
+    to: href("/field"),
+    show: true,
+  },
+  {
+    key: "quotes",
+    feature: FEATURES.pages.contracts,
+    minPlan: "expired" as PlanId,
+    title: m.quotesTitle,
+    desc: m.quotesDesc,
+    icon: ReceiptOutline,
+    to: href("/quotes"),
     show: true,
   },
   ].filter((item) => item.show && hasFeature(item.feature) && planMeetsMinimum(userPlan, item.minPlan));
