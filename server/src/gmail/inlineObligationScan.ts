@@ -34,23 +34,26 @@ export interface InlineEmailScanInput {
 }
 
 const KIND_PATTERNS: { kind: ObligationKind; re: RegExp }[] = [
-  { kind: "payment_due", re: /payment\s+due|amount\s+due|due\s+date|pay\s+by|pay\s+immediately|due\s+immediately|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|מועד\s*תשלום|תאריך\s*לתשלום|תאריך\s*פירעון|מועד\s*אחרון|לתשלום\s*עד|לתשלום\s*מיידי|עד\s*לתשלום|הודעה\s*על\s*חוב|תשלום\s*חוב|דרישה\s*מיידית|חוב\s*בארנונה/gi },
-  { kind: "warranty", re: /warranty|אחריות/gi },
-  { kind: "renewal", re: /renewal|\brenew\b|subscription|מנוי|חידוש/gi },
-  { kind: "maintenance", re: /maintenance|next\s+service|service\s+due|טיפול\s*הבא|תאריך\s*טיפול|טיפול\s*תקופתי/gi },
+  { kind: "payment_due", re: /payment\s+due|amount\s+due|due\s+date|pay\s+by|pay\s+immediately|due\s+immediately|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|מועד\s*תשלום|תאריך\s*לתשלום|תאריך\s*פירעון|מועד\s*אחרון|לתשלום\s*עד|לתשלום\s*מיידי|עד\s*לתשלום|הודעה\s*על\s*חוב|תשלום\s*חוב|דרישה\s*מיידית|חוב\s*בארנונה|срок[а-яё]*\s+оплаты|срок[а-яё]*\s+платежа|оплатить\s+до|оплата\s+до|к\s+оплате|задолженност[а-яё]*|требовани[а-яё]*\s+об\s+оплате|оплатить\s+немедленно/gi },
+  { kind: "warranty", re: /warranty|אחריות|гаранти[а-яё]*|действительн[а-яё]*\s+до|срок[а-яё]*\s+действия/gi },
+  { kind: "renewal", re: /renewal|\brenew\b|subscription|מנוי|חידוש|продлени[а-яё]*|подписк[а-яё]*/gi },
+  { kind: "maintenance", re: /maintenance|next\s+service|service\s+due|טיפול\s*הבא|תאריך\s*טיפול|טיפול\s*תקופתי|следующ[а-яё]*\s+обслуживани[а-яё]*|техническ[а-яё]*\s+обслуживани[а-яё]*/gi },
+  // Action deadlines with no money attached, e.g. a consulate waiting list that
+  // must be confirmed "в срок до <date>".
+  { kind: "due_task", re: /в\s+срок\s+до|подтвердить\s+(?:необходимость|актуальность|заявк[а-яё]*)|актуальност[а-яё]*\s+заявки|списк[а-яё]*\s+ожидания/gi },
 ];
 
-const DUE_CUE = /expires?|expir(?:y|ation)|valid\s+until|valid\s+through|warranty|payment\s+due|amount\s+due|due\s+date|due\s+on|pay\s+by|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|renew(?:al)?|\brenew\b|subscription|next\s+service|service\s+due|maintenance|בתוקף\s*עד|תפוג|פג\s*תוקף|מועד\s*תשלום|תאריך\s*לתשלום|תאריך\s*פירעון|מועד\s*אחרון|לתשלום|אחריות|חידוש|טיפול\s*הבא|תאריך\s*טיפול|מנוי|הודעה\s*על\s*חוב|תשלום\s*חוב|דרישה\s*מיידית|חוב/i;
+const DUE_CUE = /expires?|expir(?:y|ation)|valid\s+until|valid\s+through|warranty|payment\s+due|amount\s+due|due\s+date|due\s+on|pay\s+by|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|renew(?:al)?|\brenew\b|subscription|next\s+service|service\s+due|maintenance|בתוקף\s*עד|תפוג|פג\s*תוקף|מועד\s*תשלום|תאריך\s*לתשלום|תאריך\s*פירעון|מועד\s*אחרון|לתשלום|אחריות|חידוש|טיפול\s*הבא|תאריך\s*טיפול|מנוי|הודעה\s*על\s*חוב|תשלום\s*חוב|דרישה\s*מיידית|חוב|истека[а-яё]*|действительн[а-яё]*\s+до|срок[а-яё]*\s+(?:действия|оплаты|платежа)|оплатить\s+до|оплата\s+до|к\s+оплате|задолженност[а-яё]*|продлени[а-яё]*|подписк[а-яё]*|гаранти[а-яё]*|обслуживани[а-яё]*|в\s+срок\s+до/i;
 
-const ISSUE_DATE = /נערכה\s*בתאריך|נכון\s*לתאריך|תאריך\s*(?:עריכה|הפקה|הנפקה|הדפסה)|issue\s+date|date\s+of\s+issue|invoice\s+date|document\s+date|as\s+of/i;
+const ISSUE_DATE = /נערכה\s*בתאריך|נכון\s*לתאריך|תאריך\s*(?:עריכה|הפקה|הנפקה|הדפסה)|issue\s+date|date\s+of\s+issue|invoice\s+date|document\s+date|as\s+of|дата\s+(?:выдачи|выставления|документа)|по\s+состоянию\s+на/i;
 
-const DUE_PHRASE_BEFORE = /payment\s+due|due\s+date|pay\s+by|valid\s+until|לתשלום\s*עד|תאריך\s*לתשלום|מועד\s*תשלום|מועד\s*אחרון|תאריך\s*פירעון|בתוקף\s*עד/i;
+const DUE_PHRASE_BEFORE = /payment\s+due|due\s+date|pay\s+by|valid\s+until|לתשלום\s*עד|תאריך\s*לתשלום|מועד\s*תשלום|מועד\s*אחרון|תאריך\s*פירעון|בתוקף\s*עד|срок[а-яё]*\s+оплаты|оплатить\s+до|действительн[а-яё]*\s+до|в\s+срок\s+до/i;
 
-const RECEIPT_SUBJECT = /(?:^|[^\p{L}])(?:קבלה|receipt)(?:[^\p{L}]|$)/iu;
+const RECEIPT_SUBJECT = /(?:^|[^\p{L}])(?:קבלה|receipt|квитанци[а-яё]*|кассовый\s+чек)(?:[^\p{L}]|$)/iu;
 
-const IMMEDIATE = /pay\s+immediately|due\s+immediately|due\s+upon\s+receipt|לתשלום\s*מיידי|תשלום\s*מיידי|מיד\s*עם\s*קבלת|דרישה\s*מיידית/i;
+const IMMEDIATE = /pay\s+immediately|due\s+immediately|due\s+upon\s+receipt|לתשלום\s*מיידי|תשלום\s*מיידי|מיד\s*עם\s*קבלת|דרישה\s*מיידית|оплатить\s+немедленно|немедленн[а-яё]*\s+оплат[а-яё]*|срочн[а-яё]*\s+оплат[а-яё]*/i;
 
-const SUBJECT_KIND_WORDS = /warranty|expires?|expiry|expiration|valid\s+until|payment\s+due|amount\s+due|due\s+date|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|renewal|\brenew\b|subscription|maintenance|next\s+service|service\s+due|אחריות|תפוג\S*|בתוקף\s*עד|מועד\s*תשלום|לתשלום\s*עד|חידוש|טיפול\s*הבא|תאריך\s*טיפול|מנוי|הודעה\s*על\s*חוב|דרישה\s*מיידית|תשלום\s*חוב|חוב\s*בארנונה/gi;
+const SUBJECT_KIND_WORDS = /warranty|expires?|expiry|expiration|valid\s+until|payment\s+due|amount\s+due|due\s+date|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|renewal|\brenew\b|subscription|maintenance|next\s+service|service\s+due|אחריות|תפוג\S*|בתוקף\s*עד|מועד\s*תשלום|לתשלום\s*עד|חידוש|טיפול\s*הבא|תאריך\s*טיפול|מנוי|הודעה\s*על\s*חוב|דרישה\s*מיידית|תשלום\s*חוב|חוב\s*בארנונה|гаранти[а-яё]*|истека[а-яё]*|действительн[а-яё]*\s+до|срок[а-яё]*\s+(?:действия|оплаты)|оплатить\s+до|задолженност[а-яё]*|продлени[а-яё]*|подписк[а-яё]*|обслуживани[а-яё]*|подтверждени[а-яё]*\s+актуальности/gi;
 
 const GENERIC_SENDER = /no-?reply|donotreply|notifications?|mailer-daemon|newsletter|noreply/i;
 
@@ -65,8 +68,14 @@ const HEBREW_MONTHS: Record<string, number> = {
   יולי: 7, אוגוסט: 8, ספטמבר: 9, אוקטובר: 10, נובמבר: 11, דצמבר: 12,
 };
 
+const RUSSIAN_MONTHS: Record<string, number> = {
+  января: 1, февраля: 2, марта: 3, апреля: 4, мая: 5, июня: 6,
+  июля: 7, августа: 8, сентября: 9, октября: 10, ноября: 11, декабря: 12,
+};
+
 const ENGLISH_MONTH = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
 const HEBREW_MONTH = Object.keys(HEBREW_MONTHS).join("|");
+const RUSSIAN_MONTH = Object.keys(RUSSIAN_MONTHS).join("|");
 
 export function htmlToPlainText(html: string): string {
   const withoutActive = html
@@ -282,6 +291,7 @@ function findDates(text: string): FoundDate[] {
     new RegExp(`\\b(\\d{1,2})\\s+(${ENGLISH_MONTH})\\s+(20\\d{2})\\b`, "gi"),
     new RegExp(`\\b(${ENGLISH_MONTH})\\s+(\\d{1,2}),?\\s+(20\\d{2})\\b`, "gi"),
     new RegExp(`(\\d{1,2})\\s+ב?(${HEBREW_MONTH})\\s+(20\\d{2})`, "g"),
+    new RegExp(`(\\d{1,2})\\s+(${RUSSIAN_MONTH})\\s+(20\\d{2})`, "gi"),
   ];
   for (const pattern of patterns) {
     let match: RegExpExecArray | null;
@@ -305,6 +315,8 @@ function isoFromMatch(match: RegExpExecArray): string | null {
   }
   const hebrew = Object.keys(HEBREW_MONTHS).find((month) => raw.includes(month));
   if (hebrew) return isoDate(Number(match[3]), HEBREW_MONTHS[hebrew], Number(match[1]));
+  const russian = Object.keys(RUSSIAN_MONTHS).find((month) => raw.toLowerCase().includes(month));
+  if (russian) return isoDate(Number(match[3]), RUSSIAN_MONTHS[russian], Number(match[1]));
   const monthName = raw.match(new RegExp(ENGLISH_MONTH, "i"))?.[0]?.toLowerCase();
   if (!monthName || !ENGLISH_MONTHS[monthName]) return null;
   const day = /^\d/.test(raw) ? Number(match[1]) : Number(match[2]);

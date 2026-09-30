@@ -98,7 +98,7 @@ const proposals = ref<ObligationSuggestion[]>([]);
 const dismissed = ref(new Set<string>());
 const saved = ref(new Set<string>());
 const search = ref("");
-const languageOptions = [{ label: "עברית", value: "he" }, { label: "English", value: "en" }];
+const languageOptions = [{ label: "עברית", value: "he" }, { label: "English", value: "en" }, { label: "Русский", value: "ru" }];
 const monthOptions = computed(() => [1, 3, 6, 12, 24, 36].map(value => ({ value, label: `${value} ${c.value.months}` })));
 const visible = computed(() => proposals.value.filter(item => !dismissed.value.has(item.id) && `${item.entity_name} ${item.from} ${item.evidence_quote}`.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())));
 const urgent = computed(() => visible.value.filter(item => item.kind === "due_task" || item.warning === "immediate"));

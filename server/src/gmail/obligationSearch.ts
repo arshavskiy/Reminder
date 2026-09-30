@@ -1,11 +1,11 @@
 // Gmail search packs for the obligations scan.
-// English and Hebrew exist now. Another pack can be added later.
+// English, Hebrew and Russian exist now. Another pack can be added later.
 // A caller sends 1–3 of the packs (the language URL, or a user choice).
 // The query uses only those packs, and it does not require an attachment.
 
 import type { ObligationKind } from "./inlineObligationScan";
 
-export const OBLIGATION_SEARCH_LANGS = ["en", "he"] as const;
+export const OBLIGATION_SEARCH_LANGS = ["en", "he", "ru"] as const;
 export type ObligationSearchLang = (typeof OBLIGATION_SEARCH_LANGS)[number];
 
 export const MIN_OBLIGATION_SEARCH_LANGS = 1;
@@ -54,6 +54,23 @@ export const OBLIGATION_SEARCH_TERMS: Record<ObligationSearchLang, readonly Obli
     { lang: "he", kind: "renewal", text: "מנוי" },
     { lang: "he", kind: "maintenance", text: "טיפול הבא" },
     { lang: "he", kind: "maintenance", text: "תאריך טיפול" },
+  ],
+  ru: [
+    { lang: "ru", kind: "warranty", text: "гарантия" },
+    { lang: "ru", kind: "warranty", text: "действительно до" },
+    { lang: "ru", kind: "warranty", text: "срок действия" },
+    { lang: "ru", kind: "payment_due", text: "срок оплаты" },
+    { lang: "ru", kind: "payment_due", text: "оплатить до" },
+    { lang: "ru", kind: "payment_due", text: "задолженность" },
+    { lang: "ru", kind: "payment_due", text: "требование об оплате" },
+    { lang: "ru", kind: "due_task", text: "оплатить немедленно" },
+    { lang: "ru", kind: "due_task", text: "подтверждение актуальности" },
+    { lang: "ru", kind: "due_task", text: "список ожидания" },
+    { lang: "ru", kind: "due_task", text: "в срок до" },
+    { lang: "ru", kind: "renewal", text: "продление" },
+    { lang: "ru", kind: "renewal", text: "подписка" },
+    { lang: "ru", kind: "maintenance", text: "следующее обслуживание" },
+    { lang: "ru", kind: "maintenance", text: "техническое обслуживание" },
   ],
 };
 

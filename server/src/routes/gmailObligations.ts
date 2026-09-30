@@ -75,7 +75,7 @@ export function registerGmailObligationRoutes(app: express.Application) {
     } catch { if (!res.headersSent) res.status(500).json({ error: "source_unavailable" }); }
   });
   /**
-   * POST /api/gmail/obligation/scan?langs=he,en&months=3
+   * POST /api/gmail/obligation/scan?langs=he,en,ru&months=3
    * langs is 1–3 packs (en, he today). Omitted langs means Hebrew.
    * Reads the message body and, when the subject matches, the first attached PDF
    * together. Saves discoveries and their sources; reminders require review.

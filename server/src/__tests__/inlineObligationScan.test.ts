@@ -55,6 +55,41 @@ describe("obligation search languages", () => {
   });
 });
 
+it("builds a Russian query from the Russian pack only", () => {
+  const params = obligationSearchParameters(["ru"], 3);
+  expect(params.langs).toEqual(["ru"]);
+  expect(params.terms.every((term) => term.lang === "ru")).toBe(true);
+  expect(params.q).toContain("срок оплаты");
+  expect(params.q).toContain("список ожидания");
+  expect(params.q).not.toContain("warranty");
+  expect(parseObligationSearchLangs("ru,en,he")).toEqual(["ru", "en", "he"]);
+});
+
+describe("Russian obligation emails", () => {
+  it("proposes a due task for a consulate waiting-list confirmation", () => {
+    const result = scanInlineEmailForObligation({
+      from: "queue-robot@kd-mid.ru",
+      subject: "Подтверждение актуальности заявки",
+      plain: "Вы зарегистрированы в списке ожидания По вопросу: Биометрический паспорт\nНомер заявки - 678182\n"
+        + "просим в срок до 2026-08-26 подтвердить необходимость в совершении выбранного Вами консульского действия, пройдя по ссылке:",
+      html: null,
+      now: new Date("2026-08-18T00:00:00Z"),
+    });
+    expect(result).toMatchObject({ kind: "due_task", due_date: "2026-08-26", entity_name: "Подтверждение актуальности заявки" });
+  });
+
+  it("reads a Russian long-form payment date", () => {
+    const result = scanInlineEmailForObligation({
+      from: "Водоканал <billing@example.ru>",
+      subject: "Счёт: срок оплаты",
+      plain: "Оплатить до 5 октября 2026 г.",
+      html: null,
+      now: NOW,
+    });
+    expect(result).toMatchObject({ kind: "payment_due", due_date: "2026-10-05" });
+  });
+});
+
 describe("scanInlineEmailForObligation", () => {
   it("reads a warranty date from the email body when there is no file", () => {
     const result = scanInlineEmailForObligation({
