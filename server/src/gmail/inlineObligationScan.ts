@@ -33,6 +33,9 @@ export interface InlineEmailScanInput {
   sentOn?: string;
 }
 
+/** How far back a passed deadline is still proposed, flagged as missed by the client. */
+export const MISSED_DEADLINE_DAYS = 90;
+
 const KIND_PATTERNS: { kind: ObligationKind; re: RegExp }[] = [
   { kind: "payment_due", re: /payment\s+due|amount\s+due|due\s+date|pay\s+by|pay\s+immediately|due\s+immediately|notice\s+of\s+debt|debt\s+notice|debt\s+payment|immediate\s+demand|immediate\s+payment|outstanding\s+debt|payment\s+demand|מועד\s*תשלום|תאריך\s*לתשלום|תאריך\s*פירעון|מועד\s*אחרון|לתשלום\s*עד|לתשלום\s*מיידי|עד\s*לתשלום|הודעה\s*על\s*חוב|תשלום\s*חוב|דרישה\s*מיידית|חוב\s*בארנונה|срок[а-яё]*\s+оплаты|срок[а-яё]*\s+платежа|оплатить\s+до|оплата\s+до|к\s+оплате|задолженност[а-яё]*|требовани[а-яё]*\s+об\s+оплате|оплатить\s+немедленно/gi },
   { kind: "warranty", re: /warranty|אחריות|гаранти[а-яё]*|действительн[а-яё]*\s+до|срок[а-яё]*\s+действия/gi },
@@ -101,8 +104,15 @@ export function scanInlineEmailForObligation(input: InlineEmailScanInput): Inlin
 
   const today = todayIso(input.now ?? new Date());
   const lines = text.split("\n");
-  const dates = findDates(text).filter((found) => found.iso >= today && !dateIsDocumentDate(text, found.index));
-  const cued = dates.filter((found) => lineIsCued(lines, found.line));
+  const dates = findDates(text).filter((found) => !dateIsDocumentDate(text, found.index));
+  let cued = dates.filter((found) => found.iso >= today && lineIsCued(lines, found.line));
+  // A deadline that passed recently is still worth surfacing so it can be
+  // handled late. A future date always wins; only when there is none do we
+  // fall back to the most recent missed one.
+  if (!cued.length) {
+    const oldest = shiftDays(today, -MISSED_DEADLINE_DAYS);
+    cued = dates.filter((found) => found.iso < today && found.iso >= oldest && lineIsCued(lines, found.line));
+  }
   if (!cued.length) return immediateDueTask(input, text, lines, subject);
 
   let chosen = cued[0];
@@ -334,6 +344,12 @@ function isoDate(year: number, month: number, day: number): string | null {
 
 function todayIso(now: Date): string {
   return now.toISOString().slice(0, 10);
+}
+
+function shiftDays(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function decodeHtmlEntities(value: string): string {

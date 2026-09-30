@@ -78,6 +78,39 @@ describe("Russian obligation emails", () => {
     expect(result).toMatchObject({ kind: "due_task", due_date: "2026-08-26", entity_name: "Подтверждение актуальности заявки" });
   });
 
+  it("still proposes a recently missed deadline", () => {
+    const result = scanInlineEmailForObligation({
+      from: "queue-robot@kd-mid.ru",
+      subject: "Подтверждение актуальности заявки",
+      plain: "просим в срок до 2026-08-26 подтвердить необходимость в совершении выбранного Вами консульского действия",
+      html: null,
+      now: new Date("2026-09-30T00:00:00Z"),
+    });
+    expect(result).toMatchObject({ kind: "due_task", due_date: "2026-08-26" });
+  });
+
+  it("drops a deadline older than the missed-deadline window", () => {
+    const result = scanInlineEmailForObligation({
+      from: "queue-robot@kd-mid.ru",
+      subject: "Подтверждение актуальности заявки",
+      plain: "просим в срок до 2026-08-26 подтвердить необходимость в совершении выбранного Вами консульского действия",
+      html: null,
+      now: new Date("2027-01-15T00:00:00Z"),
+    });
+    expect(result).toBeNull();
+  });
+
+  it("prefers a future date over a missed one", () => {
+    const result = scanInlineEmailForObligation({
+      from: "Insurer <no-reply@example.com>",
+      subject: "Policy renewal",
+      plain: "Renewal was due on 2026-09-01.\nNext renewal date: 2026-12-01",
+      html: null,
+      now: new Date("2026-09-30T00:00:00Z"),
+    });
+    expect(result).toMatchObject({ due_date: "2026-12-01" });
+  });
+
   it("reads a Russian long-form payment date", () => {
     const result = scanInlineEmailForObligation({
       from: "Водоканал <billing@example.ru>",
