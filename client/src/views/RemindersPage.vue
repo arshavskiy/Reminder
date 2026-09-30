@@ -173,7 +173,7 @@
           :row-key="(r: any) => r.id"
           :row-props="rowProps"
           :checked-row-keys="selectedReminderKeys"
-          :scroll-x="1600"
+          :scroll-x="tableScrollX"
           class="reminders-table reminders-table--with-sidebar"
           size="small"
           @update:checked-row-keys="onSelectedReminderKeys"
@@ -188,7 +188,7 @@
         :row-key="(r: any) => r.id"
         :row-props="rowProps"
         :checked-row-keys="selectedReminderKeys"
-        :scroll-x="1600"
+        :scroll-x="tableScrollX"
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
@@ -1407,7 +1407,8 @@ const baseColumns = computed(() => [
   {
     title: l.value.common.name,
     key: "title",
-    width: 200,
+    // No fixed width: in a fixed-layout table this column takes all leftover
+    // space, so the narrow columns beside it keep their set widths.
     minWidth: 200,
     sorter: (a: ReminderWithContext, b: ReminderWithContext) => columnTextSort(a.title, b.title),
     render: (row: ReminderWithContext) =>
@@ -1515,8 +1516,8 @@ const baseColumns = computed(() => [
   {
     title: l.value.reminders.daysBefore,
     key: "advance_days",
-    width: 90,
-    minWidth: 90,
+    width: 60,
+    minWidth: 50,
     sorter: (a: ReminderWithContext, b: ReminderWithContext) => (a.advance_days ?? 0) - (b.advance_days ?? 0),
     render: (row: ReminderWithContext) =>
       h("span", row.advance_days != null ? String(row.advance_days) : "—"),
@@ -1525,6 +1526,7 @@ const baseColumns = computed(() => [
     title: l.value.common.status,
     key: "status",
     width: 80,
+    minWidth: 50,
     filterMultiple: true,
     filterOptions: statusOptions.value,
     filter: (value: string | number, row: ReminderWithContext) => row.status === value,
@@ -1533,7 +1535,8 @@ const baseColumns = computed(() => [
   },
   {
     key: "calendar",
-    width: 60,
+    width: 50,
+    minWidth: 50,
     sorter: (a: ReminderWithContext, b: ReminderWithContext) =>
       Number(Boolean(a.calendar_synced)) - Number(Boolean(b.calendar_synced)),
     render: (row: ReminderWithContext) =>
@@ -1562,8 +1565,8 @@ const baseColumns = computed(() => [
   {
     title: l.value.common.actions,
     key: "actions",
-    width: 72,
-    minWidth: 72,
+    width: 60,
+    minWidth: 50,
     render: (row: ReminderWithContext) =>
       h("div", {
         class: "reminder-actions-cell",
@@ -1629,6 +1632,11 @@ function handleRowAction(key: string, row: ReminderWithContext) {
 // in the row preview and detail page.
 const HIDDEN_COLUMN_KEYS = new Set(["reminder_category", "client_name"]);
 const visibleColumns = computed(() => baseColumns.value.filter((column) => !HIDDEN_COLUMN_KEYS.has(String(column.key))));
+
+// Sum of the column widths, so the fixed 50px columns are not stretched to fill a wider table.
+const tableScrollX = computed(() =>
+  columns.value.reduce((total: number, column: any) => total + (typeof column.width === "number" ? column.width : (typeof column.minWidth === "number" ? column.minWidth : 120)), 0),
+);
 
 const columns = computed(() =>
   bulkMode.value
