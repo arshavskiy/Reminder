@@ -1625,10 +1625,15 @@ function handleRowAction(key: string, row: ReminderWithContext) {
   if (key === "delete") { confirmDelete(row); return; }
 }
 
+// Hidden from the table to keep it compact; category and client stay available
+// in the row preview and detail page.
+const HIDDEN_COLUMN_KEYS = new Set(["reminder_category", "client_name"]);
+const visibleColumns = computed(() => baseColumns.value.filter((column) => !HIDDEN_COLUMN_KEYS.has(String(column.key))));
+
 const columns = computed(() =>
   bulkMode.value
-    ? [{ type: "selection", width: 46, fixed: "right" }, ...baseColumns.value]
-    : baseColumns.value
+    ? [{ type: "selection", width: 46, fixed: "right" }, ...visibleColumns.value]
+    : visibleColumns.value
 );
 </script>
 

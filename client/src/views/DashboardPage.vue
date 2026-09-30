@@ -61,21 +61,21 @@
 
       <!-- Quick stats — small chips line, easy to scan -->
       <div class="dash__stats">
-        <div v-if="hasFeature(FEATURES.dashboard.statDocuments)" class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statDocuments)" class="stat stat--link" role="link" tabindex="0" @click="goStat('/documents')" @keydown.enter="goStat('/documents')">
           <n-icon :component="DocumentTextOutline" :size="18" class="stat__icon" />
           <div>
             <span class="stat__num">{{ stats?.total_documents ?? 0 }}</span>
             <span class="stat__label">{{ l.dashboard.statDocuments }}</span>
           </div>
         </div>
-        <div v-if="hasFeature(FEATURES.dashboard.statClients)" class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statClients)" class="stat stat--link" role="link" tabindex="0" @click="goStat('/clients')" @keydown.enter="goStat('/clients')">
           <n-icon :component="PeopleOutline" :size="18" class="stat__icon" />
           <div>
             <span class="stat__num">{{ stats?.total_clients ?? 0 }}</span>
             <span class="stat__label">{{ l.dashboard.statClients }}</span>
           </div>
         </div>
-        <div v-if="hasFeature(FEATURES.dashboard.statInspections)" class="stat">
+        <div v-if="hasFeature(FEATURES.dashboard.statInspections)" class="stat stat--link" role="link" tabindex="0" @click="goStat('/documents')" @keydown.enter="goStat('/documents')">
           <n-icon :component="ConstructOutline" :size="18" class="stat__icon" />
           <div>
             <span class="stat__num">{{ stats?.total_inspections ?? 0 }}</span>
@@ -84,7 +84,8 @@
         </div>
         <div
           v-if="hasFeature(FEATURES.dashboard.statPendingReminders)"
-          class="stat"
+          class="stat stat--link"
+          role="link" tabindex="0" @click="goStat('/reminders')" @keydown.enter="goStat('/reminders')"
         >
           <n-icon :component="AlarmOutline" :size="18" class="stat__icon stat__icon--accent" />
           <div>
@@ -99,7 +100,8 @@
             hasFeature(FEATURES.dashboard.statExpiringSoon) &&
             (stats?.expiring_soon ?? 0) > 0
           "
-          class="stat"
+          class="stat stat--link"
+          role="link" tabindex="0" @click="goStat('/documents')" @keydown.enter="goStat('/documents')"
         >
           <n-icon :component="WarningOutline" :size="18" class="stat__icon stat__icon--warn" />
           <div>
@@ -110,14 +112,14 @@
           </div>
         </div>
         <template v-if="showInvoiceStats">
-          <div class="stat">
+          <div class="stat stat--link" role="link" tabindex="0" @click="goStat('/invoices')" @keydown.enter="goStat('/invoices')">
             <n-icon :component="ReceiptOutline" :size="18" class="stat__icon" />
             <div>
               <span class="stat__num">{{ invoiceCounts.invoice }}</span>
               <span class="stat__label">{{ l.invoices.title }}</span>
             </div>
           </div>
-          <div class="stat">
+          <div class="stat stat--link" role="link" tabindex="0" @click="goStat('/invoices')" @keydown.enter="goStat('/invoices')">
             <n-icon :component="CheckmarkCircleOutline" :size="18" class="stat__icon" />
             <div>
               <span class="stat__num">{{ invoiceCounts.receipt }}</span>
@@ -472,6 +474,9 @@ const showInvoiceStats = computed(() =>
   hasFeature(FEATURES.pages.invoices) && planMeetsMinimum(resolveUserPlan(authStore.user), "business" as PlanId),
 );
 const invoiceCounts = ref({invoice: 0, receipt: 0});
+function goStat(path: string) {
+  router.push(href(path));
+}
 const dueSoon = ref<InvoiceDueSoon[]>([]);
 const remindedIds = ref(new Set<string>());
 function dueLabel(days: number): string {
@@ -1064,6 +1069,16 @@ const data_cards = computed(() => modules.value);
   align-items: flex-start;
   gap: 12px;
   min-width: 130px;
+}
+.stat--link {
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.stat--link:hover,
+.stat--link:focus-visible {
+  border-color: var(--brand-color);
+  background: var(--bg-hover);
+  outline: none;
 }
 .stat > div {
   display: flex;
