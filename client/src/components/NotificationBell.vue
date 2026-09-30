@@ -30,6 +30,14 @@
         </button>
       </div>
 
+      <div v-if="pushSupported" class="notif-panel__push">
+        <n-icon :component="pushSubscribed ? NotificationsOffOutline : NotificationsOutline" :size="16" />
+        <span>{{ pushSubscribed ? l.notifications.pushOn : l.notifications.pushOff }}</span>
+        <button class="notif-panel__mark-all" type="button" :disabled="pushBusy" @click="togglePush">
+          {{ pushSubscribed ? l.notifications.pushDisable : l.notifications.pushEnable }}
+        </button>
+      </div>
+
 <!--      <div class="notif-panel__quickadd">-->
 <!--        <div class="notif-panel__quickadd-title">{{ l.notifications.quickAdd }}</div>-->
 <!--        <n-input v-model:value="quickTitle" size="small" :placeholder="l.notifications.quickAddTitlePlaceholder" />-->
@@ -74,7 +82,8 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { NButton, NCheckbox, NDatePicker, NIcon, NInput, NPopover, NSelect, useMessage } from "naive-ui";
-import { NotificationsOutline } from "@vicons/ionicons5";
+import { NotificationsOffOutline, NotificationsOutline } from "@vicons/ionicons5";
+import { usePush } from "../composables/useAdminPush.js";
 import { useI18n } from "../composables/useI18n.js";
 import { useNotifications } from "../composables/useNotifications.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -87,6 +96,16 @@ const message = useMessage();
 const router = useRouter();
 const authStore = useAuthStore();
 const { items, unreadCount, refresh, markRead, markAllRead, startPolling } = useNotifications();
+
+const { supported: pushSupported, subscribed: pushSubscribed, busy: pushBusy, refreshState: refreshPush, enablePush, disablePush } = usePush();
+async function togglePush() {
+  try {
+    if (pushSubscribed.value) await disablePush();
+    else await enablePush();
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : l.value.notifications.pushError);
+  }
+}
 
 const quickTitle = ref("");
 const quickDateMs = ref<number | null>(null);
@@ -122,6 +141,7 @@ const categoryOptions = computed(() => {
 
 onMounted(async () => {
   startPolling();
+  void refreshPush();
   try {
     const data = await api.reminders.categories();
     categories.value = data.categories;
@@ -136,7 +156,8 @@ function onToggle(show: boolean) {
 
 function onItemClick(item: NotificationItem) {
   if (!item.read_at) void markRead(item.id);
-  if (item.kind === "billing_renewal_due") router.push({path: href("/profile"), query: {section: "subscription"}});
+  if (item.kind === "discovery_new") router.push(href("/discover-reminders"));
+  else if (item.kind === "billing_renewal_due") router.push({path: href("/profile"), query: {section: "subscription"}});
   else if (item.reminder_id) router.push(href(`/reminders/${item.reminder_id}`));
   else router.push(href("/reminders"));
 }
@@ -221,6 +242,19 @@ async function submitQuickAdd() {
   color: var(--brand-color);
   font-size: 12px;
   cursor: pointer;
+}
+.notif-panel__push {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.notif-panel__push span {
+  flex: 1;
 }
 .notif-panel__list {
   display: grid;

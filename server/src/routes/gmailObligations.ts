@@ -13,6 +13,7 @@ import { htmlToPlainText, scanInlineEmailForObligation, subjectRequestsAttachmen
 import { parsePdf } from "../pipeline/pdfParser";
 import { releaseTempFile, tempDir } from "../storage/tempFiles";
 import {
+  type ObligationSearchParameters,
   obligationLangErrorBody,
   obligationSearchParameters,
   parseObligationSearchLangs,
@@ -106,48 +107,60 @@ export function registerGmailObligationRoutes(app: express.Application) {
     const months = historyMonths(req.query.months);
     const search = obligationSearchParameters(langs, months);
 
-    const accessToken = await resolveGmailToken(userId);
-    if (!accessToken) {
-      res.status(403).json({ error: "gmail_not_connected" });
+    const result = await runObligationScan(userId, search);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error, ...(result.detail ? { detail: result.detail } : {}) });
       return;
     }
-
-    try {
-      const listed = await listMessageIds(accessToken, userId, search.q);
-      if (listed.error) {
-        res.status(listed.error.httpStatus).json({ error: listed.error.code, detail: listed.error.message });
-        return;
-      }
-
-      const accountRow = await col<{ gmail_email?: string }>("users").findOne({ _id: new ObjectId(userId) });
-      const account = accountRow?.gmail_email ?? "default";
-      const proposals = [];
-      for (const id of listed.ids) {
-        const hit = await scanMessage(listed.accessToken, id, userId, account);
-        if (hit) proposals.push(hit);
-      }
-      proposals.sort((a, b) => a.due_date.localeCompare(b.due_date));
-
-      logger.info("gmail_obligation_scan", {
-        user_id: userId,
-        langs: search.langs,
-        scanned: listed.ids.length,
-        found: proposals.length,
-      });
-
-      res.json({
-        langs: search.langs,
-        historyMonths: search.historyMonths,
-        terms: search.terms,
-        query: search.q,
-        scanned: listed.ids.length,
-        proposals,
-      });
-    } catch (err) {
-      logger.error("gmail_obligation_scan_failed", { user_id: userId, error: String(err) });
-      res.status(500).json({ error: "internal_error" });
-    }
+    res.json({
+      langs: search.langs,
+      historyMonths: search.historyMonths,
+      terms: search.terms,
+      query: search.q,
+      scanned: result.scanned,
+      proposals: result.proposals,
+    });
   });
+}
+
+export type ObligationScanResult =
+  | { ok: true; scanned: number; proposals: Awaited<ReturnType<typeof scanMessage>>[] }
+  | { ok: false; status: number; error: string; detail?: string };
+
+/**
+ * Runs one obligation scan for a user and saves every hit. Shared by the scan
+ * route and the scheduled auto-scan so both persist discoveries the same way.
+ */
+export async function runObligationScan(userId: string, search: ObligationSearchParameters): Promise<ObligationScanResult> {
+  const accessToken = await resolveGmailToken(userId);
+  if (!accessToken) return { ok: false, status: 403, error: "gmail_not_connected" };
+
+  try {
+    const listed = await listMessageIds(accessToken, userId, search.q);
+    if (listed.error) {
+      return { ok: false, status: listed.error.httpStatus, error: listed.error.code, detail: listed.error.message };
+    }
+
+    const accountRow = await col<{ gmail_email?: string }>("users").findOne({ _id: new ObjectId(userId) });
+    const account = accountRow?.gmail_email ?? "default";
+    const proposals = [];
+    for (const id of listed.ids) {
+      const hit = await scanMessage(listed.accessToken, id, userId, account);
+      if (hit) proposals.push(hit);
+    }
+    proposals.sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+    logger.info("gmail_obligation_scan", {
+      user_id: userId,
+      langs: search.langs,
+      scanned: listed.ids.length,
+      found: proposals.length,
+    });
+    return { ok: true, scanned: listed.ids.length, proposals };
+  } catch (err) {
+    logger.error("gmail_obligation_scan_failed", { user_id: userId, error: String(err) });
+    return { ok: false, status: 500, error: "internal_error" };
+  }
 }
 
 function historyMonths(value: unknown): number {

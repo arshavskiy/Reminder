@@ -4,7 +4,8 @@ import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
 import {buildPlanEntitlements, newUserSettingsBase, persistPlanEntitlements} from "../plans/planEntitlements";
-import {PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {obligationLangErrorBody, parseObligationSearchLangs} from "../gmail/obligationSearch";
 
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
@@ -138,6 +139,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
       features_json?: string | null;
       s3_store_invoices?: boolean;
       s3_store_inspection_reports?: boolean;
+      discovery_auto_scan?: boolean;
+      discovery_langs?: string[] | string;
     };
 
     const patch: Record<string, unknown> = {};
@@ -162,6 +165,28 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
     if (body.report_config !== undefined) patch.report_config = normalizeReportConfig(body.report_config);
     if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
+    if (body.discovery_langs !== undefined) {
+      const langs = parseObligationSearchLangs(body.discovery_langs);
+      if (typeof langs === "string") {
+        res.status(400).json(obligationLangErrorBody(langs));
+        return;
+      }
+      patch.discovery_langs = langs;
+    }
+    if (body.discovery_auto_scan !== undefined) {
+      const enable = Boolean(body.discovery_auto_scan);
+      if (enable) {
+        // The scan needs the same plan the manual scan needs; refuse here so the
+        // toggle cannot be switched on for an account the scheduler would skip.
+        let planUser: any = null;
+        try { planUser = await col("users").findOne({ _id: new ObjectId(auth.userId) }); } catch { /* treated as no plan */ }
+        if (!planAllowsDocumentImport(effectivePlanId(planUser))) {
+          res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+          return;
+        }
+      }
+      patch.discovery_auto_scan = enable;
+    }
     if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
     if (body.s3_store_invoices !== undefined || body.s3_store_inspection_reports !== undefined) {
       // A plan without fileStorage cannot turn cloud storage back on: without

@@ -18,6 +18,7 @@ import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../in
 import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoices/documentProof";
 import {sendEmailWithAttachments} from "../reminders/emailSender";
 import { toIlsMany } from "../invoices/fxRates";
+import { selectDueSoon } from "../invoices/dueSoon";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -130,6 +131,48 @@ export function registerInvoiceRoutes(app: express.Application) {
       // Every currency the user has, so the filter still offers the others once one is picked.
       currencies: uniqueSorted(allRows.map((row) => String(row.currency ?? "").toUpperCase()).filter(isNonEmptyString)),
     });
+  });
+
+  // Unpaid invoices due soon (or just overdue) for the dashboard. Registered
+  // before /api/invoices/:id so "due-soon" is not read as an id.
+  app.get("/api/invoices/due-soon", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const days = clampInt(req.query.days, 14, 1, 90);
+    const invoices = await col("invoices")
+      .find({ user_id: userId, payment_due_date: { $nin: [null, ""] } } as any, { projection: { preview_html: 0 } } as any)
+      .sort({ payment_due_date: 1 } as any)
+      .limit(500)
+      .toArray() as InvoiceRow[];
+    const documentIds = [...new Set(invoices.map((invoice) => String(invoice.document_id ?? "")).filter(ObjectId.isValid))];
+    const documents = documentIds.length
+      ? await col("documents")
+        .find({ _id: { $in: documentIds.map((id) => new ObjectId(id)) }, user_id: userId } as any, { projection: { raw_text: 0 } } as any)
+        .toArray() as InvoiceRow[]
+      : [];
+    const documentMap = new Map(documents.map((doc) => [doc._id.toString(), doc]));
+    const providers = await loadGmailSearchProviders();
+    const rows = invoices
+      .filter((invoice) => invoiceIsVisible(invoice, documentMap.get(String(invoice.document_id))))
+      .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
+      .map((row: any) => ({ ...row, payment_due_date: isoDate(row.payment_due_date) }));
+    const today = new Date().toISOString().slice(0, 10);
+    const items = selectDueSoon(rows as any[], today, days).slice(0, 20).map((row: any) => ({
+      id: row.id,
+      supplier_name: row.supplier_name,
+      amount_display: row.amount_display,
+      currency: row.currency,
+      payment_due_date: row.payment_due_date,
+      daysLeft: row.daysLeft,
+      document_category: row.document_category,
+    }));
+    res.json({ items, days });
   });
 
   app.get("/api/invoices/expenses/monthly", async (req, res) => {

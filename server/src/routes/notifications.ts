@@ -77,6 +77,52 @@ export function registerNotificationRoutes(app: express.Application) {
     res.json({ ok: true });
   });
 
+  // Web push for any signed-in user (reminder and discovery alerts). The admin
+  // endpoints under /api/admin/push store into the same collection.
+  app.get("/api/push/vapid-key", async (req, res) => {
+    try {
+      await requireAuth(req.headers.cookie);
+    } catch (e) {
+      res.status((e as HTTPException).status ?? 401).json({ error: (e as HTTPException).message });
+      return;
+    }
+    res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+  });
+
+  app.post("/api/push/subscribe", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      res.status((e as HTTPException).status ?? 401).json({ error: (e as HTTPException).message });
+      return;
+    }
+    const { endpoint, keys } = req.body as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      res.status(400).json({ error: "Invalid subscription" });
+      return;
+    }
+    await col("push_subscriptions").updateOne(
+      { user_id: userId, endpoint },
+      { $set: { user_id: userId, endpoint, keys, updated_at: new Date() }, $setOnInsert: { created_at: new Date() } },
+      { upsert: true },
+    );
+    res.status(201).json({ ok: true });
+  });
+
+  app.post("/api/push/unsubscribe", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      res.status((e as HTTPException).status ?? 401).json({ error: (e as HTTPException).message });
+      return;
+    }
+    const { endpoint } = req.body as { endpoint?: string };
+    if (endpoint) await col("push_subscriptions").deleteOne({ user_id: userId, endpoint });
+    res.json({ ok: true });
+  });
+
   // POST /api/notifications/read-all
   app.post("/api/notifications/read-all", async (req, res) => {
     let userId: string;

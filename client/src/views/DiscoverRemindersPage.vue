@@ -20,6 +20,10 @@
           <template #icon><n-icon :component="SearchOutline" /></template>{{ c.scan }}
         </n-button>
       </div>
+      <label class="auto-scan">
+        <n-switch :value="autoScan" :loading="autoScanSaving" :disabled="!connected || !allowed" @update:value="setAutoScan" />
+        <span><strong>{{ c.autoScan }}</strong><small class="muted">{{ c.autoScanHint }}</small></span>
+      </label>
       <p class="muted">{{ c.limit }}</p>
       <p v-if="scanning" role="status">{{ c.scanning }}</p>
     </section>
@@ -98,7 +102,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NTag } from "naive-ui";
+import { NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag } from "naive-ui";
 import {
   AddOutline, AlarmOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
   FlashOutline, MailOutline, RefreshOutline, SearchOutline, ShieldCheckmarkOutline, TimeOutline, WalletOutline, WarningOutline,
@@ -107,6 +111,7 @@ import PageHeader from "../components/PageHeader.vue";
 import { api, type ObligationSuggestion } from "../services/apiService";
 import { useI18n } from "../composables/useI18n";
 import { useAuthStore } from "../stores/auth";
+import { useUserSettingsStore } from "../stores/userSettings";
 import { planAllowsDocumentImport, resolveUserPlan } from "../shared/pricingPlans";
 import { discoveryMessages } from "../locales/discoveryMessages";
 
@@ -116,6 +121,9 @@ const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const allowed = computed(() => planAllowsDocumentImport(resolveUserPlan(auth.user)));
+const userSettings = useUserSettingsStore();
+const autoScan = ref(false);
+const autoScanSaving = ref(false);
 const connected = ref(false);
 const email = ref<string | null>(null);
 const loading = ref(true);
@@ -185,6 +193,15 @@ async function dismiss(item: ObligationSuggestion) {
 function formatDate(value: string) { return new Intl.DateTimeFormat(locale.value === "he" ? "he-IL" : "en-GB").format(new Date(`${value}T12:00:00`)); }
 function emailLink(id: string) { return `https://mail.google.com/mail/u/${email.value ? `?authuser=${encodeURIComponent(email.value)}` : '0/'}#all/${encodeURIComponent(id)}`; }
 function errorText(err: unknown) { return err instanceof Error ? err.message : c.value.failed; }
+async function setAutoScan(value: boolean) {
+  autoScanSaving.value = true;
+  error.value = "";
+  try {
+    const row = await userSettings.save({ discovery_auto_scan: value, discovery_langs: languages.value });
+    autoScan.value = Boolean(row.discovery_auto_scan);
+  } catch (err) { error.value = errorText(err); }
+  finally { autoScanSaving.value = false; }
+}
 async function connect() {
   connecting.value = true;
   error.value = "";
@@ -230,6 +247,11 @@ async function save() {
 onMounted(async () => {
   if (route.query.error) error.value = c.value.connectionFailed;
   try { await loadSaved(); } catch (err) { error.value = errorText(err); }
+  try {
+    const row = await userSettings.load();
+    autoScan.value = Boolean(row?.discovery_auto_scan);
+    if (row?.discovery_langs?.length) languages.value = [...row.discovery_langs];
+  } catch { /* the switch just stays off */ }
   try { const status = await api.gmail.status(); connected.value = status.connected; email.value = status.email; }
   catch (err) { error.value = errorText(err); }
   finally { loading.value = false; }
@@ -246,6 +268,8 @@ h2, h3, p { margin: 0 0 8px; }
 h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
 .scan-controls { margin: 24px 0 12px; align-items: end; }
 .scan-controls label { display: grid; gap: 8px; flex: 1; min-width: 180px; }
+.auto-scan { display: flex; align-items: center; gap: 12px; margin-top: 4px; cursor: pointer; }
+.auto-scan span { display: grid; gap: 2px; }
 .muted, .connection p { color: var(--text-secondary); font-size: 13px; }
 .scan-panel { background: linear-gradient(135deg, color-mix(in srgb, var(--brand-color) 9%, var(--bg-card)), var(--bg-card) 60%); }
 .connection > .n-icon { padding: 10px; border-radius: 14px; box-sizing: content-box; background: color-mix(in srgb, var(--brand-color) 16%, transparent); color: var(--brand-color); }

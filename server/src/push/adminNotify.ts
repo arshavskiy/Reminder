@@ -52,6 +52,27 @@ export function notifyPasswordResetRequested(opts: { email?: string | null }): v
   fire("בקשת איפוס סיסמה", opts.email ? `נשלח קישור איפוס אל ${opts.email}` : "נשלח קישור איפוס סיסמה", "/admin");
 }
 
+// A regular (contract/document) reminder just went out by email; tell its owner
+// on their devices too. Same fire-and-forget contract as the helpers around it.
+export async function notifyOwnerReminderSent(opts: {
+  userId: string;
+  title?: string | null;
+  reminderId?: string | null;
+}): Promise<void> {
+  try {
+    await sendToUser(opts.userId, {
+      title: "תזכורת נשלחה",
+      body: opts.title?.trim() || "תזכורת",
+      data: { url: "/reminders", reminderId: opts.reminderId ?? null, kind: "reminder_sent" },
+    });
+  } catch (err) {
+    logger.warn("owner_reminder_notify_failed", {
+      user_id: opts.userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 // Personal reminders push to the owning user, not admins — fire-and-forget,
 // same "never throw into the caller's flow" rule as the admin helpers above.
 export async function notifyPersonalReminderDue(opts: {

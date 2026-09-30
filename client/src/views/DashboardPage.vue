@@ -262,6 +262,32 @@
           </ul>
           <p v-else class="panel__empty">{{ l.dashboard.noUpcoming }}</p>
         </section>
+
+        <section v-if="showInvoiceStats && dueSoon.length" class="panel">
+          <header class="panel__head">
+            <h3>{{ l.dashboard.dueSoonTitle }}</h3>
+            <router-link class="panel__more" :to="href('/invoices')">{{ l.dashboard.allInvoices }}</router-link>
+          </header>
+          <ul class="panel__list">
+            <li v-for="inv in dueSoon" :key="inv.id" class="panel__row">
+              <div class="panel__row-stack">
+                <router-link class="panel__row-title" :to="href('/invoices/' + inv.id)">{{ inv.supplier_name || l.dashboard.unknownSupplier }}</router-link>
+                <span class="panel__row-sub" dir="ltr">{{ inv.amount_display }}</span>
+              </div>
+              <span class="panel__row-date" :class="{ 'panel__row-date--late': inv.daysLeft < 0 }">
+                {{ inv.payment_due_date }} · {{ dueLabel(inv.daysLeft) }}
+              </span>
+              <n-tooltip>
+                <template #trigger>
+                  <button class="btn btn--ghost btn--xs icon-btn" type="button" :aria-label="l.dashboard.addReminder" :disabled="remindedIds.has(inv.id)" @click="remindAboutInvoice(inv)">
+                    <n-icon :component="remindedIds.has(inv.id) ? CheckmarkCircleOutline : AlarmOutline" :size="16" />
+                  </button>
+                </template>
+                {{ l.dashboard.addReminder }}
+              </n-tooltip>
+            </li>
+          </ul>
+        </section>
       </div>
     </n-spin>
   </div>
@@ -303,7 +329,7 @@ import {
 import {useRescanModalStore} from "../stores/rescanModal.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
-import type {ExpiryCalendarItem} from "../services/apiService.js";
+import type {ExpiryCalendarItem, InvoiceDueSoon} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import type {DocTemplate} from "../shared/types.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
@@ -446,10 +472,36 @@ const showInvoiceStats = computed(() =>
   hasFeature(FEATURES.pages.invoices) && planMeetsMinimum(resolveUserPlan(authStore.user), "business" as PlanId),
 );
 const invoiceCounts = ref({invoice: 0, receipt: 0});
+const dueSoon = ref<InvoiceDueSoon[]>([]);
+const remindedIds = ref(new Set<string>());
+function dueLabel(days: number): string {
+  if (days === 0) return l.value.dashboard.dueToday;
+  if (days === 1) return l.value.dashboard.dueTomorrow;
+  return (days > 0 ? l.value.dashboard.dueInDays : l.value.dashboard.overdueDays).replace("{n}", String(Math.abs(days)));
+}
+async function remindAboutInvoice(inv: InvoiceDueSoon) {
+  try {
+    const result = await api.reminders.createPersonal({
+      title: `${l.value.dashboard.payPrefix}: ${inv.supplier_name || l.value.dashboard.unknownSupplier} ${inv.amount_display}`.trim(),
+      target_date: inv.payment_due_date,
+      remind_before_days: [1, 0],
+      reminder_category: "Personal",
+    });
+    if (!result.created) throw new Error("not_created");
+    remindedIds.value = new Set([...remindedIds.value, inv.id]);
+    message.success(l.value.dashboard.reminderAdded);
+  } catch {
+    message.error(l.value.dashboard.reminderFailed);
+  }
+}
 async function loadInvoiceCounts() {
   if (!showInvoiceStats.value) return;
   try {
-    const result = await api.invoices.list({limit: 1}, true);
+    const [result, due] = await Promise.all([
+      api.invoices.list({limit: 1}, true),
+      api.invoices.dueSoon(14).catch(() => ({items: [] as InvoiceDueSoon[]})),
+    ]);
+    dueSoon.value = due.items;
     invoiceCounts.value = {
       invoice: result.documentCategoryCounts?.invoice ?? 0,
       receipt: result.documentCategoryCounts?.receipt ?? 0,
@@ -1217,6 +1269,9 @@ html[data-theme="light"] .module__icon {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+.panel__row-date--late {
+  color: var(--color-error);
 }
 .panel__row-sub {
   font-size: 12px;

@@ -15,11 +15,22 @@ import { syncAllCalendars, pushReminderToCalendar, parseCalendarTime } from "../
 import {insertReminderIfAllowed} from "../quotas/reminderQuota";
 import {featureFlagsForUser} from "../plans/tierFeatures";
 import {clientDisplayName} from "../utils/clientNames";
-import {notifyEmailSendFailed, notifyPersonalReminderDue, notifyReminderSkipped} from "../push/adminNotify";
+import {notifyEmailSendFailed, notifyOwnerReminderSent, notifyPersonalReminderDue, notifyReminderSkipped} from "../push/adminNotify";
 import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContractEmailWithMeta} from "../contracts/contractEmail.js";
 import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
 import {isProcessPaused} from "../ops/processControl";
 import {checkBillingReminders} from "../plans/billingReminders";
+import {
+  AUTO_SCAN_HISTORY_MONTHS,
+  AUTO_SCAN_USERS_PER_TICK,
+  autoScanDue,
+  discoveryDigest,
+  newDiscoveryIds,
+} from "../gmail/autoDiscovery";
+import {obligationSearchParameters, parseObligationSearchLangs} from "../gmail/obligationSearch";
+import {effectivePlanId, planAllowsDocumentImport} from "../plans/tierFeatures";
+import {isFeatureEnabledForUser} from "../features";
+import {sendToUser} from "../push/pushService";
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 
@@ -76,6 +87,7 @@ export function startScheduler() {
       await runWithHealth("checkBillingReminders", checkBillingReminders);
     if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
     await runWithHealth("syncCalendars", syncAllCalendars);
+    await runWithHealth("checkDiscoveryScans", checkDiscoveryScans);
     await col("scheduler_health").updateOne(
       { name: "tick" },
       { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
@@ -96,6 +108,52 @@ export function stopScheduler() {
   if (_timer) {
     clearInterval(_timer);
     _timer = null;
+  }
+}
+
+// Weekly unattended discovery scan for users who opted in. Only deadlines that
+// were not already saved raise a notification, so a rerun stays quiet.
+async function checkDiscoveryScans() {
+  const now = new Date();
+  const rows = await col("user_settings").find({discovery_auto_scan: true}).toArray() as any[];
+  let scanned = 0;
+  for (const row of rows) {
+    if (scanned >= AUTO_SCAN_USERS_PER_TICK) break;
+    if (!autoScanDue(row.discovery_last_scan_at, now)) continue;
+
+    const userId = String(row.user_id);
+    const user = await col("users").findOne({_id: toObjectId(userId)}) as any;
+    if (!user || !planAllowsDocumentImport(effectivePlanId(user))) continue;
+    if (!await isFeatureEnabledForUser(userId, "pages.discovery")) continue;
+
+    // Marked before the scan so a failing account is retried next interval, not every hour.
+    await col("user_settings").updateOne({user_id: row.user_id}, {$set: {discovery_last_scan_at: now}});
+    scanned += 1;
+
+    const langs = parseObligationSearchLangs(row.discovery_langs);
+    const search = obligationSearchParameters(typeof langs === "string" ? ["he"] : langs, AUTO_SCAN_HISTORY_MONTHS);
+    const {discoveries} = await import("../gmail/discoveryStore");
+    const {runObligationScan} = await import("../routes/gmailObligations");
+    const before = await discoveries().find({user_id: userId}, {projection: {_id: 1}} as any).toArray();
+    const result = await runObligationScan(userId, search);
+    if (!result.ok) {
+      logger.warn("discovery_auto_scan_failed", {user_id: userId, error: result.error});
+      continue;
+    }
+
+    const fresh = newDiscoveryIds(before.map((item: any) => String(item._id)), result.proposals.map((item: any) => String(item.id)));
+    if (!fresh.length) continue;
+    const items = result.proposals.filter((item: any) => fresh.includes(String(item.id)));
+    const digest = discoveryDigest(items.map((item: any) => ({entity_name: item.entity_name, due_date: item.due_date})));
+    await col("notifications").insertOne({
+      user_id: userId,
+      kind: "discovery_new",
+      title: digest.title,
+      body: digest.body,
+      created_at: new Date(),
+      read_at: null,
+    } as any);
+    await sendToUser(userId, {title: digest.title, body: digest.body, data: {url: "/discover-reminders", kind: "discovery_new"}});
   }
 }
 
@@ -558,6 +616,13 @@ async function processReminder(reminder: ReminderWithContext) {
       recipient_count: recipients.length,
     });
     await markSent(reminder);
+    if ((reminder as any).user_id != null) {
+      await notifyOwnerReminderSent({
+        userId: String((reminder as any).user_id),
+        title: reminder.title,
+        reminderId: String(remId),
+      });
+    }
   } else if (failCount + 1 >= 3) {
     await col("reminders").updateOne(
       { _id: toObjectId(remId) } as any,

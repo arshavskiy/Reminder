@@ -60,7 +60,7 @@ async function enablePush(): Promise<void> {
     }
     if (permission.value !== "granted") throw new Error("לא ניתן אישור להתראות");
 
-    const { key } = await api.admin.pushVapidKey();
+    const { key } = await api.push.vapidKey();
     if (!key) throw new Error("חסר מפתח VAPID בשרת");
 
     const reg = await getRegistration();
@@ -72,7 +72,7 @@ async function enablePush(): Promise<void> {
       });
     }
     const json = sub.toJSON();
-    await api.admin.pushSubscribe({ endpoint: json.endpoint!, keys: json.keys as { p256dh: string; auth: string } });
+    await api.push.subscribe({ endpoint: json.endpoint!, keys: json.keys as { p256dh: string; auth: string } });
     subscribed.value = true;
   } finally {
     busy.value = false;
@@ -85,7 +85,7 @@ async function disablePush(): Promise<void> {
     const reg = await getRegistration();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
-      await api.admin.pushUnsubscribe(sub.endpoint).catch(() => {});
+      await api.push.unsubscribe(sub.endpoint).catch(() => {});
       await sub.unsubscribe();
     }
     subscribed.value = false;
@@ -97,3 +97,6 @@ async function disablePush(): Promise<void> {
 export function useAdminPush() {
   return { supported, permission, subscribed, busy, refreshState, enablePush, disablePush };
 }
+
+// Push is no longer admin-only; regular users subscribe through /api/push/*.
+export const usePush = useAdminPush;

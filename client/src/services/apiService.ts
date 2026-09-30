@@ -22,6 +22,16 @@ import type {
   UserSettings,
 } from "../../src/shared/types.js";
 
+export interface InvoiceDueSoon {
+  id: string;
+  supplier_name: string | null;
+  amount_display: string;
+  currency: string | null;
+  payment_due_date: string;
+  daysLeft: number;
+  document_category: string | null;
+}
+
 export interface ObligationSuggestion {
   id: string;
   status: "new" | "created" | "dismissed";
@@ -801,7 +811,14 @@ export const api = {
     stats: (force = false) => get<DashboardStats>("/dashboard/stats", force),
   },
 
+  push: {
+    vapidKey: () => get<{ key: string | null }>("/push/vapid-key", true),
+    subscribe: (body: { endpoint: string; keys: { p256dh: string; auth: string } }) => post<{ ok: boolean }>("/push/subscribe", body),
+    unsubscribe: (endpoint: string) => post<{ ok: boolean }>("/push/unsubscribe", { endpoint }),
+  },
+
   invoices: {
+    dueSoon: (days = 14) => get<{ items: InvoiceDueSoon[]; days: number }>(`/invoices/due-soon${qs({ days })}`, true),
     list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; currency?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean }, force = false) =>
       get<{
         rows: ImportedInvoice[];
@@ -1070,7 +1087,7 @@ export const api = {
 
   userSettings: {
     get: () => get<UserSettings>("/user-settings"),
-    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features">>) =>
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features" | "discovery_auto_scan" | "discovery_langs">>) =>
       put<UserSettings>("/user-settings", body),
   },
 

@@ -134,6 +134,9 @@ export interface UserSettings extends PipelineFlags {
     client_fields?: string[];
   } | null;
   calendar_next_tests_only?: boolean;
+  discovery_auto_scan?: boolean;
+  discovery_langs?: string[];
+  discovery_last_scan_at?: string | null;
   /** Keep invoices in object storage. Unset is treated as enabled. */
   s3_store_invoices?: boolean;
   /** Keep inspection reports in object storage. Unset is treated as enabled. */
