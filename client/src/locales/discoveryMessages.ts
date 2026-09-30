@@ -17,6 +17,8 @@ export const discoveryMessages = {
     failed: "Something went wrong. Please try again.", connectionFailed: "Email connection failed. Please try connecting again.",
     plan: "Email discovery requires a plan with document import.", plans: "View plans",
     kinds: { warranty: "Warranty", renewal: "Renewal", payment_due: "Payment due", maintenance: "Maintenance", due_task: "Urgent task" },
+    missed: "Missed deadlines", missedHint: "This date has passed. You may still be able to act on it late.",
+    dueToday: "Due today", dueTomorrow: "Due tomorrow", inDays: "In {n} days", daysAgo: "{n} days ago", dayAgo: "1 day ago",
   },
   he: {
     title: "גילוי תזכורות", subtitle: "מצאו מועדים חשובים בדואר והפכו אותם לתזכורות שאפשר לבדוק ולנהל.",
@@ -36,5 +38,7 @@ export const discoveryMessages = {
     failed: "אירעה שגיאה. נסו שוב.", connectionFailed: "חיבור הדואר נכשל. נסו להתחבר שוב.",
     plan: "גילוי תזכורות בדואר דורש תוכנית הכוללת ייבוא מסמכים.", plans: "צפייה בתוכניות",
     kinds: { warranty: "אחריות", renewal: "חידוש", payment_due: "מועד תשלום", maintenance: "טיפול הבא", due_task: "משימה דחופה" },
+    missed: "מועדים שפוספסו", missedHint: "התאריך כבר עבר. ייתכן שעדיין אפשר לטפל בכך באיחור.",
+    dueToday: "היום", dueTomorrow: "מחר", inDays: "בעוד {n} ימים", daysAgo: "לפני {n} ימים", dayAgo: "לפני יום",
   },
 };

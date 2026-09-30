@@ -25,26 +25,55 @@
     </section>
 
     <div class="summary" aria-live="polite">
-      <div><strong>{{ scanned ?? '—' }}</strong><span>{{ c.scanned }}</span></div>
-      <div><strong>{{ upcoming.length }}</strong><span>{{ c.upcoming }}</span></div>
-      <div><strong>{{ urgent.length }}</strong><span>{{ c.urgent }}</span></div>
+      <div class="stat-card">
+        <n-icon :component="MailOutline" :size="20" class="stat-card__icon" />
+        <div><strong>{{ scanned ?? '—' }}</strong><span>{{ c.scanned }}</span></div>
+      </div>
+      <div class="stat-card stat-card--missed">
+        <n-icon :component="WarningOutline" :size="20" class="stat-card__icon" />
+        <div><strong>{{ missed.length }}</strong><span>{{ c.missed }}</span></div>
+      </div>
+      <div class="stat-card stat-card--upcoming">
+        <n-icon :component="CalendarOutline" :size="20" class="stat-card__icon" />
+        <div><strong>{{ upcoming.length }}</strong><span>{{ c.upcoming }}</span></div>
+      </div>
+      <div class="stat-card stat-card--urgent">
+        <n-icon :component="FlashOutline" :size="20" class="stat-card__icon" />
+        <div><strong>{{ urgent.length }}</strong><span>{{ c.urgent }}</span></div>
+      </div>
     </div>
-    <n-input v-model:value="search" :placeholder="c.search" :aria-label="c.search" clearable />
+    <n-input v-model:value="search" :placeholder="c.search" :aria-label="c.search" clearable>
+      <template #prefix><n-icon :component="SearchOutline" /></template>
+    </n-input>
     <n-empty v-if="!scanning && !visible.length" :description="scanned === null ? c.start : search ? c.noMatch : c.empty" class="empty-state" />
-    <section v-for="group in groups" v-show="group.items.length" :key="group.label" class="result-group">
-      <h2>{{ group.label }} <span class="muted">({{ group.items.length }})</span></h2>
-      <article v-for="item in group.items" :key="item.id" class="suggestion">
-        <div class="suggestion-heading"><n-tag :type="item.warning ? 'warning' : 'info'" size="small">{{ c.kinds[item.kind] }}</n-tag><time :datetime="item.due_date">{{ formatDate(item.due_date) }}</time></div>
+    <section v-for="group in groups" v-show="group.items.length" :key="group.key" class="result-group" :class="`result-group--${group.key}`">
+      <h2 class="result-group__title">
+        <n-icon :component="group.icon" :size="20" />{{ group.label }} <span class="count-pill">{{ group.items.length }}</span>
+      </h2>
+      <p v-if="group.key === 'missed'" class="muted">{{ c.missedHint }}</p>
+      <article v-for="item in group.items" :key="item.id" class="suggestion" :class="`suggestion--${stateOf(item)}`">
+        <div class="suggestion-heading">
+          <n-tag :type="item.warning ? 'warning' : 'info'" size="small" round>
+            <template #icon><n-icon :component="kindIcon[item.kind]" /></template>{{ c.kinds[item.kind] }}
+          </n-tag>
+          <span class="due-chip" :class="`due-chip--${stateOf(item)}`">
+            <n-icon :component="stateOf(item) === 'missed' ? WarningOutline : TimeOutline" :size="14" />
+            <time :datetime="item.due_date">{{ formatDate(item.due_date) }}</time>
+            <span class="due-chip__rel">· {{ relativeLabel(item.due_date) }}</span>
+          </span>
+        </div>
         <h3>{{ item.entity_name }}</h3><p class="muted sender" dir="auto">{{ item.from }}</p>
         <blockquote dir="auto">{{ item.evidence_quote }}</blockquote>
         <p v-if="item.warning" class="muted">{{ c.immediate }}</p>
         <p class="muted">{{ item.confidence === 'high' ? c.high : c.medium }}<span v-if="item.attachment_name"> · {{ item.attachment_name }}</span></p>
         <div class="card-actions">
-          <n-button type="primary" :disabled="saved.has(item.id)" @click="review(item)">{{ saved.has(item.id) ? c.saved : c.review }}</n-button>
-          <n-button @click="preview(item)">{{ c.source }}</n-button>
+          <n-button type="primary" :disabled="saved.has(item.id)" @click="review(item)">
+            <template #icon><n-icon :component="saved.has(item.id) ? CheckmarkCircleOutline : AddOutline" /></template>{{ saved.has(item.id) ? c.saved : c.review }}
+          </n-button>
+          <n-button @click="preview(item)"><template #icon><n-icon :component="DocumentTextOutline" /></template>{{ c.source }}</n-button>
           <a v-for="pdf in item.pdfs" :key="pdf.id" :href="api.gmail.discoveryPdfUrl(item.id, pdf.id)" target="_blank" rel="noopener noreferrer">{{ pdf.filename }}</a>
           <a :href="emailLink(item.messageId)" target="_blank" rel="noopener noreferrer">{{ c.openEmail }}</a>
-          <n-button quaternary @click="dismiss(item)">{{ c.dismiss }}</n-button>
+          <n-button quaternary @click="dismiss(item)"><template #icon><n-icon :component="CloseOutline" /></template>{{ c.dismiss }}</n-button>
         </div>
       </article>
     </section>
@@ -70,7 +99,10 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NTag } from "naive-ui";
-import { SearchOutline } from "@vicons/ionicons5";
+import {
+  AddOutline, AlarmOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
+  FlashOutline, MailOutline, RefreshOutline, SearchOutline, ShieldCheckmarkOutline, TimeOutline, WalletOutline, WarningOutline,
+} from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import { api, type ObligationSuggestion } from "../services/apiService";
 import { useI18n } from "../composables/useI18n";
@@ -101,9 +133,28 @@ const search = ref("");
 const languageOptions = [{ label: "עברית", value: "he" }, { label: "English", value: "en" }, { label: "Русский", value: "ru" }];
 const monthOptions = computed(() => [1, 3, 6, 12, 24, 36].map(value => ({ value, label: `${value} ${c.value.months}` })));
 const visible = computed(() => proposals.value.filter(item => !dismissed.value.has(item.id) && `${item.entity_name} ${item.from} ${item.evidence_quote}`.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())));
-const urgent = computed(() => visible.value.filter(item => item.kind === "due_task" || item.warning === "immediate"));
-const upcoming = computed(() => visible.value.filter(item => item.kind !== "due_task" && item.warning !== "immediate"));
-const groups = computed(() => [{ label: c.value.urgent, items: urgent.value }, { label: c.value.upcoming, items: upcoming.value }]);
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const kindIcon = { warranty: ShieldCheckmarkOutline, renewal: RefreshOutline, payment_due: WalletOutline, maintenance: ConstructOutline, due_task: FlashOutline };
+type ItemState = "missed" | "urgent" | "upcoming";
+function stateOf(item: ObligationSuggestion): ItemState {
+  if (item.due_date < todayIso() && !item.warning) return "missed";
+  return item.kind === "due_task" || item.warning === "immediate" ? "urgent" : "upcoming";
+}
+const missed = computed(() => visible.value.filter(item => stateOf(item) === "missed"));
+const urgent = computed(() => visible.value.filter(item => stateOf(item) === "urgent"));
+const upcoming = computed(() => visible.value.filter(item => stateOf(item) === "upcoming"));
+const groups = computed(() => [
+  { key: "missed", icon: WarningOutline, label: c.value.missed, items: [...missed.value].sort((a, b) => b.due_date.localeCompare(a.due_date)) },
+  { key: "urgent", icon: FlashOutline, label: c.value.urgent, items: urgent.value },
+  { key: "upcoming", icon: AlarmOutline, label: c.value.upcoming, items: upcoming.value },
+]);
+function relativeLabel(value: string): string {
+  const days = Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${todayIso()}T00:00:00Z`)) / 86400000);
+  if (days === 0) return c.value.dueToday;
+  if (days === 1) return c.value.dueTomorrow;
+  if (days === -1) return c.value.dayAgo;
+  return (days > 0 ? c.value.inDays : c.value.daysAgo).replace("{n}", String(Math.abs(days)));
+}
 const showReview = ref(false);
 const selected = ref<ObligationSuggestion | null>(null);
 const draftTitle = ref("");
@@ -196,12 +247,43 @@ h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
 .scan-controls { margin: 24px 0 12px; align-items: end; }
 .scan-controls label { display: grid; gap: 8px; flex: 1; min-width: 180px; }
 .muted, .connection p { color: var(--text-secondary); font-size: 13px; }
-.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.summary > div { display: grid; gap: 6px; padding: 20px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; }
-.summary strong { font-size: 28px; color: var(--brand-color); }.summary span { color: var(--text-secondary); }
-.result-group { display: grid; gap: 14px; }.suggestion-heading { justify-content: space-between; }
+.scan-panel { background: linear-gradient(135deg, color-mix(in srgb, var(--brand-color) 9%, var(--bg-card)), var(--bg-card) 60%); }
+.connection > .n-icon { padding: 10px; border-radius: 14px; box-sizing: content-box; background: color-mix(in srgb, var(--brand-color) 16%, transparent); color: var(--brand-color); }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat-card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; }
+.stat-card > div { display: grid; gap: 2px; min-width: 0; }
+.stat-card__icon { flex: 0 0 auto; padding: 9px; border-radius: 12px; box-sizing: content-box; background: var(--bg-hover); color: var(--text-secondary); }
+.stat-card strong { font-size: 26px; line-height: 1.1; color: var(--text-primary); }
+.stat-card span { color: var(--text-secondary); font-size: 13px; }
+.stat-card--upcoming .stat-card__icon { color: var(--brand-color); background: color-mix(in srgb, var(--brand-color) 15%, transparent); }
+.stat-card--urgent .stat-card__icon { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 16%, transparent); }
+.stat-card--missed .stat-card__icon { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 14%, transparent); }
+.stat-card--missed strong { color: var(--color-error); }
+.result-group { display: grid; gap: 14px; }
+.result-group__title { display: flex; align-items: center; gap: 8px; }
+.result-group--missed .result-group__title { color: var(--color-error); }
+.result-group--urgent .result-group__title { color: var(--color-warning); }
+.count-pill { padding: 1px 10px; border-radius: 999px; background: var(--bg-hover); color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.suggestion { border-inline-start: 4px solid var(--brand-color); transition: box-shadow var(--transition-fast); }
+.suggestion:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--text-primary) 8%, transparent); }
+.suggestion--urgent { border-inline-start-color: var(--color-warning); }
+.suggestion--missed { border-inline-start-color: var(--color-error); }
+.suggestion-heading { justify-content: space-between; }
+.due-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; background: color-mix(in srgb, var(--brand-color) 13%, transparent); color: var(--brand-color); }
+.due-chip--urgent { background: color-mix(in srgb, var(--color-warning) 16%, transparent); color: var(--color-warning); }
+.due-chip--missed { background: color-mix(in srgb, var(--color-error) 13%, transparent); color: var(--color-error); }
+.due-chip__rel { font-weight: 500; opacity: 0.85; }
 blockquote { margin: 16px 0; padding: 12px 16px; border-inline-start: 3px solid var(--brand-color); background: var(--bg-elevated); white-space: pre-wrap; overflow-wrap: anywhere; }
 .sender { overflow-wrap: anywhere; }.card-actions { margin-top: 20px; }a { color: var(--brand-color); }
 .empty-state { padding: 40px 0; }.review-form { margin-top: 20px; }.date-input { width: 100%; padding: 10px; font: inherit; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; }
-@media (max-width: 600px) { .scan-panel, .suggestion { padding: 16px; }.summary > div { padding: 12px; }.summary span { font-size: 12px; }.scan-controls > .n-button { width: 100%; } }
+@media (max-width: 900px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .scan-panel, .suggestion { padding: 14px; }
+  .stat-card { padding: 10px 12px; gap: 10px; }
+  .stat-card strong { font-size: 20px; }
+  .stat-card span { font-size: 11px; }
+  .stat-card__icon { padding: 6px; }
+  .scan-controls > .n-button { width: 100%; }
+  .due-chip__rel { display: none; }
+}
 </style>
