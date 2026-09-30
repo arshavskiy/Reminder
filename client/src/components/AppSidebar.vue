@@ -350,6 +350,20 @@ const allNav = computed<NavItem[]>(() => {
       icon: WalletOutline,
       minPlan: "business" as const,
       feature: FEATURES.pages.invoices,
+      children: [
+        {
+          label: localeStore.catalog.invoices.tabLabel,
+          key: "invoices",
+          minPlan: "business" as const,
+          feature: FEATURES.pages.invoices,
+        },
+        {
+          label: localeStore.catalog.common.graph,
+          key: "invoices/expenses",
+          minPlan: "business" as const,
+          feature: FEATURES.pages.invoices,
+        },
+      ],
     },
     {
       label: nav.gmail,
@@ -436,6 +450,7 @@ function isActiveNav(key: string, query?: Record<string, string>): boolean {
     if (path !== "/activity") return false;
     return !query?.kind || route.query.kind === query.kind;
   }
+  if (key === "invoices" && path.startsWith("/invoices/expenses")) return false;
   const onPage = key.includes("/")
     ? path === `/${key}` || path.startsWith(`/${key}/`)
     : activeKey.value === key || path === `/${key}` || path.startsWith(`/${key}/`);

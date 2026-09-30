@@ -5,7 +5,7 @@
       :subtitle="sourceLine ? t('invoices.from', {source: sourceLine}) : undefined"
     >
       <template #breadcrumb>
-        <router-link :to="href('/invoices')">{{ l.invoices.title }}</router-link>
+        <router-link :to="href('/invoices')">{{ l.invoices.tabLabel }}</router-link>
         <span class="sep">/</span>
         <span>{{ invoice?.invoice_number || l.invoiceDetailMsg.details }}</span>
       </template>

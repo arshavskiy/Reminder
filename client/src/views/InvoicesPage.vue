@@ -2,7 +2,7 @@
   <div class="page2 invoices-page" :dir="dir">
     <PageHeader
       :count="total"
-      :title="l.invoices.title"
+      :title="l.invoices.tabLabel"
       :subtitle="l.invoices.subtitle"
     >
       <template #hero>

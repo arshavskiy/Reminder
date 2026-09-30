@@ -1184,6 +1184,11 @@ function providerCategoryLabel(value: string): string {
   font-weight: 700;
 }
 
+
+.toolbar__filters-row {
+  display: flex;
+}
+
 @media (max-width: 980px) {
   .expense-layout {
     grid-template-columns: 1fr;
