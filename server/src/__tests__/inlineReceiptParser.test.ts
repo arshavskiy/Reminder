@@ -306,6 +306,21 @@ describe("parseInlineReceipt", () => {
     expect(parseInlineReceipt("no-reply@grab.com", "<p>Total Paid THB 523</p>", "You're in! It only gets better from here with Grab.")).toBeNull();
   });
 
+  it("parses a Moovit-Pango monthly public transport statement", () => {
+    const html = "<b>תודה שנסעת איתנו בתחבורה הציבורית</b><span>מסמך הודעת החיוב לתאריכים </span><span>25.08.2026 - 24.09.2026 </span>"
+      + "<span>מוכן לצפייה.</span><td> הסכום לתשלום: <span><span>61.50</span>&nbsp;₪ </span></td>";
+    const result = parseInlineReceipt("DoNotReply@moovit-pango.co.il", html, "החשבון שלך בתחבורה ציבורית");
+    expect(result).toMatchObject({
+      vendor: "Moovit Pango", transactionId: "pango-2026-08-25-2026-09-24", amount: 61.5, currency: "ILS",
+      date: "2026-09-24", dedupeKey: "pango:2026-08-25:2026-09-24",
+    });
+  });
+
+  it("ignores Pango marketing mail", () => {
+    expect(parseInlineReceipt("DoNotReply@marketing-email.pango.co.il", "<p>הסכום לתשלום: 61.50 ₪</p>", "פנגו. צאו מהבית (פרסומת)")).toBeNull();
+    expect(parseInlineReceipt("DoNotReply@moovit-pango.co.il", "<p>הסכום לתשלום: 61.50 ₪</p>", "עדכון")).toBeNull();
+  });
+
   it("parses a Booking.com payment receipt", () => {
     const html = "<h3>This is your receipt</h3><td>Booking number</td><td>6615507868</td><td>Property name</td><td>COSI Krabi Ao Nang Beach</td>"
       + "<td>Property address</td><td>Ao Nang, Thailand</td><td><strong>Amount paid on 21 Jun 2025</strong></td><td><strong>THB 5,188.03</strong></td>";

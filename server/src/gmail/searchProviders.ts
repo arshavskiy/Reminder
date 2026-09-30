@@ -91,6 +91,7 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "ravkav-online", category: "transport", label: "תחבורה - רב-קו אונליין", terms: ["ravkavonline.co.il", "רב-קו אונליין", "Rav-Kav Online"], sort_order: 650, enabled: true },
   { id: "ravpass", category: "transport", label: "תחבורה - רב-פס", terms: ["ravpass.co.il", "Rav-Pass", "רב-פס", "HopOn"], sort_order: 655, enabled: true },
   { id: "moovit", category: "transport", label: "תחבורה - Moovit", terms: ["moovitapp.com", "Moovit", "מוביט"], sort_order: 660, enabled: true },
+  { id: "pango", category: "transport", label: "תחבורה - פנגו", terms: ["moovit-pango.co.il", "pango.co.il", "Pango", "פנגו", "החשבון שלך בתחבורה ציבורית"], sort_order: 665, enabled: true },
   { id: "gett", category: "transport", label: "תחבורה - Gett", terms: ["gett.com", "Gett", "גט טקסי"], sort_order: 670, enabled: true },
   { id: "yango", category: "transport", label: "תחבורה - Yango", terms: ["yango.com", "Yango", "יאנגו"], sort_order: 680, enabled: true },
   { id: "bolt", category: "transport", label: "תחבורה - Bolt", terms: ["bolt.eu", "Your Bolt trip", "Bolt"], sort_order: 682, enabled: true },

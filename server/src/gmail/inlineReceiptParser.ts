@@ -247,6 +247,30 @@ function parseBolt(html: string, subject: string): ParsedInlineReceipt | null {
   };
 }
 
+// Moovit-Pango monthly public-transport statement, subject "החשבון שלך בתחבורה
+// ציבורית". The body states the billing period ("25.08.2026 - 24.09.2026") and
+// "הסכום לתשלום: 61.50 ₪" but no document number, so the period keys the record.
+function parsePango(html: string, subject: string): ParsedInlineReceipt | null {
+  if (!/החשבון שלך בתחבורה ציבורית/.test(subject)) return null;
+  const text = stripTags(html);
+  const period = text.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
+  const paid = text.match(/הסכום לתשלום\s*:?\s*([\d,]+(?:\.\d+)?)\s*(₪|ש["'׳]?ח)?/);
+  if (!period || !paid) return null;
+  const amount = parseAmount(paid[1]);
+  if (amount === null) return null;
+  const from = `${period[3]}-${period[2]}-${period[1]}`;
+  const to = `${period[6]}-${period[5]}-${period[4]}`;
+  return {
+    vendor: "Moovit Pango",
+    transactionId: `pango-${from}-${to}`,
+    amount,
+    currency: "ILS",
+    merchant: `תחבורה ציבורית ${period[1]}.${period[2]}.${period[3]} - ${period[4]}.${period[5]}.${period[6]}`,
+    date: to,
+    dedupeKey: `pango:${from}:${to}`,
+  };
+}
+
 // "Your Grab E-Receipt". Rides are in English ("Booking ID: A-8XFOSPJWW5GCAV
 // ... Total Paid THB 523"); GrabFood can be in Thai ("รวม ฿ 972 ... รหัสการจอง A-...").
 function parseGrab(html: string, subject: string): ParsedInlineReceipt | null {
@@ -339,6 +363,7 @@ const INLINE_RECEIPT_PARSERS: Array<{
   { senderPattern: /@(notice\.)?aliexpress\.com$/i, parse: parseAliExpress },
   { senderPattern: /@([a-z0-9-]+\.)*bolt\.eu$/i, parse: parseBolt },
   { senderPattern: /@([a-z0-9-]+\.)*grab\.com$/i, parse: parseGrab },
+  { senderPattern: /^DoNotReply@moovit-pango\.co\.il$/i, parse: parsePango },
   { senderPattern: /^noreply-payments@booking\.com$/i, parse: parseBookingCom },
   { senderPattern: /@airbnb\.com$/i, parse: parseAirbnb },
 ];

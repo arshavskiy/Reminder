@@ -52,6 +52,7 @@ export function buildInlineReceiptQueries(keywordQuery: string, historyMonths: n
     { query: withHistory("from:(business-updates.facebook.com OR support.facebook.com) receipt", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:aliexpress.com subject:(\"order confirmed\" OR \"orders confirmed\")", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:bolt.eu subject:\"Your Bolt trip\"", historyMonths), ...KNOWN_SENDER_WINDOW },
+    { query: withHistory("from:moovit-pango.co.il subject:\"תחבורה ציבורית\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:grab.com subject:\"E-Receipt\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:noreply-payments@booking.com subject:\"your receipt\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:airbnb.com subject:\"receipt from Airbnb\"", historyMonths), ...KNOWN_SENDER_WINDOW },
@@ -66,6 +67,7 @@ function looksLikeKnownInlineReceipt(from: string, subject: string): boolean {
   if (/@paypal\.(com|co\.il)$/i.test(email) && /receipt/i.test(subject)) return true;
   if (/@hyp\.co\.il$/i.test(email) && /אישור תשלום|payment/i.test(subject)) return true;
   if (/@(support\.facebook\.com|business-updates\.facebook\.com)$/i.test(email) && /receipt/i.test(subject)) return true;
+  if (/@moovit-pango\.co\.il$/i.test(email) && /תחבורה ציבורית/.test(subject)) return true;
   return false;
 }
 
