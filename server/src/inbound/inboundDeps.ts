@@ -22,9 +22,12 @@ export function inboundEmailDomain(): string | null {
   return process.env.INBOUND_EMAIL_DOMAIN?.trim() || null;
 }
 
+// Reading a received email needs a key with more than "sending access", which
+// is all RESEND_API_KEY may have. A separate key keeps the sending key restricted;
+// without one we fall back to RESEND_API_KEY.
 async function resendClient() {
   const { Resend } = await import("resend");
-  return new Resend(process.env.RESEND_API_KEY);
+  return new Resend(process.env.RESEND_INBOUND_API_KEY?.trim() || process.env.RESEND_API_KEY);
 }
 
 export function createInboundDeps(): InboundDeps {
