@@ -20,6 +20,11 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Saved Table Views
+
+- Invoices now opens on the last 3 months by default.
+- Tables remember filters, date range, sort, page size and view per user on Invoices, Documents, Reminders, Clients, Equipment, Activity log, Gmail inbox and Expense analytics.
+
 ### Plans and Announcements
 
 - Made email-in a Business-plan feature (`emailIn` tier flag, server and client mirror); other plans see a Business-plan hint on the Profile card.

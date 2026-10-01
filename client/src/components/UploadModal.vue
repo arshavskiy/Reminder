@@ -47,14 +47,14 @@
             <div class="drop-zone__main">{{ l.uploadModal.dropMain }}</div>
             <div class="drop-zone__or">{{ l.uploadModal.or }}</div>
             <n-button ghost size="small" type="primary" @click.stop="fileInput?.click()">{{ l.uploadModal.chooseFiles }}</n-button>
-            <n-button ghost size="small" class="drop-zone__camera" @click.stop="cameraInput?.click()">
+            <n-button v-if="isTouchDevice" ghost size="small" class="drop-zone__camera" @click.stop="cameraInput?.click()">
               <template #icon><n-icon :component="CameraOutline" /></template>{{ l.uploadModal.takePhoto }}
             </n-button>
             <div class="drop-zone__hint">PDF · DOCX · XLSX · PNG · JPG · TIF</div>
           </div>
           <div v-else class="drop-zone__add-more" @click.stop="fileInput?.click()">
             <span>{{ l.uploadModal.addMoreFiles }}</span>
-            <n-button ghost size="tiny" @click.stop="cameraInput?.click()">
+            <n-button v-if="isTouchDevice" ghost size="tiny" @click.stop="cameraInput?.click()">
               <template #icon><n-icon :component="CameraOutline" /></template>{{ l.uploadModal.takePhoto }}
             </n-button>
           </div>
@@ -342,6 +342,10 @@ function onDrop(e: DragEvent) {
 }
 
 const cameraInput = ref<HTMLInputElement | null>(null);
+// The camera button only makes sense on a phone or tablet: on desktop `capture` is
+// ignored and it would just open a second file picker.
+const isTouchDevice = typeof window !== "undefined" && typeof window.matchMedia === "function"
+  && window.matchMedia("(pointer: coarse) and (hover: none)").matches;
 
 function onCameraInputChange(e: Event) {
   const input = e.target as HTMLInputElement;

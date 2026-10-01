@@ -262,6 +262,8 @@ import {useI18n} from "../composables/useI18n.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import { resolveDateRangePreset } from "../shared/dateRangePresets.js";
+import { usePersistedTableState } from "../composables/useTableState.js";
+import { decodeDateRange, encodeDateRange, pickOne } from "../shared/tableState";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
@@ -298,6 +300,17 @@ const exporting = ref(false);
 const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const themeTick = ref(0);
 const chartType = ref<ExpenseChartType>("stacked");
+// Date range, proof filter and chart type are remembered too; category and
+// suppliers already persist through useLocalStorage above.
+usePersistedTableState("expense-analytics", {
+  snapshot: () => ({ dateRange: encodeDateRange(dateRange.value), proof: proofFilter.value, chart: chartType.value }),
+  restore: (saved) => {
+    const range = decodeDateRange(saved.dateRange);
+    if (range !== undefined) dateRange.value = range;
+    proofFilter.value = pickOne(saved.proof, ["all", "paid", "requested", "income"] as ProofFilter[], "paid");
+    chartType.value = pickOne(saved.chart, ["stacked", "grouped", "line", "pie"] as ExpenseChartType[], "stacked");
+  },
+});
 const supplierColorIndex = ref<Record<string, number>>({});
 let chart: echarts.EChartsType | null = null;
 let chartResizeObserver: ResizeObserver | null = null;

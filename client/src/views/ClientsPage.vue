@@ -389,6 +389,8 @@ import {
 } from "@vicons/ionicons5";
 import { useClientsStore } from "../stores/clients.js";
 import { useConfirm } from "../composables/useConfirm.js";
+import {usePersistedTableState} from "../composables/useTableState.js";
+import {pickOne} from "../shared/tableState";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
 import {useDevModal} from "../composables/useDevModal.js";
@@ -450,6 +452,16 @@ const entityFilter = ref<EntityFilter>("all");
 type ClientSortKey = "display_name" | "contact_person" | "email" | "phone" | "doc_count";
 const sortKey = ref<ClientSortKey>("display_name");
 const sortDir = ref<"asc" | "desc">("asc");
+
+// Remember the entity filter and sort between visits (search text is left out).
+usePersistedTableState("clients", {
+  snapshot: () => ({ entity: entityFilter.value, sortKey: sortKey.value, sortDir: sortDir.value }),
+  restore: (saved) => {
+    entityFilter.value = pickOne(saved.entity, ["all", "person", "company"] as EntityFilter[], "all");
+    sortKey.value = pickOne(saved.sortKey, ["display_name", "contact_person", "email", "phone", "doc_count"] as ClientSortKey[], "display_name");
+    sortDir.value = pickOne(saved.sortDir, ["asc", "desc"] as const, "asc");
+  },
+});
 
 function clientSortValue(row: Client, key: ClientSortKey): string | number {
   if (key === "doc_count") return Number(row.doc_count ?? 0);

@@ -66,13 +66,13 @@ const items = computed<Item[]>(() => {
   const list: Item[] = [];
   const canImport = planAllowsDocumentImport(plan.value);
   if (canImport) {
-    list.push({id: "emailIn", businessOnly: true, locked: !planAllowsEmailIn(plan.value), action: () => router.push(href("/profile")), tour: "profile"});
+    list.push({id: "emailIn", businessOnly: true, locked: !planAllowsEmailIn(plan.value), action: () => router.push({path: href("/profile"), query: {section: "settings"}}), tour: "profile"});
     list.push({id: "camera", action: () => emit("upload")});
     if (featuresStore.hasFeature(FEATURES.pages.discovery)) {
       list.push({id: "discovery", action: () => router.push(href("/discover-reminders")), tour: "discovery"});
     }
   }
-  list.push({id: "feed", businessOnly: true, locked: !planAllowsGoogleCalendar(plan.value), action: () => router.push(href("/profile")), tour: "profile"});
+  list.push({id: "feed", businessOnly: true, locked: !planAllowsGoogleCalendar(plan.value), action: () => router.push({path: href("/profile"), query: {section: "settings"}}), tour: "profile"});
   list.push({id: "push"});
   if (canImport) list.push({id: "dueSoon"});
   return list;
@@ -89,7 +89,8 @@ function startTour(item: Item) {
   const tourId = item.tour;
   if (!tourId) return;
   // Tours run on the page that holds their targets, so go there first.
-  void router.push(href(tourId === "discovery" ? "/discover-reminders" : "/profile")).then(() => {
+  const target = tourId === "discovery" ? {path: href("/discover-reminders")} : {path: href("/profile"), query: {section: "settings"}};
+  void router.push(target).then(() => {
     setTimeout(() => walkthrough.startTour(tourId), 700);
   });
 }

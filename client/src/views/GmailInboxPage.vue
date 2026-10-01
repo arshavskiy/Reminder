@@ -743,6 +743,8 @@ import { useAuthStore } from "../stores/auth.js";
 import type { DocTemplate } from "../shared/types.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {usePersistedTableState} from "../composables/useTableState.js";
+import {asString, decodeDateRange, encodeDateRange, pickOne} from "../shared/tableState";
 import {useDevModal} from "../composables/useDevModal.js";
 import GmailLogo from "../components/GmailLogo.vue";
 import GmailImportJobStatus from "../components/GmailImportJobStatus.vue";
@@ -858,6 +860,16 @@ const filterType = ref<string>("none");
 const filterSender = ref<string | null>(null);
 const filterDateRange = ref<[number, number] | null>(null);
 const filterIdentifierText = ref("");
+// Remember the filter type, sender and date range (identifier text is left out).
+usePersistedTableState("gmail-inbox", {
+  snapshot: () => ({ type: filterType.value, sender: filterSender.value, dateRange: encodeDateRange(filterDateRange.value) }),
+  restore: (saved) => {
+    filterType.value = pickOne(saved.type, ["none", "sender", "date", "inspection"], "none");
+    filterSender.value = asString(saved.sender);
+    const range = decodeDateRange(saved.dateRange);
+    if (range !== undefined) filterDateRange.value = range;
+  },
+});
 const senderProviders = ref<GmailSearchProvider[]>([]);
 
 const filterTypeOptions = computed<SelectOption[]>(() => [

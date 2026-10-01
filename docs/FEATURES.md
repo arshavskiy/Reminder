@@ -820,6 +820,14 @@ Color-coded view of certificate expiry dates overlaid on the existing reminder c
 
 `sessionStorage`-backed filter persistence per page. `readRememberedFilter` / `writeRememberedFilter` helpers save the selected filter tab key, surviving in-session navigation without polluting permanent storage.
 
+### Saved table views
+
+- Table pages remember the user's selections between visits in `localStorage`, per user and page (`ui.table.<userId>.<page>`): Invoices, Documents, Reminders, Clients, Equipment, Activity log, Gmail inbox and Expense analytics. Saved: filters, date range, sort column and direction, page size and list/grid view. Free-text search is not saved, so a forgotten term never makes a list look empty
+- Date ranges are saved as a preset id (a "3m" stays the trailing three months) or as explicit dates; an explicit "all time" is distinct from never having chosen
+- Invoices opens on the last 3 months until the user picks something else
+- Code: `shared/tableState.ts` (pure helpers, tested in `tableState.test.ts`), `composables/useTableState.ts` (`usePersistedTableState`, `useTableSort`). Saved values are validated on restore, so stale options fall back to defaults
+- Views are stored in the browser, so they do not follow the user to another device
+
 
 
 ---
@@ -1278,7 +1286,7 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 
 #### Camera capture and share-to-app
 
-- Upload modal "take photo" input (`capture="environment"`)
+- Upload modal "take photo" input (`capture="environment"`), shown only on touch devices (`(pointer: coarse) and (hover: none)`); hidden on desktop
 - PWA `share_target` (POST `/share-target`; pdf, png, jpeg, tiff): service worker stores files in Cache `remindocr-shared-files`, redirects to `/dashboard?shared=1`, dashboard opens the upload modal with them
 - Works on installed Android Chrome PWA; not iOS Safari
 

@@ -813,6 +813,9 @@ import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
 import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useConfirm} from "../composables/useConfirm.js";
+import {usePersistedTableState} from "../composables/useTableState.js";
+import {resolveDateRangePreset} from "../shared/dateRangePresets";
+import {asString, asStringArray, decodeDateRange, encodeDateRange, pickOne} from "../shared/tableState";
 
 const router = useRouter();
 const {l, dir, t, locale} = useI18n();
@@ -849,7 +852,8 @@ const importingInlineId = ref<string | null>(null);
 const viewMode = ref<"cards" | "table">("table");
 const invoiceUploadInput = ref<HTMLInputElement | null>(null);
 const selectedInvoiceIds = ref(new Set<string>());
-const dateRange = ref<[number, number] | null>(null);
+// Opens on the last three months; a saved choice (including all time) replaces it below.
+const dateRange = ref<[number, number] | null>(resolveDateRangePreset("3m"));
 const page = ref(1);
 const pageSize = ref(20);
 type InvoiceSortKey = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount";
@@ -872,6 +876,41 @@ const filters = reactive({
   currency: null as string | null,
   suppliers: [] as string[],
   duplicatesOnly: false,
+});
+// Remember the filters, date range, sort and page size between visits. Free-text
+// search is left out on purpose: a forgotten search term makes the list look empty.
+const PAGE_SIZES = [10, 20, 50, 100] as const;
+const SORT_KEYS: InvoiceSortKey[] = ["supplier", "status", "date", "client", "category", "type", "amount"];
+usePersistedTableState("invoices", {
+  snapshot: () => ({
+    status: filters.status,
+    type: filters.type,
+    documentCategory: filters.documentCategory,
+    cashFlow: filters.cashFlow,
+    category: filters.category,
+    currency: filters.currency,
+    suppliers: [...filters.suppliers],
+    duplicatesOnly: filters.duplicatesOnly,
+    dateRange: encodeDateRange(dateRange.value),
+    sortBy: sortBy.value,
+    sortDir: sortDir.value,
+    pageSize: pageSize.value,
+  }),
+  restore: (saved) => {
+    filters.status = asString(saved.status);
+    filters.type = asString(saved.type);
+    filters.documentCategory = asString(saved.documentCategory) as typeof filters.documentCategory;
+    filters.cashFlow = asString(saved.cashFlow);
+    filters.category = asString(saved.category);
+    filters.currency = asString(saved.currency);
+    filters.suppliers = asStringArray(saved.suppliers);
+    filters.duplicatesOnly = saved.duplicatesOnly === true;
+    const range = decodeDateRange(saved.dateRange);
+    if (range !== undefined) dateRange.value = range;
+    sortBy.value = pickOne(saved.sortBy, SORT_KEYS, "date");
+    sortDir.value = pickOne(saved.sortDir, ["asc", "desc"] as const, "desc");
+    pageSize.value = pickOne(saved.pageSize, PAGE_SIZES, 20);
+  },
 });
 const businessModal = reactive({
   show: false,

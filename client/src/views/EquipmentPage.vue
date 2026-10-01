@@ -408,6 +408,8 @@ import type {EquipmentHistoryEvent} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {useI18n} from "../composables/useI18n.js";
+import {usePersistedTableState} from "../composables/useTableState.js";
+import {asString} from "../shared/tableState";
 import {useDevModal} from "../composables/useDevModal.js";
 import type {Client, Equipment, EquipmentCategory} from "@shared/types.js";
 import XlsxImportModal from "../components/XlsxImportModal.vue";
@@ -468,6 +470,16 @@ const stats = ref<Record<string, number>>({});
 const clients = ref<Client[]>([]);
 const loading = ref(false);
 const search = ref("");
+
+// Remember the category, manufacturer and client filters between visits (search text is left out).
+usePersistedTableState("equipment", {
+  snapshot: () => ({ category: category.value, manufacturer: filterManufacturer.value, clientId: filterClientId.value }),
+  restore: (saved) => {
+    category.value = (asString(saved.category, "all") ?? "all") as EquipmentCategory | "all";
+    filterManufacturer.value = asString(saved.manufacturer);
+    filterClientId.value = asString(saved.clientId);
+  },
+});
 
 const manufacturerOptions = computed<SelectOption[]>(() => {
   const names = [...new Set(rows.value.map((r) => r.manufacturer).filter(Boolean))] as string[];
