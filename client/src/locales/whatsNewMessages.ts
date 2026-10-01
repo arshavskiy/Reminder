@@ -2,7 +2,7 @@
 // when adding a batch of items: every user then sees the card once more.
 export const WHATS_NEW_RELEASE = "2026-10";
 
-export type WhatsNewItemId = "emailIn" | "camera" | "discovery" | "feed" | "push" | "dueSoon";
+export type WhatsNewItemId = "emailIn" | "camera" | "discovery" | "feed" | "push" | "dueSoon" | "tableViews";
 
 type ItemText = { title: string; text: string; action?: string };
 type Messages = {
@@ -28,6 +28,7 @@ export const whatsNewMessages: Record<"he" | "en", Messages> = {
       feed: { title: "פיד יומן ל-Apple ול-Outlook", text: "מנוי יומן לקריאה בלבד שמציג את התזכורות בכל אפליקציית יומן.", action: "קבלת הקישור" },
       push: { title: "התראות בדפדפן", text: "בפעמון בראש העמוד אפשר להפעיל התראות על תזכורות שנשלחו ועל מועדים חדשים." },
       dueSoon: { title: "חשבוניות לתשלום בקרוב", text: "בלוח הראשי מופיעות חשבוניות שמועד התשלום שלהן קרוב, עם הוספת תזכורת בלחיצה." },
+      tableViews: { title: "הטבלאות זוכרות את הבחירות שלכם", text: "סינונים, טווח תאריכים, מיון וגודל עמוד נשמרים בכל טבלה, ועמוד החשבוניות נפתח על שלושת החודשים האחרונים." },
     },
   },
   en: {
@@ -43,6 +44,7 @@ export const whatsNewMessages: Record<"he" | "en", Messages> = {
       feed: { title: "Calendar feed for Apple and Outlook", text: "A read-only calendar subscription that shows your reminders in any calendar app.", action: "Get the link" },
       push: { title: "Browser notifications", text: "Use the bell at the top of the page to turn on alerts for sent reminders and new discoveries." },
       dueSoon: { title: "Invoices due soon", text: "The dashboard lists invoices whose payment date is near, with one-click add-reminder." },
+      tableViews: { title: "Tables remember your choices", text: "Filters, date range, sort and page size are saved on each table, and Invoices opens on the last 3 months." },
     },
   },
 };

@@ -75,6 +75,7 @@ const items = computed<Item[]>(() => {
   list.push({id: "feed", businessOnly: true, locked: !planAllowsGoogleCalendar(plan.value), action: () => router.push({path: href("/profile"), query: {section: "settings"}}), tour: "profile"});
   list.push({id: "push"});
   if (canImport) list.push({id: "dueSoon"});
+  list.push({id: "tableViews"});
   return list;
 });
 
