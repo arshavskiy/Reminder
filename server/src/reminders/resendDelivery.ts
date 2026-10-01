@@ -135,6 +135,14 @@ export function registerResendWebhook(app: express.Application): void {
           },
           secret,
         } as any) as ResendDeliveryEvent;
+        if ((event as { type?: string }).type === "email.received") {
+          // Acknowledge first: importing can take a while and Resend retries a
+          // slow webhook. The handler claims the email id, so a retry is a no-op.
+          res.json({ ok: true });
+          const { processInboundEvent } = await import("../inbound/inboundDeps");
+          void processInboundEvent(event);
+          return;
+        }
         await handleResendDeliveryEvent(event);
         res.json({ ok: true });
       } catch (err) {

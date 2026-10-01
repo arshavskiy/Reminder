@@ -22,6 +22,13 @@ import type {
   UserSettings,
 } from "../../src/shared/types.js";
 
+export interface InboundEmailStatus {
+  configured: boolean;
+  allowed: boolean;
+  enabled: boolean;
+  address: string | null;
+}
+
 export interface InvoiceDueSoon {
   id: string;
   supplier_name: string | null;
@@ -1432,6 +1439,12 @@ export const api = {
     feedStatus: () => get<{ allowed: boolean; enabled: boolean; path: string | null }>("/calendar/feed/status", true),
     feedEnable: () => post<{ enabled: boolean; path: string }>("/calendar/feed/token", {}),
     feedDisable: () => del("/calendar/feed"),
+  },
+
+  inboundEmail: {
+    status: () => get<InboundEmailStatus>("/inbound-email/status", true),
+    enable: () => post<InboundEmailStatus>("/inbound-email/token", {}),
+    disable: () => del("/inbound-email"),
   },
 
   drive: {
