@@ -40,6 +40,8 @@ export interface TierFeatureFlags {
     gmailInvoiceHistoryMonths: number | null;
     googleDriveSync: boolean;
     googleCalendarSync: boolean;
+    /** Personal forwarding address for documents. Business only. */
+    emailIn: boolean;
     automaticEmailReminders: boolean;
     automaticMonthlyReports: boolean;
     excelExport: boolean;
@@ -81,6 +83,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: false,
         googleCalendarSync: false,
+        emailIn: false,
         automaticEmailReminders: false,
         automaticMonthlyReports: false,
         excelExport: false,
@@ -94,6 +97,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInvoiceHistoryMonths: 1,
         googleDriveSync: true,
         googleCalendarSync: false,
+        emailIn: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
@@ -109,6 +113,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: false,
         googleCalendarSync: false,
+        emailIn: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
@@ -122,6 +127,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: true,
         googleCalendarSync: false,
+        emailIn: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
@@ -135,6 +141,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInvoiceHistoryMonths: 36,
         googleDriveSync: true,
         googleCalendarSync: true,
+        emailIn: true,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
         excelExport: true,
@@ -230,6 +237,12 @@ export function planAllowsGoogleDrive(planId: PlanId | string | null | undefined
 /** Google Calendar sync is a business-plan feature. */
 export function planAllowsGoogleCalendar(planId: PlanId | string | null | undefined): boolean {
     return tierFeatureFlags(planId).googleCalendarSync;
+}
+
+/** Email-in (a personal address to forward documents to) is a business-plan feature. */
+export function planAllowsEmailIn(planId: PlanId | string | null | undefined): boolean {
+    const flags = tierFeatureFlags(planId);
+    return flags.emailIn && flags.documentImport;
 }
 
 export function planAllowsAutomaticEmailReminders(planId: PlanId | string | null | undefined): boolean {

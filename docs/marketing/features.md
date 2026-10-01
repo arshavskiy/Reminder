@@ -27,7 +27,9 @@ Bring business documents, important dates and email reminders into one workflow.
 - Configure advance reminders; send client email reminders and use reusable email templates.
 - Review reminder records and delivery state; use dashboard summaries and an expiry calendar.
 - In-app notifications with read/unread controls; browser push requires configuration and permission.
-- Google Calendar integration on Business with a connected Google account.
+- Google Calendar integration on Business with a connected Google account, plus a subscribable calendar feed (ICS) for Apple and Outlook.
+- Email-in on Business: a personal address that imported documents are forwarded to.
+- Camera capture and share-to-app from a phone; weekly reminder discovery in the mailbox (Hebrew, English, Russian) with alerts.
 
 ### Clients and everyday operations
 
@@ -78,7 +80,9 @@ Bring business documents, important dates and email reminders into one workflow.
 | Users / connected email accounts | 2 / 2 | 2 / 0 | 2 / 2 | Unlimited / unlimited |
 | Inspection Gmail history | 16 months | None | 16 months | 24 months |
 | Invoice Gmail history | 1 month (runtime trial allowance) | None | None | 36 months |
-| Google Calendar / field work | No | No | No | Yes |
+| Google Calendar / calendar feed / field work | No | No | No | Yes |
+| Email-in (forward documents to a personal address) | No | No | No | Yes |
+| Camera capture, share-to-app, weekly discovery scan | Yes | No | Yes | Yes |
 
 Upload and Gmail imports share the quota. Trial quota is total across the trial, not monthly. No credit card is required for the trial. Prices and subscription terms are confirmed before payment; existing customers retain agreed terms. Unlimited describes the catalog entitlement, not a processing-speed or service-level guarantee.
 

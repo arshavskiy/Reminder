@@ -6,6 +6,7 @@
         {{ l.dashboard.completeSetup }}
       </button>
     </div>
+    <WhatsNewCard @upload="showUploadModal = true" />
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div
@@ -339,6 +340,7 @@ import {type FeatureKey, FEATURES} from "../shared/features.js";
 import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import UploadModal from "../components/UploadModal.vue";
+import WhatsNewCard from "../components/WhatsNewCard.vue";
 import type { UploadOptions } from "../components/UploadModal.vue";
 import ExtractRemindersModal from "../components/ExtractRemindersModal.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";

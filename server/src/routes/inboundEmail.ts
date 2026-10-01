@@ -2,7 +2,7 @@ import express from "express";
 import { randomBytes } from "crypto";
 import { col } from "../db/db";
 import { HTTPException, requireAuth } from "../auth/middleware";
-import { effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
+import { effectivePlanId, planAllowsEmailIn, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 import { inboundAddress } from "../inbound/inboundEmail";
 import { inboundEmailDomain } from "../inbound/inboundDeps";
 
@@ -31,7 +31,7 @@ export function registerInboundEmailRoutes(app: express.Application) {
     const token = typeof row?.inbound_email_token === "string" ? row.inbound_email_token : null;
     res.json({
       configured: Boolean(inboundEmailDomain()),
-      allowed: planAllowsDocumentImport(auth.plan),
+      allowed: planAllowsEmailIn(auth.plan),
       enabled: Boolean(token),
       address: address(token),
     });
@@ -45,8 +45,8 @@ export function registerInboundEmailRoutes(app: express.Application) {
       res.status(503).json({ error: "inbound_email_not_configured" });
       return;
     }
-    if (!planAllowsDocumentImport(auth.plan)) {
-      res.status(403).json({ error: "plan_no_document_import", message: PLAN_GATE_MESSAGES.documentImport });
+    if (!planAllowsEmailIn(auth.plan)) {
+      res.status(403).json({ error: "plan_no_email_in", message: PLAN_GATE_MESSAGES.emailIn });
       return;
     }
     const token = randomBytes(12).toString("hex");
@@ -58,6 +58,6 @@ export function registerInboundEmailRoutes(app: express.Application) {
     const auth = await authedUser(req, res);
     if (!auth) return;
     await col<any>("user_settings").updateOne({ user_id: auth.userId }, { $unset: { inbound_email_token: "" } });
-    res.json({ configured: Boolean(inboundEmailDomain()), allowed: planAllowsDocumentImport(auth.plan), enabled: false, address: null });
+    res.json({ configured: Boolean(inboundEmailDomain()), allowed: planAllowsEmailIn(auth.plan), enabled: false, address: null });
   });
 }

@@ -20,6 +20,12 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Plans and Announcements
+
+- Made email-in a Business-plan feature (`emailIn` tier flag, server and client mirror); other plans see a Business-plan hint on the Profile card.
+- Added a dashboard What's new card (dismissal stored in `user_settings.whats_new_seen`) and `profile` / `discovery` walkthrough tours.
+- Added email-in, calendar feed, camera/share and the weekly scan to the plan feature lists and landing pages.
+
 ### API Documentation and Tests
 
 - Documented every API route in `docs/openapi.yaml` (was 36 of about 300) with a coverage test that fails on any undocumented route; added `scripts/openapiGenerate.ts` and refreshed servers, tags and intro.

@@ -74,3 +74,19 @@ describe("PUT /api/user-settings — discovery fields", () => {
     expect(rows("user_settings")[0].discovery_auto_scan).toBe(false);
   });
 });
+
+describe("PUT /api/user-settings — whats_new_seen", () => {
+  it("stores the dismissed release id", async () => {
+    const res = await put({ whats_new_seen: "2026-10" });
+    expect(res.status).toBe(200);
+    expect((await res.json()).whats_new_seen).toBe("2026-10");
+    expect(rows("user_settings")[0].whats_new_seen).toBe("2026-10");
+  });
+
+  it("rejects ids that are not short release tokens", async () => {
+    for (const bad of ["<script>alert(1)</script>", "x".repeat(40), "two words"]) {
+      expect((await put({ whats_new_seen: bad })).status).toBe(400);
+    }
+    expect(rows("user_settings")).toHaveLength(0);
+  });
+});

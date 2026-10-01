@@ -58,12 +58,21 @@ describe("email-in routes", () => {
     expect((await res.json()).error).toBe("inbound_email_not_configured");
   });
 
-  it("refuses plans without document import", async () => {
-    mocks.user = { plan: "trial", trial_ends_at: "2020-01-01T00:00:00Z" };
-    const res = await call("POST", "/api/inbound-email/token");
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("plan_no_document_import");
+  it("is a business feature: basic and lapsed-trial plans are refused", async () => {
+    for (const user of [{ plan: "basic" }, { plan: "trial", trial_ends_at: "2020-01-01T00:00:00Z" }]) {
+      mocks.user = user;
+      const status = await (await call("GET", "/api/inbound-email/status")).json();
+      expect(status.allowed).toBe(false);
+      const res = await call("POST", "/api/inbound-email/token");
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toBe("plan_no_email_in");
+    }
     expect(rows("user_settings")).toHaveLength(0);
+  });
+
+  it("lets admins use it whatever their stored plan", async () => {
+    mocks.user = { plan: "basic", role: "admin" };
+    expect((await call("POST", "/api/inbound-email/token")).status).toBe(200);
   });
 
   it("creates an address, shows it in status and rotates it", async () => {

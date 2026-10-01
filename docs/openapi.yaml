@@ -1216,6 +1216,12 @@ paths:
                       - en
                       - ru
                   description: Languages used by the weekly scan
+                whats_new_seen:
+                  type: string
+                  nullable: true
+                  pattern: ^[\w.-]{1,32}$
+                  example: 2026-10
+                  description: Release id of the last What's new card the user dismissed
               additionalProperties: true
       responses:
         "200":
@@ -5570,13 +5576,16 @@ paths:
                     example: error
                   message:
                     type: string
+      description: "`allowed` is true on the business plan (and admin). `configured`
+        is false when INBOUND_EMAIL_DOMAIN is not set."
   /api/inbound-email/token:
     post:
       summary: "Email-in: create or rotate the forwarding address"
       tags:
         - Email-in
-      description: Address is `in+<24 hex>@<INBOUND_EMAIL_DOMAIN>`. Rotating makes the
-        previous address stop working.
+      description: Business plan only. Address is `in+<24
+        hex>@<INBOUND_EMAIL_DOMAIN>`. Rotating makes the previous address stop
+        working.
       responses:
         "200":
           description: Address created or rotated
@@ -5616,7 +5625,7 @@ paths:
                   message:
                     type: string
         "403":
-          description: Plan does not allow document import
+          description: Plan does not include email-in (business only)
           content:
             application/json:
               schema:
@@ -5624,7 +5633,7 @@ paths:
                 properties:
                   error:
                     type: string
-                    example: plan_no_document_import
+                    example: plan_no_email_in
                   message:
                     type: string
         "503":

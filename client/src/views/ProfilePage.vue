@@ -714,7 +714,7 @@
                   </div>
                 </div>
 
-                <div v-if="calendarAllowed" class="settings-subrow">
+                <div v-if="calendarAllowed" class="settings-subrow tour-feed">
                   <span class="settings-panel__label">{{ l.profileSettings.feedTitle }}</span>
                   <p class="settings-row__desc">{{ l.profileSettings.feedHint }}</p>
                   <div v-if="calendarFeed?.enabled && calendarFeedUrl" class="inline-field__row">
@@ -727,7 +727,11 @@
                   <n-button v-else size="small" ghost type="primary" :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedEnable }}</n-button>
                 </div>
 
-                <div v-if="inboundEmail?.configured && inboundEmail.allowed" class="settings-subrow">
+                <div v-if="inboundEmail?.configured && !inboundEmail.allowed" class="settings-subrow">
+                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.inboundBusinessOnly }}</p>
+                </div>
+                <div v-if="inboundEmail?.configured && inboundEmail.allowed" class="settings-subrow tour-inbound">
                   <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
                   <p class="settings-row__desc">{{ l.profileSettings.inboundHint }}</p>
                   <div v-if="inboundEmail.enabled && inboundEmail.address" class="inline-field__row">

@@ -9,7 +9,7 @@ import { isFeatureEnabledForUser } from "../features";
 import { importFile } from "../pipeline/importer";
 import { mainDocumentsFilter } from "../documents/documentVisibility";
 import { releaseTempFile, tempDir } from "../storage/tempFiles";
-import { effectivePlanId, planAllowsDocumentImport } from "../plans/tierFeatures";
+import { effectivePlanId, planAllowsEmailIn } from "../plans/tierFeatures";
 import { assertDocumentImportQuota, DocumentImportQuotaError } from "../quotas/documentImportQuota";
 import { scanInlineEmailForObligation } from "../gmail/inlineObligationScan";
 import { discoveryId, persistDiscovery, plainEmailHtml } from "../gmail/discoveryStore";
@@ -41,7 +41,7 @@ export function createInboundDeps(): InboundDeps {
       try { user = await col<any>("users").findOne({ _id: new ObjectId(String(settings.user_id)) } as any); } catch { /* unknown user */ }
       if (!user) return null;
       const plan = effectivePlanId(user);
-      return { userId: String(settings.user_id), plan, importAllowed: planAllowsDocumentImport(plan) };
+      return { userId: String(settings.user_id), plan, importAllowed: planAllowsEmailIn(plan) };
     },
 
     async claimEmail(emailId, userId) {

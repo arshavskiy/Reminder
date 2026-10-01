@@ -1254,6 +1254,13 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 - Push sent when a reminder email is sent (`notifyOwnerReminderSent`) and on new discoveries
 - Needs VAPID keys (not set on dev)
 
+### What's new card and tours
+
+- Dashboard card (`WhatsNewCard.vue`, messages in `locales/whatsNewMessages.ts`) lists the new features once per release; dismissal is stored per user as `user_settings.whats_new_seen` (`PUT /api/user-settings`). Bump `WHATS_NEW_RELEASE` to show it again
+- Business-only items show a plan tag instead of a button on other plans; the weekly scan item appears only when `pages.discovery` is on
+- Walkthrough tours `profile` (email-in, calendar feed) and `discovery` (weekly scan) start from the card
+- Plan lists and landing pages (`client/src/shared/pricingCatalog.json`, `npm run pricing:sync`) mention email-in, calendar feed, camera/share and the weekly scan
+
 ### Navigation and Tables
 
 - הוצאות sidebar sub-pages: invoices table and expenses graph
@@ -1277,7 +1284,7 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 
 #### Email-in
 
-- Per-user address `in+<24hex>@in.remindocr.com` (token in `user_settings`); profile card "העברת מסמכים בדואר" with copy, rotate, disable; hidden unless `INBOUND_EMAIL_DOMAIN` is set
+- **Business plan only** (`emailIn` tier flag, also admin; the Profile card shows a Business-plan hint on other plans). Per-user address `in+<24hex>@in.remindocr.com` (token in `user_settings`); profile card "העברת מסמכים בדואר" with copy, rotate, disable; hidden unless `INBOUND_EMAIL_DOMAIN` is set
 - Routes: `GET /api/inbound-email/status`, `POST /token`, `DELETE /api/inbound-email`
 - Flow: Resend `email.received` webhook (`/api/webhooks/resend`, Svix-verified) -> `inbound/inboundEmail.ts` claims the email id (idempotent), skips auto-replies, imports PDF/image attachments via `importFile` (hash dedup, document quota enforced); body-only mail goes to the inline receipt parser and discovery; then notification + push
 - Limits: 10 attachments, 20MB, 50 emails per day per user; a failed run releases the claim so a replay works

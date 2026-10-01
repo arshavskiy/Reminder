@@ -1094,7 +1094,7 @@ export const api = {
 
   userSettings: {
     get: () => get<UserSettings>("/user-settings"),
-    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features" | "discovery_auto_scan" | "discovery_langs">>) =>
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features" | "discovery_auto_scan" | "discovery_langs" | "whats_new_seen">>) =>
       put<UserSettings>("/user-settings", body),
   },
 

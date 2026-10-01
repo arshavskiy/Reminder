@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPlanEntitlements } from "../plans/planEntitlements";
-import { TIER_FEATURE_FLAGS, featureFlagsForUser } from "../plans/tierFeatures";
+import { TIER_FEATURE_FLAGS, featureFlagsForUser, planAllowsEmailIn } from "../plans/tierFeatures";
 
 describe("plan entitlements", () => {
     it("treats a lapsed trial as expired for quotas and import flags", () => {
@@ -99,5 +99,15 @@ describe("plan entitlements", () => {
       excelExport: true,
       maxUsers: TIER_FEATURE_FLAGS.business.maxUsers,
     });
+  });
+});
+
+describe("email-in entitlement", () => {
+  it("is on for business and admin only", () => {
+    expect(planAllowsEmailIn("business")).toBe(true);
+    expect(planAllowsEmailIn("admin")).toBe(true);
+    for (const plan of ["expired", "trial", "digital", "basic"]) expect(planAllowsEmailIn(plan)).toBe(false);
+    expect(buildPlanEntitlements({ plan: "business" }).emailIn).toBe(true);
+    expect(buildPlanEntitlements({ plan: "basic" }).emailIn).toBe(false);
   });
 });
