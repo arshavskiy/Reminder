@@ -1429,6 +1429,9 @@ export const api = {
     sync: () => post<{ pushed: number; updated: number; cancelled: number }>("/calendar/sync", {}),
     disconnect: () => post<{ ok: boolean }>("/calendar/disconnect", {}),
     rename: (name: string) => post<{ ok: boolean; name: string; synced: boolean }>("/calendar/name", {name}),
+    feedStatus: () => get<{ allowed: boolean; enabled: boolean; path: string | null }>("/calendar/feed/status", true),
+    feedEnable: () => post<{ enabled: boolean; path: string }>("/calendar/feed/token", {}),
+    feedDisable: () => del("/calendar/feed"),
   },
 
   drive: {

@@ -30,7 +30,7 @@ const PROP_SOURCE_ID = "reminderAppSourceId";
 const EVENT_SUMMARY_PREFIX = "תסקיר לא בתוקף";
 
 /** Reminder statuses worth putting on a calendar. */
-const SYNCABLE_STATUSES = ["pending", "snoozed", "triggered"];
+export const SYNCABLE_STATUSES = ["pending", "snoozed", "triggered"];
 
 function toObjectId(value: unknown): any {
   try { return new ObjectId(String(value)); } catch { return value; }
@@ -89,7 +89,7 @@ export function calendarKindOf(reminder: any, link?: { gtask_id?: unknown; gcal_
   return isPersonalReminder(reminder) ? "task" : "event";
 }
 
-function buildEventSummary(reminder: any): string {
+export function buildEventSummary(reminder: any): string {
   if (isPersonalReminder(reminder)) {
     const title = String(reminder.title ?? "").trim();
     return title || "תזכורת אישית";

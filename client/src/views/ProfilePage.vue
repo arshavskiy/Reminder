@@ -714,6 +714,19 @@
                   </div>
                 </div>
 
+                <div v-if="calendarAllowed" class="settings-subrow">
+                  <span class="settings-panel__label">{{ l.profileSettings.feedTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.feedHint }}</p>
+                  <div v-if="calendarFeed?.enabled && calendarFeedUrl" class="inline-field__row">
+                    <n-input :value="calendarFeedUrl" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
+                    <n-button size="small" ghost @click="copyCalendarFeed">{{ l.profileSettings.feedCopy }}</n-button>
+                    <n-button size="small" ghost tag="a" :href="calendarFeedWebcal">{{ l.profileSettings.feedOpen }}</n-button>
+                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedRotate }}</n-button>
+                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="disableCalendarFeed">{{ l.profileSettings.feedDisable }}</n-button>
+                  </div>
+                  <n-button v-else size="small" ghost type="primary" :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedEnable }}</n-button>
+                </div>
+
                 <div v-if="calendarAllowed && calendarStatus?.connected" class="settings-subrow">
                   <label class="settings-panel__label" for="calendar-name">{{ l.profileSettings.calendarNameLabel }}</label>
                   <div class="inline-field__row">
@@ -2120,8 +2133,35 @@ async function loadDriveStatus() {
   }
 }
 
+const calendarFeed = ref<{ enabled: boolean; path: string | null } | null>(null);
+const calendarFeedBusy = ref(false);
+const calendarFeedUrl = computed(() =>
+  calendarFeed.value?.path ? `${window.location.origin}${calendarFeed.value.path}` : "",
+);
+const calendarFeedWebcal = computed(() => calendarFeedUrl.value.replace(/^https?:/, "webcal:"));
+async function loadCalendarFeed() {
+  try { calendarFeed.value = await api.calendar.feedStatus(); } catch { calendarFeed.value = null; }
+}
+async function enableCalendarFeed() {
+  calendarFeedBusy.value = true;
+  try { calendarFeed.value = await api.calendar.feedEnable(); }
+  catch { message.error(l.value.profileSettings.feedError); }
+  finally { calendarFeedBusy.value = false; }
+}
+async function disableCalendarFeed() {
+  calendarFeedBusy.value = true;
+  try { await api.calendar.feedDisable(); calendarFeed.value = { enabled: false, path: null }; }
+  catch { message.error(l.value.profileSettings.feedError); }
+  finally { calendarFeedBusy.value = false; }
+}
+async function copyCalendarFeed() {
+  try { await navigator.clipboard.writeText(calendarFeedUrl.value); message.success(l.value.profileSettings.feedCopied); }
+  catch { message.error(l.value.profileSettings.feedError); }
+}
+
 async function loadCalendarStatus() {
   calendarLoading.value = true;
+  void loadCalendarFeed();
   try {
     calendarStatus.value = await api.calendar.status();
     calendarName.value = calendarStatus.value?.calendar_name || DEFAULT_CALENDAR_NAME.value;

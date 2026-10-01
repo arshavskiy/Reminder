@@ -13,7 +13,9 @@ import {
   resolveCalendarToken,
 } from "../calendar/googleCalendar";
 import { TASKS_SCOPE } from "../calendar/googleTasks";
-import { pullCalendarChanges, pushAllReminders } from "../calendar/sync";
+import { buildEventSummary, parseCalendarTime, pullCalendarChanges, pushAllReminders, SYNCABLE_STATUSES } from "../calendar/sync";
+import { buildIcsFeed, type IcsFeedItem } from "../calendar/icsFeed";
+import { randomBytes } from "crypto";
 import { featureFlagsForUser, PLAN_GATE_MESSAGES } from "../plans/tierFeatures";
 
 const GOOGLE_IDENTITY_SCOPE = "openid profile email";
@@ -301,6 +303,91 @@ export function registerCalendarRoutes(app: express.Express) {
     res.json({ ok: true });
   });
 
+  // ── ICS subscription feed ────────────────────────────────────────────────
+  // A read-only feed for Apple/Outlook/any calendar app. The URL holds a random
+  // token that acts as the credential, so it can be rotated or switched off.
+  app.get("/api/calendar/feed/status", async (req, res) => {
+    const userId = await feedUserId(req, res);
+    if (!userId) return;
+    const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    const row = await col<any>("user_settings").findOne({ user_id: userId });
+    const token = typeof row?.calendar_feed_token === "string" ? row.calendar_feed_token : null;
+    res.json({
+      allowed: featureFlagsForUser(user).googleCalendarSync,
+      enabled: Boolean(token),
+      path: token ? `/api/calendar/feed/${token}.ics` : null,
+    });
+  });
+
+  // POST /api/calendar/feed/token — create the feed, or rotate its token.
+  app.post("/api/calendar/feed/token", async (req, res) => {
+    const userId = await feedUserId(req, res);
+    if (!userId) return;
+    const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+    if (!featureFlagsForUser(user).googleCalendarSync) {
+      res.status(403).json({ error: "calendar_plan_required", message: PLAN_GATE_MESSAGES.calendar });
+      return;
+    }
+    const token = randomBytes(32).toString("hex");
+    await col<any>("user_settings").updateOne({ user_id: userId }, { $set: { calendar_feed_token: token } }, { upsert: true });
+    res.json({ enabled: true, path: `/api/calendar/feed/${token}.ics` });
+  });
+
+  // DELETE /api/calendar/feed — switch the feed off; the old URL stops working.
+  app.delete("/api/calendar/feed", async (req, res) => {
+    const userId = await feedUserId(req, res);
+    if (!userId) return;
+    await col<any>("user_settings").updateOne({ user_id: userId }, { $unset: { calendar_feed_token: "" } });
+    res.json({ enabled: false, path: null });
+  });
+
+  // GET /api/calendar/feed/<token>.ics — public: the token is the credential.
+  app.get("/api/calendar/feed/:file", async (req, res) => {
+    const match = /^([0-9a-f]{64}).ics$/.exec(String(req.params.file ?? ""));
+    if (!match) {
+      res.status(404).end();
+      return;
+    }
+    try {
+      const row = await col<any>("user_settings").findOne({ calendar_feed_token: match[1] });
+      if (!row?.user_id) {
+        res.status(404).end();
+        return;
+      }
+      const userId = String(row.user_id);
+      const user = await col<any>("users").findOne({ _id: new ObjectId(userId) } as any);
+      // A plan that lost calendar access stops serving, same as the Google sync.
+      if (!user || !featureFlagsForUser(user).googleCalendarSync) {
+        res.status(404).end();
+        return;
+      }
+      const reminders = await col<any>("reminders")
+        .find({ user_id: userId, status: { $in: SYNCABLE_STATUSES } })
+        .sort({ trigger_date: 1 })
+        .limit(1000)
+        .toArray();
+      const items = reminders.flatMap((reminder): IcsFeedItem[] => {
+        const personal = String(reminder.source_type ?? "") === "personal";
+        const date = String((personal ? reminder.expiry_date : null) ?? reminder.trigger_date ?? "").slice(0, 10);
+        if (!date) return [];
+        return [{
+          id: String(reminder._id),
+          date,
+          time: parseCalendarTime(reminder.calendar_time),
+          summary: buildEventSummary(reminder),
+          contractNumber: reminder.contract_number ? String(reminder.contract_number) : null,
+        }];
+      });
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Cache-Control", "private, max-age=900");
+      res.setHeader("Content-Disposition", 'inline; filename="remindocr.ics"');
+      res.send(buildIcsFeed(items, { calendarName: calendarNameForUser(user) }));
+    } catch (err) {
+      logger.error("calendar_feed_failed", { error: String(err) });
+      res.status(500).end();
+    }
+  });
+
   // POST /api/calendar/name — rename the app's calendar. The stored name is the
   // source of truth; pushing to Google is best-effort, since ensureAppCalendar
   // reconciles any drift on the next sync.
@@ -383,4 +470,14 @@ function safeFrontendReturnPath(value: unknown): string | null {
   if (!text || !text.startsWith("/") || text.startsWith("//")) return null;
   if (/[\r\n]/.test(text)) return null;
   return text;
+}
+
+async function feedUserId(req: express.Request, res: express.Response): Promise<string | null> {
+  try {
+    return (await requireAuth(req.headers.cookie)).userId;
+  } catch (e) {
+    const err = e as HTTPException;
+    res.status(err.status ?? 401).json({ error: err.message });
+    return null;
+  }
 }
