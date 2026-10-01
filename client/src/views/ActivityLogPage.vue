@@ -41,7 +41,7 @@
     </div>
 
     <n-data-table
-      :columns="columns"
+      :columns="tableSort.apply(columns)"
       :data="rows"
       :loading="loading"
       :pagination="{ pageSize: 20 }"
@@ -49,6 +49,7 @@
       :scroll-x="980"
       size="small"
       class="activity-table"
+      @update:sorter="tableSort.onUpdate"
     />
   </div>
 </template>
@@ -62,6 +63,8 @@ import {RefreshOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
+import {parseSavedSort, usePersistedTableState, useTableSort} from "../composables/useTableState.js";
+import {pickOne} from "../shared/tableState";
 
 type ActivityRow = {
   id: string;
@@ -87,6 +90,16 @@ const rows = ref<ActivityRow[]>([]);
 const loading = ref(false);
 const kind = ref<KindFilter>(route.query.kind === "document" || route.query.kind === "email" ? route.query.kind : "all");
 const message = useMessage();
+const tableSort = useTableSort({columnKey: "at", order: "descend"});
+
+// Remember the kind filter and sort. A ?kind= link from another page wins over the saved filter.
+usePersistedTableState("activity", {
+  snapshot: () => ({kind: kind.value, sort: tableSort.sort.value}),
+  restore: (saved) => {
+    if (!route.query.kind) kind.value = pickOne(saved.kind, ["all", "email", "document"] as KindFilter[], "all");
+    tableSort.sort.value = parseSavedSort(saved.sort, ["title", "at"]);
+  },
+});
 
 const kindFilters = computed<Array<{ label: string; value: KindFilter }>>(() => [
   {label: l.value.activity.filterAll, value: "all"},

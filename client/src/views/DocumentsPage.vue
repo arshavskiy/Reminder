@@ -807,6 +807,8 @@ import {
   pickBestTemplateForExtraction,
 } from "@shared/missingDocumentFields.js";
 import {readRememberedFilter, writeRememberedFilter} from "@shared/rememberedUi.js";
+import {usePersistedTableState} from "../composables/useTableState.js";
+import {asString, decodeDateRange, encodeDateRange, pickOne} from "../shared/tableState";
 import {confirmActionButtonProps, confirmCancelButtonProps, CONFIRM_DIALOG_CLASS, useConfirm} from "../composables/useConfirm.js";
 import ConfirmDialogHead from "../components/ConfirmDialogHead.vue";
 import HydraulicCheckModal from "../components/contracts/HydraulicCheckModal.vue";
@@ -1210,6 +1212,33 @@ const pageSize = ref(20);
 const currentPage = ref(1);
 watch([search, filterClientId, filterInspectionType, filterDateRange, statusFilter, pageSize, documentSortBy, documentSortDir], () => {
   currentPage.value = 1;
+});
+
+// Remember the filters, sort, page size and view between visits (search text is left out).
+usePersistedTableState("documents", {
+  snapshot: () => ({
+    clientId: filterClientId.value,
+    inspectionType: filterInspectionType.value,
+    dateRange: encodeDateRange(filterDateRange.value),
+    status: statusFilter.value,
+    sortBy: documentSortBy.value,
+    sortDir: documentSortDir.value,
+    pageSize: pageSize.value,
+    viewMode: viewMode.value,
+  }),
+  restore: (saved) => {
+    filterClientId.value = asString(saved.clientId);
+    filterInspectionType.value = asString(saved.inspectionType);
+    const range = decodeDateRange(saved.dateRange);
+    if (range !== undefined) filterDateRange.value = range;
+    const status = pickOne(saved.status, [...DOCUMENT_FILTER_KEYS], "all" as DocumentStatusFilter);
+    statusFilter.value = status;
+    activeFilterKey.value = status;
+    documentSortBy.value = pickOne(saved.sortBy, ["file", "type", "date", "import", "client", "number"] as DocumentSortKey[], "import");
+    documentSortDir.value = pickOne(saved.sortDir, ["asc", "desc"] as const, "desc");
+    pageSize.value = pickOne(saved.pageSize, [10, 20, 50, 100], 20);
+    viewMode.value = pickOne(saved.viewMode, ["grid", "list"] as const, "list");
+  },
 });
 
 // Refetch from server whenever the client filter changes (so we always get

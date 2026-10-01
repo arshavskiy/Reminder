@@ -141,6 +141,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
       s3_store_inspection_reports?: boolean;
       discovery_auto_scan?: boolean;
       discovery_langs?: string[] | string;
+      whats_new_seen?: string | null;
     };
 
     const patch: Record<string, unknown> = {};
@@ -186,6 +187,15 @@ export function registerUserSettingsRoutes(app: express.Application) {
         }
       }
       patch.discovery_auto_scan = enable;
+    }
+    if (body.whats_new_seen !== undefined) {
+      // A release id such as "2026-10"; kept short so it cannot be used to store arbitrary text.
+      const seen = body.whats_new_seen === null ? null : String(body.whats_new_seen).trim();
+      if (seen !== null && !/^[\w.-]{1,32}$/.test(seen)) {
+        res.status(400).json({ error: "invalid_release_id" });
+        return;
+      }
+      patch.whats_new_seen = seen;
     }
     if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
     if (body.s3_store_invoices !== undefined || body.s3_store_inspection_reports !== undefined) {

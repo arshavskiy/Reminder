@@ -67,6 +67,8 @@ Enforced in server code (+ matching disabled UI). Source: `TIER_FEATURE_FLAGS`.
 | OCR / preview / extraction | ✓ | ✓ | ✓ | All plans |
 | Google Drive sync / export | — | ✓ | ✓ | `googleDriveSync` |
 | Google Calendar sync | — | — | ✓ | Marketing + flags: **business only** |
+| ICS calendar feed (Apple / Outlook) | — | — | ✓ | Same entitlement as Google Calendar sync |
+| Email-in (personal forwarding address) | — | — | ✓ | `emailIn` flag: **business only** (and admin); also needs document import |
 | Cloud storage (S3) of files | — | ✓ | ✓ | `s3_store_invoices` / `s3_store_inspection_reports` default **off** on free; toggles disabled in UI |
 | Templates menu (print / email / doc) | — | ✓ | ✓ | Account dropdown submenu hidden on free |
 | Automatic email reminders (scheduler) | — | ✓ | ✓ | Free cannot create reminders at all (quota 0) |

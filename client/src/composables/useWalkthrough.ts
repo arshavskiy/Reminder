@@ -53,6 +53,28 @@ const PAGE_TOUR_MAP: Record<string, string> = {
 };
 
 const TOURS_HE: Record<string, WalkthroughStep[]> = {
+  profile: [
+    {
+      selector: ".tour-inbound",
+      title: "כתובת אישית להעברת מסמכים",
+      text: "מפעילים את הכתובת ומעבירים אליה חשבוניות ותסקירים מכל תיבת דואר. אפשר להחליף או לכבות אותה בכל רגע.",
+      placement: "bottom",
+    },
+    {
+      selector: ".tour-feed",
+      title: "פיד יומן",
+      text: "מעתיקים את הקישור ומוסיפים אותו כמנוי ב-Apple Calendar או ב-Outlook כדי לראות שם את התזכורות.",
+      placement: "bottom",
+    },
+  ],
+  discovery: [
+    {
+      selector: ".auto-scan",
+      title: "סריקה שבועית",
+      text: "הפעילו כדי שהמערכת תסרוק את הדואר פעם בשבוע ותתריע רק על מועדים חדשים, כולל מועדים שפוספסו.",
+      placement: "bottom",
+    },
+  ],
   main: [
     {
       selector: ".app-nav__brand",
@@ -234,6 +256,28 @@ const TOURS_HE: Record<string, WalkthroughStep[]> = {
 };
 
 const TOURS_EN: Record<string, WalkthroughStep[]> = {
+  profile: [
+    {
+      selector: ".tour-inbound",
+      title: "Your personal address for documents",
+      text: "Turn it on and forward invoices and reports to it from any mailbox. You can replace or switch it off at any time.",
+      placement: "bottom",
+    },
+    {
+      selector: ".tour-feed",
+      title: "Calendar feed",
+      text: "Copy the link and add it as a subscription in Apple Calendar or Outlook to see your reminders there.",
+      placement: "bottom",
+    },
+  ],
+  discovery: [
+    {
+      selector: ".auto-scan",
+      title: "Weekly scan",
+      text: "Turn it on to scan your mailbox once a week and be alerted only to new deadlines, including missed ones.",
+      placement: "bottom",
+    },
+  ],
   main: [
     {
       selector: ".app-nav__brand",

@@ -137,6 +137,8 @@ export interface UserSettings extends PipelineFlags {
   discovery_auto_scan?: boolean;
   discovery_langs?: string[];
   discovery_last_scan_at?: string | null;
+  /** Release id of the last What's new card the user dismissed. */
+  whats_new_seen?: string | null;
   /** Keep invoices in object storage. Unset is treated as enabled. */
   s3_store_invoices?: boolean;
   /** Keep inspection reports in object storage. Unset is treated as enabled. */

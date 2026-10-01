@@ -1,5 +1,47 @@
 # Change Log
 
+## 2026-10-01
+
+### Reminder Discovery
+
+- Added Russian support for Gmail obligation search and scan (kind/cue patterns, months, language option); missed deadlines (90 days) shown in their own group.
+- Redesigned the discovery page (stat cards, missed/urgent/upcoming groups, due chips) and added an opt-in weekly auto-scan with notification and push for new finds.
+- Added Moovit/Pango receipt parsing.
+
+### Dashboard and UI
+
+- Added feature-gated module cards, invoice/receipt chips, a due-soon invoices panel, and clickable stat cards.
+- Added הוצאות sidebar sub-pages; hid category/client columns in the reminders table; capped the calendar width.
+- Added user web push (enable/disable in the bell; push on reminder email sent).
+
+### Intake
+
+- Added a subscribable ICS calendar feed (business plan).
+- Added camera capture in the upload modal and PWA share-to-app.
+- Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
+
+### Saved Table Views
+
+- Invoices now opens on the last 3 months by default.
+- Tables remember filters, date range, sort, page size and view per user on Invoices, Documents, Reminders, Clients, Equipment, Activity log, Gmail inbox and Expense analytics.
+
+### Plans and Announcements
+
+- Made email-in a Business-plan feature (`emailIn` tier flag, server and client mirror); other plans see a Business-plan hint on the Profile card.
+- Added a dashboard What's new card (dismissal stored in `user_settings.whats_new_seen`) and `profile` / `discovery` walkthrough tours.
+- Added email-in, calendar feed, camera/share and the weekly scan to the plan feature lists and landing pages.
+
+### API Documentation and Tests
+
+- Documented every API route in `docs/openapi.yaml` (was 36 of about 300) with a coverage test that fails on any undocumented route; added `scripts/openapiGenerate.ts` and refreshed servers, tags and intro.
+- Added route tests for email-in, the ICS feed, user push, weekly-scan settings, due-soon invoices and the Resend webhook.
+- Fixed six stale tests (pricing amounts, redesigned default reminder email, overdue inspection dates are kept as overdue) and raised the Vitest timeout to 30s so the pipeline-heavy suites stop timing out.
+
+### Bug Fixes
+
+- Fixed Resend webhook verification passing `secret` instead of `webhookSecret` (every webhook failed with "Secret can't be empty").
+- Email-in releases its claim on unexpected failure so a replay is not ignored as a duplicate.
+
 ## 2026-09-04
 
 ### Inspection Reports

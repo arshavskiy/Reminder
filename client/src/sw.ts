@@ -28,6 +28,34 @@ if (manifest.some((entry) => entry.url === "index.html")) {
 
 // API requests always hit the network — no cache layer that could go stale.
 
+// ── Web Share Target ──
+// The manifest's share_target posts shared files here. Park them in the Cache
+// API (a service worker cannot open the upload modal) and send the user to the
+// dashboard, which reads them back and opens the modal.
+const SHARED_FILES_CACHE = "remindocr-shared-files";
+self.addEventListener("fetch", (event: FetchEvent) => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== "POST" || url.pathname !== "/share-target") return;
+  event.respondWith((async () => {
+    try {
+      const form = await event.request.formData();
+      const cache = await caches.open(SHARED_FILES_CACHE);
+      for (const key of await cache.keys()) await cache.delete(key);
+      let index = 0;
+      for (const value of form.getAll("files")) {
+        if (typeof value === "string") continue;
+        await cache.put(
+          new Request(`/__shared-files__/${index++}`),
+          new Response(value, { headers: { "Content-Type": value.type, "X-File-Name": encodeURIComponent(value.name) } }),
+        );
+      }
+    } catch {
+      // Fall through to the dashboard; the modal simply opens empty.
+    }
+    return Response.redirect("/dashboard?shared=1", 303);
+  })());
+});
+
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event: ExtendableEvent) => event.waitUntil(self.clients.claim()));
 

@@ -779,6 +779,10 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 24px;
+  /* A compact month view: wide screens would otherwise stretch it past 1000px. */
+  width: 100%;
+  max-width: 880px;
+  margin-inline: auto;
 }
 
 .rcal__head {

@@ -2,6 +2,7 @@ import {describe, expect, it} from "vitest";
 import type {EmailVars} from "../templates/renderEmail.js";
 import {listTemplateVars, renderTemplate} from "../templates/renderEmail.js";
 import {loadReminderTemplate} from "../email-templates/loader.js";
+import {prepareGroupedTemplateHtml} from "../reminders/groupedReminderEmail.js";
 
 describe("renderTemplate", () => {
   it("substitutes a simple variable", () => {
@@ -183,7 +184,9 @@ describe("reminder email templates — full data fill", () => {
     // regex and leak into the sent email as literal text.
     it(`${name}.html has no malformed brace tokens in source`, () => {
       const raw = loadReminderTemplate(name);
-      expect(raw.match(/\{\s+\{|\}\s+\}/g)).toBeNull();
+      // CSS closes nested blocks (media queries) with "}\n}", which is not a token.
+      const markup = raw.replace(/<style[\s\S]*?<\/style>/gi, "");
+      expect(markup.match(/\{\s+\{|\}\s+\}/g)).toBeNull();
     });
 
     for (const [varsLabel, vars] of VAR_SETS) {
@@ -237,21 +240,19 @@ describe("grouped items_table injection in built-in templates", () => {
     expect(rendered).toContain("תזכורת לבדיקה תקופתית");
   });
 
-  it("default.html without items_table omits the grouped table", () => {
+  it("default.html renders the single reminder without a grouped table", () => {
     const rendered = renderTemplate(loadReminderTemplate("default"), TABLE_VARS, { escape: false });
-    expect(rendered).toContain("תזכורת:");
-    expect(rendered).toContain("מן הנדסת חשמל");
+    expect(rendered).toContain("מתקרב מועד הבדיקה התקופתית");
     expect(rendered).not.toContain("פריטים לבדיקה");
     expect(rendered).not.toContain("בתוקף עד");
   });
 
-  it("default.html with items_table injects after the fields table", () => {
-    const rendered = renderTemplate(loadReminderTemplate("default"), {
-      ...TABLE_VARS,
-      items_table: SAMPLE_TABLE,
-    }, { escape: false });
-    expect(rendered.indexOf("פריטים לבדיקה")).toBeGreaterThan(rendered.indexOf("class=\"fields\""));
-    expect(rendered.indexOf("בתוקף עד")).toBeLessThan(rendered.indexOf("class=\"footer\""));
+  it("default.html gets the grouped table injected inside the body", () => {
+    // The template has no {{items_table}} token; grouped sends inject the table.
+    const source = prepareGroupedTemplateHtml(loadReminderTemplate("default"), SAMPLE_TABLE);
+    const rendered = renderTemplate(source, TABLE_VARS, { escape: false });
+    expect(rendered.indexOf("פריטים לבדיקה")).toBeGreaterThan(rendered.indexOf("<body"));
+    expect(rendered).toContain("בתוקף עד");
     expect(rendered).toContain("484590/12100");
   });
 });

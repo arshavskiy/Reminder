@@ -714,6 +714,35 @@
                   </div>
                 </div>
 
+                <div v-if="calendarAllowed" class="settings-subrow tour-feed">
+                  <span class="settings-panel__label">{{ l.profileSettings.feedTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.feedHint }}</p>
+                  <div v-if="calendarFeed?.enabled && calendarFeedUrl" class="inline-field__row">
+                    <n-input :value="calendarFeedUrl" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
+                    <n-button size="small" ghost @click="copyCalendarFeed">{{ l.profileSettings.feedCopy }}</n-button>
+                    <n-button size="small" ghost tag="a" :href="calendarFeedWebcal">{{ l.profileSettings.feedOpen }}</n-button>
+                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedRotate }}</n-button>
+                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="disableCalendarFeed">{{ l.profileSettings.feedDisable }}</n-button>
+                  </div>
+                  <n-button v-else size="small" ghost type="primary" :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedEnable }}</n-button>
+                </div>
+
+                <div v-if="inboundEmail?.configured && !inboundEmail.allowed" class="settings-subrow">
+                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.inboundBusinessOnly }}</p>
+                </div>
+                <div v-if="inboundEmail?.configured && inboundEmail.allowed" class="settings-subrow tour-inbound">
+                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.inboundHint }}</p>
+                  <div v-if="inboundEmail.enabled && inboundEmail.address" class="inline-field__row">
+                    <n-input :value="inboundEmail.address" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
+                    <n-button size="small" ghost @click="copyInboundAddress">{{ l.profileSettings.feedCopy }}</n-button>
+                    <n-button size="small" ghost :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundRotate }}</n-button>
+                    <n-button size="small" ghost :loading="inboundBusy" @click="disableInboundEmail">{{ l.profileSettings.feedDisable }}</n-button>
+                  </div>
+                  <n-button v-else size="small" ghost type="primary" :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundEnable }}</n-button>
+                </div>
+
                 <div v-if="calendarAllowed && calendarStatus?.connected" class="settings-subrow">
                   <label class="settings-panel__label" for="calendar-name">{{ l.profileSettings.calendarNameLabel }}</label>
                   <div class="inline-field__row">
@@ -1485,7 +1514,7 @@ import {
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
-import {api, type DriveExportJob, type DriveStatus, type ProfileSubscription} from "../services/apiService.js";
+import {api, type DriveExportJob, type DriveStatus, type InboundEmailStatus, type ProfileSubscription} from "../services/apiService.js";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import type { User, UserSettings } from "@shared/types.js";
 import {useI18n} from "../composables/useI18n.js";
@@ -2120,8 +2149,58 @@ async function loadDriveStatus() {
   }
 }
 
+const inboundEmail = ref<InboundEmailStatus | null>(null);
+const inboundBusy = ref(false);
+async function loadInboundEmail() {
+  try { inboundEmail.value = await api.inboundEmail.status(); } catch { inboundEmail.value = null; }
+}
+async function enableInboundEmail() {
+  inboundBusy.value = true;
+  try { inboundEmail.value = await api.inboundEmail.enable(); }
+  catch { message.error(l.value.profileSettings.feedError); }
+  finally { inboundBusy.value = false; }
+}
+async function disableInboundEmail() {
+  inboundBusy.value = true;
+  try { await api.inboundEmail.disable(); await loadInboundEmail(); }
+  catch { message.error(l.value.profileSettings.feedError); }
+  finally { inboundBusy.value = false; }
+}
+async function copyInboundAddress() {
+  try { await navigator.clipboard.writeText(inboundEmail.value?.address ?? ""); message.success(l.value.profileSettings.feedCopied); }
+  catch { message.error(l.value.profileSettings.feedError); }
+}
+
+const calendarFeed = ref<{ enabled: boolean; path: string | null } | null>(null);
+const calendarFeedBusy = ref(false);
+const calendarFeedUrl = computed(() =>
+  calendarFeed.value?.path ? `${window.location.origin}${calendarFeed.value.path}` : "",
+);
+const calendarFeedWebcal = computed(() => calendarFeedUrl.value.replace(/^https?:/, "webcal:"));
+async function loadCalendarFeed() {
+  try { calendarFeed.value = await api.calendar.feedStatus(); } catch { calendarFeed.value = null; }
+}
+async function enableCalendarFeed() {
+  calendarFeedBusy.value = true;
+  try { calendarFeed.value = await api.calendar.feedEnable(); }
+  catch { message.error(l.value.profileSettings.feedError); }
+  finally { calendarFeedBusy.value = false; }
+}
+async function disableCalendarFeed() {
+  calendarFeedBusy.value = true;
+  try { await api.calendar.feedDisable(); calendarFeed.value = { enabled: false, path: null }; }
+  catch { message.error(l.value.profileSettings.feedError); }
+  finally { calendarFeedBusy.value = false; }
+}
+async function copyCalendarFeed() {
+  try { await navigator.clipboard.writeText(calendarFeedUrl.value); message.success(l.value.profileSettings.feedCopied); }
+  catch { message.error(l.value.profileSettings.feedError); }
+}
+
 async function loadCalendarStatus() {
   calendarLoading.value = true;
+  void loadCalendarFeed();
+  void loadInboundEmail();
   try {
     calendarStatus.value = await api.calendar.status();
     calendarName.value = calendarStatus.value?.calendar_name || DEFAULT_CALENDAR_NAME.value;

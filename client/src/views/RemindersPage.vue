@@ -177,6 +177,7 @@
           class="reminders-table reminders-table--with-sidebar"
           size="small"
           @update:checked-row-keys="onSelectedReminderKeys"
+          @update:sorter="tableSort.onUpdate"
         />
       </div>
       <n-data-table
@@ -192,6 +193,7 @@
         class="reminders-table"
         size="small"
         @update:checked-row-keys="onSelectedReminderKeys"
+        @update:sorter="tableSort.onUpdate"
       />
     </section>
 
@@ -425,6 +427,8 @@ import ReminderPreviewModal from "../components/modals/ReminderPreviewModal.vue"
 import {FEATURES} from "../shared/features.js";
 import {resolveUserPlan} from "../shared/pricingPlans.js";
 import {useI18n} from "../composables/useI18n.js";
+import {parseSavedSort, usePersistedTableState, useTableSort} from "../composables/useTableState.js";
+import {asString, pickOne} from "../shared/tableState";
 import {useNotifications} from "../composables/useNotifications.js";
 import type {Client, ContractWithClient, EmailTemplate, EquipmentCategory, ReminderWithContext} from "@shared/types.js";
 
@@ -476,6 +480,7 @@ const search = ref("");
 const reminderCategories = ref<{ name: string; count: number }[]>([]);
 const categoryFilter = ref<string | null>(null);
 const categoryViewActive = computed(() => reminderCategories.value.length > 0);
+const tableSort = useTableSort({columnKey: "trigger_date", order: "ascend"});
 const bulkMode = ref(false);
 const selectedReminderKeys = ref<Array<string | number>>([]);
 const bulkSending = ref(false);
@@ -696,6 +701,8 @@ function load() {
 async function loadReminderCategories(force = false) {
   try {
     reminderCategories.value = (await api.reminders.categories(force)).categories;
+    // A remembered category that no longer has reminders would leave the table empty.
+    if (categoryFilter.value && !reminderCategories.value.some((c) => c.name === categoryFilter.value)) categoryFilter.value = null;
   } catch {
     reminderCategories.value = [];
   }
@@ -1639,10 +1646,27 @@ const tableScrollX = computed(() =>
 );
 
 const columns = computed(() =>
-  bulkMode.value
+  tableSort.apply(bulkMode.value
     ? [{ type: "selection", width: 46, fixed: "right" }, ...visibleColumns.value]
-    : visibleColumns.value
+    : visibleColumns.value)
 );
+
+// Remember the filters and the sorted column between visits (search text is left out).
+const DUE_FILTERS: DueFilter[] = ["all", "overdue", "month", "sent", "no_email"];
+usePersistedTableState("reminders", {
+  snapshot: () => ({
+    status: statusFilter.value,
+    due: dueFilter.value,
+    category: categoryFilter.value,
+    sort: tableSort.sort.value,
+  }),
+  restore: (saved) => {
+    statusFilter.value = asString(saved.status);
+    dueFilter.value = pickOne(saved.due, DUE_FILTERS, "all");
+    categoryFilter.value = asString(saved.category);
+    tableSort.sort.value = parseSavedSort(saved.sort, baseColumns.value.filter((c: any) => c.sorter).map((c: any) => String(c.key)));
+  },
+});
 </script>
 
 <style scoped>

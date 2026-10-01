@@ -22,6 +22,13 @@ import type {
   UserSettings,
 } from "../../src/shared/types.js";
 
+export interface InboundEmailStatus {
+  configured: boolean;
+  allowed: boolean;
+  enabled: boolean;
+  address: string | null;
+}
+
 export interface InvoiceDueSoon {
   id: string;
   supplier_name: string | null;
@@ -1087,7 +1094,7 @@ export const api = {
 
   userSettings: {
     get: () => get<UserSettings>("/user-settings"),
-    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features" | "discovery_auto_scan" | "discovery_langs">>) =>
+    save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features" | "discovery_auto_scan" | "discovery_langs" | "whats_new_seen">>) =>
       put<UserSettings>("/user-settings", body),
   },
 
@@ -1429,6 +1436,15 @@ export const api = {
     sync: () => post<{ pushed: number; updated: number; cancelled: number }>("/calendar/sync", {}),
     disconnect: () => post<{ ok: boolean }>("/calendar/disconnect", {}),
     rename: (name: string) => post<{ ok: boolean; name: string; synced: boolean }>("/calendar/name", {name}),
+    feedStatus: () => get<{ allowed: boolean; enabled: boolean; path: string | null }>("/calendar/feed/status", true),
+    feedEnable: () => post<{ enabled: boolean; path: string }>("/calendar/feed/token", {}),
+    feedDisable: () => del("/calendar/feed"),
+  },
+
+  inboundEmail: {
+    status: () => get<InboundEmailStatus>("/inbound-email/status", true),
+    enable: () => post<InboundEmailStatus>("/inbound-email/token", {}),
+    disable: () => del("/inbound-email"),
   },
 
   drive: {

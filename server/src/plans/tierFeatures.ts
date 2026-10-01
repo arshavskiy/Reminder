@@ -11,6 +11,8 @@ export interface TierFeatureFlags {
   gmailInvoiceHistoryMonths: number | null;
   googleDriveSync: boolean;
   googleCalendarSync: boolean;
+  /** Per-user forwarding address: documents emailed to in+<token>@ are imported. Business only. */
+  emailIn: boolean;
   automaticEmailReminders: boolean;
   automaticMonthlyReports: boolean;
   excelExport: boolean;
@@ -37,6 +39,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     gmailInvoiceHistoryMonths: 0,
     googleDriveSync: false,
     googleCalendarSync: false,
+
+    emailIn: false,
     automaticEmailReminders: false,
     automaticMonthlyReports: false,
     excelExport: false,
@@ -57,6 +61,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     gmailInvoiceHistoryMonths: 1,
     googleDriveSync: true,
     googleCalendarSync: false,
+
+    emailIn: false,
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
@@ -76,6 +82,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     gmailInvoiceHistoryMonths: 0,
     googleDriveSync: false,
     googleCalendarSync: false,
+
+    emailIn: false,
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
@@ -90,6 +98,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     gmailInvoiceHistoryMonths: 0,
     googleDriveSync: true,
     googleCalendarSync: false,
+
+    emailIn: false,
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
@@ -106,6 +116,8 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     gmailInvoiceHistoryMonths: 36,
     googleDriveSync: true,
     googleCalendarSync: true,
+
+    emailIn: true,
     automaticEmailReminders: true,
     automaticMonthlyReports: true,
     excelExport: true,
@@ -117,6 +129,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
 };
 
 export const PLAN_GATE_MESSAGES = {
+  emailIn: "קליטת מסמכים בדואר (כתובת אישית להעברת מסמכים) זמינה במסלול עסקי בלבד.",
   calendar: "סנכרון Google Calendar זמין במסלול עסקי בלבד.",
   automaticEmailReminders: "תזכורות אימייל אוטומטיות זמינות במסלולים בסיסי ועסקי בלבד.",
   automaticMonthlyReports: "דוחות חודשיים אוטומטיים זמינים במסלולים בסיסי ועסקי בלבד.",
@@ -188,6 +201,12 @@ export function featureFlagsForUser(
 
 export function planAllowsGoogleCalendar(planOrRole: string | null | undefined): boolean {
   return tierFeatureFlags(planOrRole).googleCalendarSync;
+}
+
+/** Whether this plan gets a personal address to forward documents to (and may import documents). */
+export function planAllowsEmailIn(planOrRole: string | null | undefined): boolean {
+  const flags = tierFeatureFlags(planOrRole);
+  return flags.emailIn && flags.documentImport;
 }
 
 export function planAllowsAutomaticEmailReminders(planOrRole: string | null | undefined): boolean {
