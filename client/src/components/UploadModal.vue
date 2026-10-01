@@ -33,15 +33,30 @@
             type="file"
             @change="onFileInputChange"
           />
+          <input
+            ref="cameraInput"
+            accept="image/*"
+            capture="environment"
+            class="hidden"
+            multiple
+            type="file"
+            @change="onCameraInputChange"
+          />
           <div v-if="!files.length" class="drop-zone__empty">
             <div class="drop-zone__icon">☁</div>
             <div class="drop-zone__main">{{ l.uploadModal.dropMain }}</div>
             <div class="drop-zone__or">{{ l.uploadModal.or }}</div>
             <n-button ghost size="small" type="primary" @click.stop="fileInput?.click()">{{ l.uploadModal.chooseFiles }}</n-button>
+            <n-button ghost size="small" class="drop-zone__camera" @click.stop="cameraInput?.click()">
+              <template #icon><n-icon :component="CameraOutline" /></template>{{ l.uploadModal.takePhoto }}
+            </n-button>
             <div class="drop-zone__hint">PDF · DOCX · XLSX · PNG · JPG · TIF</div>
           </div>
           <div v-else class="drop-zone__add-more" @click.stop="fileInput?.click()">
             <span>{{ l.uploadModal.addMoreFiles }}</span>
+            <n-button ghost size="tiny" @click.stop="cameraInput?.click()">
+              <template #icon><n-icon :component="CameraOutline" /></template>{{ l.uploadModal.takePhoto }}
+            </n-button>
           </div>
         </div>
 
@@ -209,7 +224,8 @@
 
 <script lang="ts" setup>
 import {computed, onMounted, ref, watch} from "vue";
-import {NButton, NModal, NProgress, NSelect, NSpin, NSwitch} from "naive-ui";
+import {NButton, NIcon, NModal, NProgress, NSelect, NSpin, NSwitch} from "naive-ui";
+import {CameraOutline} from "@vicons/ionicons5";
 import {api} from "../services/apiService.js";
 import {useI18n} from "../composables/useI18n.js";
 
@@ -323,6 +339,14 @@ function onFileInputChange(e: Event) {
 function onDrop(e: DragEvent) {
   dragOver.value = false;
   addFiles(Array.from(e.dataTransfer?.files ?? []));
+}
+
+const cameraInput = ref<HTMLInputElement | null>(null);
+
+function onCameraInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  addFiles(Array.from(input.files ?? []));
+  input.value = "";
 }
 
 function addFiles(incoming: File[]) {

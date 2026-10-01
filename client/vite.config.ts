@@ -54,6 +54,20 @@ export default defineConfig({
         // screen on every launch; the router guard sends anyone unauthenticated
         // to /login anyway. scope keeps in-app navigation inside the PWA window.
         start_url: "/dashboard",
+        // Lets the installed app appear in the Android share sheet for PDFs and
+        // photos. sw.ts receives the POST and hands the files to the dashboard.
+        // iOS Safari does not support Web Share Target.
+        share_target: {
+          action: "/share-target",
+          method: "POST",
+          enctype: "multipart/form-data",
+          params: {
+            files: [{
+              name: "files",
+              accept: ["application/pdf", "image/png", "image/jpeg", "image/tiff"],
+            }],
+          },
+        },
         scope: "/",
         id: "/",
         icons: [

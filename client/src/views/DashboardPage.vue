@@ -296,8 +296,9 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted, ref} from "vue";
-import {useRouter} from "vue-router";
+import {computed, nextTick, onMounted, onUnmounted, ref} from "vue";
+import {useRoute, useRouter} from "vue-router";
+import {clearSharedFiles, readSharedFiles} from "../utils/sharedFiles.js";
 import {NIcon, NSpin, NSwitch, NTooltip, useMessage} from "naive-ui";
 import {
   AddOutline,
@@ -370,11 +371,30 @@ function goToSubscription() {
 const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const router = useRouter();
+const route = useRoute();
 const message = useMessage();
 const {openOnboarding} = useOnboarding();
 const needsOnboarding = computed(() => {
   return Boolean(authStore.user && !(authStore.user as any).onboarding_completed);
 });
+
+// Files shared to the installed PWA arrive here through /share-target (see sw.ts).
+async function openSharedFiles() {
+  if (route.query.shared !== "1") return;
+  try {
+    const shared = await readSharedFiles();
+    await clearSharedFiles();
+    if (shared.length && documentImportAllowed.value) {
+      showUploadModal.value = true;
+      await nextTick();
+      uploadModalRef.value?.addFiles(shared);
+    }
+  } catch {
+    // Shared files are a convenience; the normal upload button still works.
+  } finally {
+    void router.replace({ path: route.path });
+  }
+}
 
 const rescanStore = useRescanModalStore();
 const showUploadModal = ref(false);
@@ -543,6 +563,7 @@ function openMonthlyReport(monthMs?: number) {
 }
 
 onMounted(async () => {
+  void openSharedFiles();
   // Always refetch fresh — stats can go stale after a client/contract/document
   // is deleted elsewhere, and the cached singleton would otherwise show the old
   // count until a hard reload.
