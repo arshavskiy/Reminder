@@ -60,21 +60,31 @@ describe("normalizeExtractionFieldsForTemplate", () => {
     expect(forwardPastNextActionDate("2026-09-15", new Date(2026, 7, 9))).toBe("2026-09-15");
   });
 
-  it("normalizes template next inspection dates before saving extracted fields", () => {
+  it("keeps a past next-inspection date as overdue instead of moving it forward", () => {
     const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
       expiry_date: "2026-07-15",
     });
 
-    expect(fields?.expiry_date).toBe(forwardPastNextActionDate("2026-07-15"));
+    // Past dates stay as extracted so the reminder shows as overdue.
+    expect(fields?.expiry_date).toBe("2026-07-15");
   });
 
-  it("normalizes template next inspection dates using the extracted inspection interval", () => {
+  it("keeps a future next-inspection date unchanged", () => {
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 1);
+    const iso = future.toISOString().slice(0, 10);
+    const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, { expiry_date: iso });
+
+    expect(fields?.expiry_date).toBe(iso);
+  });
+
+  it("derives the inspection interval from the extracted dates without moving a past expiry", () => {
     const fields = normalizeExtractionFieldsForTemplate("תסקיר בדיקה", inspectionTemplate, {
       start_date: "2025-02-17",
       expiry_date: "2025-08-16",
     });
 
-    expect(fields?.expiry_date).toBe("2026-08-16");
+    expect(fields?.expiry_date).toBe("2025-08-16");
     expect(fields?.inspection_interval_months).toBe(6);
     expect(fields?.date_diff_months).toBe(6);
   });

@@ -6,7 +6,7 @@ Current feature inventory for ReminderOCR.
 
 Stack: Node.js 22 / Express · MongoDB · Vue 3 + Naive UI + Tailwind v4 · Railway + Vercel  
 
-**Updated**: 2026-09-04
+**Updated**: 2026-10-01
 
 
 
@@ -1227,4 +1227,72 @@ Download endpoint supports DOCX, XLSX, and CSV with configurable field selection
 ### Expiry date display
 
 Expiry dates in reports and contracts are displayed as original date minus one day (adjusted for end-of-day semantics).
+
+
+---
+
+## Recent Additions (2026-10)
+
+### Reminder Discovery (Gmail scan)
+
+- Scans Gmail for obligations and deadlines, saved in `reminder_discoveries` and shown on page load (`/discover-reminders`)
+- Languages: Hebrew, English, Russian (per-user `discovery_langs`); Russian kind/cue patterns and month names
+- Missed deadlines (last 90 days) in their own group beside urgent and upcoming; due chips and 4 stat cards
+- **Weekly auto-scan**: `discovery_auto_scan` switch ("סריקה שבועית והתראה"); scheduler `checkDiscoveryScans` (3 users per tick, production only) sends in-app notification + web push for new finds only
+- Moovit/Pango public-transport receipts parsed inline (`parsePango`)
+
+### Dashboard
+
+- Module cards (invoices, discovery, Gmail, field, quotes) shown only when the feature is enabled in settings
+- Invoice and receipt stat chips (business plan + `pages.invoices`)
+- "Due soon" invoices panel (`GET /api/invoices/due-soon`) with one-click add-reminder
+- `.dash__stats` cards are links: documents, clients, inspections, pending, expiring, invoices, receipts
+
+### Push Notifications (users)
+
+- `/api/push/vapid-key|subscribe|unsubscribe`; enable/disable row in the notification bell
+- Push sent when a reminder email is sent (`notifyOwnerReminderSent`) and on new discoveries
+- Needs VAPID keys (not set on dev)
+
+### Navigation and Tables
+
+- הוצאות sidebar sub-pages: invoices table and expenses graph
+- Reminders table hides category and client columns; last four columns 50-80px
+- Reminder calendar capped at 880px
+
+### Easier Intake
+
+#### ICS calendar feed
+
+- Subscribable read-only feed for Apple/Outlook/any calendar; same entitlement as Google Calendar sync (`googleCalendarSync`)
+- Routes: `GET /api/calendar/feed/status`, `POST /api/calendar/feed/token` (create/rotate), `DELETE /api/calendar/feed`, public `GET /api/calendar/feed/<64hex>.ics`
+- Token in `user_settings.calendar_feed_token`; minimal event description (no client email/phone); profile card with copy, webcal link, rotate, disable
+- Code: `server/src/calendar/icsFeed.ts`
+
+#### Camera capture and share-to-app
+
+- Upload modal "take photo" input (`capture="environment"`)
+- PWA `share_target` (POST `/share-target`; pdf, png, jpeg, tiff): service worker stores files in Cache `remindocr-shared-files`, redirects to `/dashboard?shared=1`, dashboard opens the upload modal with them
+- Works on installed Android Chrome PWA; not iOS Safari
+
+#### Email-in
+
+- Per-user address `in+<24hex>@in.remindocr.com` (token in `user_settings`); profile card "העברת מסמכים בדואר" with copy, rotate, disable; hidden unless `INBOUND_EMAIL_DOMAIN` is set
+- Routes: `GET /api/inbound-email/status`, `POST /token`, `DELETE /api/inbound-email`
+- Flow: Resend `email.received` webhook (`/api/webhooks/resend`, Svix-verified) -> `inbound/inboundEmail.ts` claims the email id (idempotent), skips auto-replies, imports PDF/image attachments via `importFile` (hash dedup, document quota enforced); body-only mail goes to the inline receipt parser and discovery; then notification + push
+- Limits: 10 attachments, 20MB, 50 emails per day per user; a failed run releases the claim so a replay works
+- Env: `INBOUND_EMAIL_DOMAIN`, `RESEND_INBOUND_API_KEY` (full-access key; falls back to `RESEND_API_KEY`), `RESEND_WEBHOOK_SECRET`
+- DNS: MX `in` -> `inbound-smtp.ap-northeast-1.amazonaws.com` (10)
+- Status: deployed on dev; webhook and dedup path verified, fresh-import run pending; not on master
+
+### Planned (not built)
+
+VAT/accountant export with SHAAM allocation number, subscription detection, cash-flow forecast, category budgets, certificate expiry tracker, reminders from extracted tasks, Russian UI locale, WhatsApp intake/channel, review queue, payment gateway, public API.
+
+### API documentation and tests
+
+- Swagger UI at `/api-docs`, spec at `/api-docs.json` (from `docs/openapi.yaml`): every Express route (about 300) is documented, with tags, parameters, request bodies and error responses; email-in, ICS feed, push, due-soon, discovery scan and the Resend webhook carry full schemas
+- `openapiCoverage.test.ts` fails when a route has no spec entry, a documented route no longer exists, a path parameter is undeclared or a `$ref` is broken
+- `npx tsx scripts/openapiGenerate.ts` (in `server/`) adds missing entries from `scripts/openapiSummaries.ts`
+- Route tests for the new features: `inboundEmailRoutes`, `calendarFeedRoutes`, `userPushRoutes`, `userSettingsDiscovery`, `invoiceDueSoonRoute`, `resendWebhookRoute` (shared in-memory DB in `__tests__/helpers/memoryDb.ts`)
 

@@ -434,7 +434,7 @@ const x = date.getDate() - days;  // Subtract days from date
 2. **Define types** in `server/src/shared/types.ts`
 3. **Add tests** in `server/src/__tests__/{resource}.test.ts`
 4. **Register route** in `server/src/index.ts` (app.use())
-5. **Update OpenAPI spec** in `docs/openapi.yaml`
+5. **Update OpenAPI spec** in `docs/openapi.yaml`. Run `npx tsx scripts/openapiGenerate.ts` from `server/` (add a summary in `scripts/openapiSummaries.ts` first) to create the entry, then refine request and response schemas. `openapiCoverage.test.ts` fails the suite when a route is missing from the spec; Swagger UI is served at `/api-docs`.
 
 **Example: POST /api/clients**
 ```typescript

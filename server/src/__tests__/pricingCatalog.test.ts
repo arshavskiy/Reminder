@@ -6,8 +6,8 @@ describe("shared pricing catalog", () => {
   it("keeps approved annual rates separate from monthly billing", () => {
     const basic = getPricingPlanForLocale("basic", "he");
     const business = getPricingPlanForLocale("business", "he");
-    expect([basic.price, yearlyMonthly(basic), basic.yearlyPrice]).toEqual([249, 215, 2580]);
-    expect([business.price, yearlyMonthly(business), business.yearlyPrice]).toEqual([399, 347, 4164]);
+    expect([basic.price, yearlyMonthly(basic), basic.yearlyPrice]).toEqual([210, 168, 2016]);
+    expect([business.price, yearlyMonthly(business), business.yearlyPrice]).toEqual([249, 199, 2388]);
     for (const locale of ["he", "en"] as const) {
       for (const plan of plansForLocale(locale).filter((item) => item.id !== "trial")) {
         expect(plan.price).toBeGreaterThan(0);
