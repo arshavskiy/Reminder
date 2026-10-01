@@ -56,6 +56,8 @@ export interface InboundDeps {
   findUserByToken(token: string): Promise<InboundUser | null>;
   /** Records the email id; false when it was already recorded (a webhook retry). */
   claimEmail(emailId: string, userId: string): Promise<boolean>;
+  /** Frees a claim after an unexpected failure so a replay of the same email is processed. */
+  releaseClaim(emailId: string): Promise<void>;
   countToday(userId: string): Promise<number>;
   fetchEmail(emailId: string): Promise<InboundEmail>;
   downloadAttachment(emailId: string, attachmentId: string): Promise<Buffer>;
@@ -116,6 +118,15 @@ export async function handleInboundEmailEvent(event: InboundEvent, deps: Inbound
   // Claimed before any work so a Resend retry cannot import the same mail twice.
   if (!await deps.claimEmail(emailId, user.userId)) return { status: "duplicate" };
 
+  try {
+    return await processClaimed(emailId, user, deps);
+  } catch (error) {
+    await deps.releaseClaim(emailId).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function processClaimed(emailId: string, user: InboundUser, deps: InboundDeps): Promise<InboundOutcome> {
   if (!user.importAllowed) {
     await deps.finish(emailId, user, { status: "refused", reason: "plan" });
     return { status: "refused", reason: "plan" };

@@ -26,6 +26,7 @@ function makeDeps(over: Partial<InboundDeps> = {}): InboundDeps {
     domain: DOMAIN,
     findUserByToken: vi.fn(async () => ({ userId: "u1", plan: "business", importAllowed: true })),
     claimEmail: vi.fn(async () => true),
+    releaseClaim: vi.fn(async () => undefined),
     countToday: vi.fn(async () => 0),
     fetchEmail: vi.fn(async () => baseEmail()),
     downloadAttachment: vi.fn(async () => Buffer.from("pdf")),
@@ -137,8 +138,21 @@ describe("handleInboundEmailEvent", () => {
     expect(await handleInboundEmailEvent(EVENT, deps)).toMatchObject({ imported: 0, duplicates: 1, discovery: true });
   });
 
-  it("rethrows an unexpected error instead of hiding it", async () => {
+  it("rethrows an unexpected error and frees the claim so a replay is processed", async () => {
     const deps = makeDeps({ importDocument: vi.fn(async () => { throw new Error("disk full"); }) });
     await expect(handleInboundEmailEvent(EVENT, deps)).rejects.toThrow("disk full");
+    expect(deps.releaseClaim).toHaveBeenCalledWith("em_1");
+  });
+
+  it("frees the claim when the email cannot be fetched", async () => {
+    const deps = makeDeps({ fetchEmail: vi.fn(async () => { throw new Error("restricted key"); }) });
+    await expect(handleInboundEmailEvent(EVENT, deps)).rejects.toThrow("restricted key");
+    expect(deps.releaseClaim).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the claim after a normal outcome", async () => {
+    const deps = makeDeps();
+    await handleInboundEmailEvent(EVENT, deps);
+    expect(deps.releaseClaim).not.toHaveBeenCalled();
   });
 });

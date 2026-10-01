@@ -54,6 +54,10 @@ export function createInboundDeps(): InboundDeps {
       }
     },
 
+    async releaseClaim(emailId) {
+      await col<any>("inbound_emails").deleteOne({ _id: emailId } as any);
+    },
+
     async countToday(userId) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
