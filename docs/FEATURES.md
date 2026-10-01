@@ -1267,7 +1267,7 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 - Dashboard card (`WhatsNewCard.vue`, messages in `locales/whatsNewMessages.ts`) lists the new features once per release; dismissal is stored per user as `user_settings.whats_new_seen` (`PUT /api/user-settings`). Bump `WHATS_NEW_RELEASE` to show it again
 - Business-only items show a plan tag instead of a button on other plans; the weekly scan item appears only when `pages.discovery` is on
 - Walkthrough tours `profile` (email-in, calendar feed) and `discovery` (weekly scan) start from the card
-- Plan lists and landing pages (`client/src/shared/pricingCatalog.json`, `npm run pricing:sync`) mention email-in, calendar feed, camera/share and the weekly scan
+- Plan lists and landing pages (`client/src/shared/pricingCatalog.json`, `npm run pricing:sync`) mention email-in, calendar feed and camera/share (reminder discovery is left out until `pages.discovery` is on by default)
 
 ### Navigation and Tables
 

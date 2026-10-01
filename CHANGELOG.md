@@ -29,7 +29,7 @@
 
 - Made email-in a Business-plan feature (`emailIn` tier flag, server and client mirror); other plans see a Business-plan hint on the Profile card.
 - Added a dashboard What's new card (dismissal stored in `user_settings.whats_new_seen`) and `profile` / `discovery` walkthrough tours.
-- Added email-in, calendar feed, camera/share and the weekly scan to the plan feature lists and landing pages.
+- Added email-in, calendar feed and camera/share to the plan feature lists and landing pages (reminder discovery is not advertised until it is enabled by default).
 
 ### API Documentation and Tests
 
