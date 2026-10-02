@@ -3,7 +3,7 @@
     <header class="rcal__head">
       <div class="rcal__title-wrap">
         <h3 class="rcal__title">{{ testsOnly ? l.calendar.journal : l.calendar.title }}</h3>
-        <div class="rcal__counts">
+        <div class="rcal__counts rcal__counts--head">
           <span v-if="!testsOnly" class="rcal__count">{{ t('calendar.remindersCount', {n: filteredRows.length}) }}</span>
           <span v-if="inspectionItemCount" class="rcal__expiry-count">
             {{ t('calendar.inspectionsCount', {n: inspectionItemCount}) }}
@@ -58,7 +58,7 @@
           v-for="item in summaryFilters"
           :key="item.key"
           class="rcal__summary-chip"
-          :class="{ 'rcal__summary-chip--active': activeFilter === item.key, 'rcal__summary-chip--empty': item.count === 0 && activeFilter !== item.key }"
+          :class="{ 'rcal__summary-chip--active': activeFilter === item.key }"
           type="button"
           @click="activeFilter = item.key"
         >
@@ -82,6 +82,13 @@
           <n-icon :component="filterIcon(filter.key)" :size="16" class="rcal__filter-icon" />
           <span class="rcal__filter-label">{{ filter.label }}</span>
         </button>
+      </div>
+      <!-- Phones: the counts sit below the filters, not between the title and the buttons. -->
+      <div v-if="!testsOnly || inspectionItemCount" class="rcal__counts rcal__counts--below">
+        <span v-if="!testsOnly" class="rcal__count">{{ t('calendar.remindersCount', {n: filteredRows.length}) }}</span>
+        <span v-if="inspectionItemCount" class="rcal__expiry-count">
+          {{ t('calendar.inspectionsCount', {n: inspectionItemCount}) }}
+        </span>
       </div>
       <div class="rcal__legend">
         <span v-if="!testsOnly" class="rcal__legend-item">
@@ -916,6 +923,7 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   gap: 6px;
   flex-wrap: wrap;
 }
+.rcal__counts--below { display: none; }
 .rcal__count {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
@@ -1451,6 +1459,14 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     gap: 6px;
   }
 
+  .rcal__counts--head {
+    display: none;
+  }
+
+  .rcal__counts--below {
+    display: flex;
+  }
+
   /* Icon-only filter buttons, as on the table pages. */
   .rcal__filter {
     display: inline-flex;
@@ -1469,14 +1485,9 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     display: none;
   }
 
-  /* Nothing to show for these: drop them rather than leave dead buttons (the active one always stays). */
-  .rcal__summary-chip--empty,
+  /* Icon buttons with nothing to show are dropped on phones (the active one always stays).
+     The summary tiles above keep their zero counts. */
   .rcal__filter--empty {
-    display: none;
-  }
-
-  /* No tile left in the summary box: hide the box too. */
-  .rcal__summary:not(:has(.rcal__summary-chip:not(.rcal__summary-chip--empty))) {
     display: none;
   }
 
