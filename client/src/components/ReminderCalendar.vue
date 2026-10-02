@@ -5,8 +5,8 @@
         <h3 class="rcal__title">{{ testsOnly ? l.calendar.journal : l.calendar.title }}</h3>
         <div class="rcal__counts">
           <span v-if="!testsOnly" class="rcal__count">{{ t('calendar.remindersCount', {n: filteredRows.length}) }}</span>
-          <span v-if="filteredExpiryItems.length" class="rcal__expiry-count">
-            {{ t('calendar.inspectionsCount', {n: filteredExpiryItems.length}) }}
+          <span v-if="inspectionItemCount" class="rcal__expiry-count">
+            {{ t('calendar.inspectionsCount', {n: inspectionItemCount}) }}
           </span>
         </div>
       </div>
@@ -95,6 +95,9 @@
           <span class="rcal__legend-item">
             <span class="rcal__legend-dot" style="background:#e8c84a"></span> {{ l.calendar.legend90 }}
           </span>
+          <span v-if="hasKind('invoice') || hasKind('discovery')" class="rcal__legend-item">
+            <span class="rcal__legend-dot rcal__legend-dot--dashed"></span> {{ l.calendar.legendExtra }}
+          </span>
         </template>
       </div>
     </header>
@@ -159,7 +162,7 @@
             >
               <template #trigger>
                 <button
-                  :class="`rcal__pill--expiry-${expiryVisualStatus(e)}`"
+                  :class="[`rcal__pill--expiry-${expiryVisualStatus(e)}`, { 'rcal__pill--invoice': Boolean(e.kind) }]"
                   :title="expiryCalendarTitle(e)"
                   class="rcal__pill rcal__pill--expiry"
                   @click.stop
@@ -178,7 +181,7 @@
                   {{ expiryTimeLabel(e) }}
                 </p>
                 <n-button class="rcal__expiry-pop__action" size="tiny" type="primary" ghost @click="onExpiryNavigate(e)">
-                  {{ l.calendar.openSource }}
+                  {{ e.kind === 'invoice' ? l.calendar.openInvoice : e.kind === 'discovery' ? l.calendar.openSuggestion : l.calendar.openSource }}
                 </n-button>
               </div>
             </n-popover>
@@ -405,7 +408,7 @@ function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 
 function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 
 const today = startOfDay(new Date());
-type CalendarFilterKey = "all" | "overdue" | "next30" | "month" | "sent" | "no_email" | "reminders" | "expiries";
+type CalendarFilterKey = "all" | "overdue" | "next30" | "month" | "sent" | "no_email" | "reminders" | "expiries" | "payments" | "mailbox";
 
 const calendarFilters = computed(() => [
   { key: "all" as CalendarFilterKey, label: l.value.calendar.filterAll },
@@ -416,7 +419,14 @@ const calendarFilters = computed(() => [
   { key: "no_email" as CalendarFilterKey, label: l.value.calendar.filterNoEmail },
   { key: "reminders" as CalendarFilterKey, label: l.value.calendar.filterReminders },
   { key: "expiries" as CalendarFilterKey, label: l.value.calendar.filterExpiries },
+  // Only offered when the calendar actually has such events, so there are no empty chips.
+  ...(hasKind("invoice") ? [{ key: "payments" as CalendarFilterKey, label: l.value.calendar.filterPayments }] : []),
+  ...(hasKind("discovery") ? [{ key: "mailbox" as CalendarFilterKey, label: l.value.calendar.filterMailbox }] : []),
 ]);
+
+function hasKind(kind: "invoice" | "discovery"): boolean {
+  return (props.expiryItems ?? []).some((item) => item.kind === kind);
+}
 
 function monthBounds(date: Date) {
   const from = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -444,7 +454,7 @@ function reminderMatchesFilter(r: ReminderWithContext, filter: CalendarFilterKey
   if (filter === "month") return isIsoInRange(iso, from, to);
   if (filter === "sent") return r.status === "sent";
   if (filter === "no_email") return r.status === "no_email" || !reminderHasEmail(r);
-  if (filter === "expiries") return false;
+  if (filter === "expiries" || filter === "payments" || filter === "mailbox") return false;
   return true;
 }
 
@@ -454,8 +464,13 @@ function expiryMatchesFilter(e: ExpiryCalendarItem, filter: CalendarFilterKey): 
   if (filter === "next30") return e.days_until >= 0 && e.days_until <= 30;
   if (filter === "month") return isIsoInRange(e.expiry_date, from, to);
   if (filter === "sent") return false;
-  if (filter === "no_email") return !e.contact_email;
+  if (filter === "no_email") return !e.kind && !e.contact_email;
   if (filter === "reminders") return false;
+  // "Inspections" means contract expiries only; payments and mailbox suggestions have their own chips.
+  // In the journal (next-tests-only) view this chip is the default and also shows them, so they are not hidden on first load.
+  if (filter === "expiries") return props.testsOnly || !e.kind;
+  if (filter === "payments") return e.kind === "invoice";
+  if (filter === "mailbox") return e.kind === "discovery";
   return true;
 }
 
@@ -466,6 +481,9 @@ const filteredRows = computed(() =>
 const filteredExpiryItems = computed(() =>
   (props.expiryItems ?? []).filter((item) => expiryMatchesFilter(item, activeFilter.value)),
 );
+
+/** Inspections only: payment dates and mailbox suggestions are listed in the calendar but are not inspections. */
+const inspectionItemCount = computed(() => filteredExpiryItems.value.filter((item) => !item.kind).length);
 
 const visibleMonthRange = computed(() => monthBounds(cursor.value));
 
@@ -512,7 +530,7 @@ const summaryFilters = computed(() => [
   {
     key: "no_email" as CalendarFilterKey,
     label: l.value.calendar.filterNoEmail,
-    count: monthReminders.value.filter((row) => !reminderHasEmail(row)).length + monthExpiryItems.value.filter((item) => !item.contact_email).length,
+    count: monthReminders.value.filter((row) => !reminderHasEmail(row)).length + monthExpiryItems.value.filter((item) => !item.kind && !item.contact_email).length,
   },
 ]);
 
@@ -564,6 +582,8 @@ function contractNumberLabel(contractNumber: string | null | undefined): string 
 }
 
 function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "warning" | "ok" {
+  // Payment dates always carry their urgency; the calendar-filters flag only governs contract expiries.
+  if (e.kind) return e.days_until < 0 ? "overdue" : e.days_until <= 7 ? "critical" : e.days_until <= 30 ? "warning" : "ok";
   if (!featuresStore.hasFeature(FEATURES.dashboard.calendarFilters)) return "ok";
   if (e.days_until < 0) return "overdue";
   if (e.days_until <= 30) return "critical";
@@ -572,6 +592,8 @@ function expiryVisualStatus(e: ExpiryCalendarItem): "overdue" | "critical" | "wa
 }
 
 function expiryCalendarLabel(e: ExpiryCalendarItem): string {
+  if (e.kind === "discovery") return e.title?.trim() || l.value.calendar.suggestion;
+  if (e.kind === "invoice") return [e.supplier_name?.trim() || l.value.common.unidentifiedSupplier, e.amount_display].filter(Boolean).join(" · ");
   const client = e.client_name?.trim();
   const contact = e.contact_person?.trim();
   const identity = client && contact ? `${client} · ${contact}` : client || contact || e.equipment_name || e.contract_type || l.value.calendar.filterExpiries;
@@ -587,6 +609,8 @@ function expiryCalendarTitle(e: ExpiryCalendarItem): string {
 }
 
 function expiryStatusLabel(e: ExpiryCalendarItem): string {
+  if (e.kind === "discovery") return e.days_until < 0 ? l.value.calendar.suggestionMissed : l.value.calendar.suggestion;
+  if (e.kind === "invoice") return e.days_until < 0 ? l.value.calendar.paymentOverdue : l.value.calendar.paymentDue;
   const status = expiryVisualStatus(e);
   if (status === "overdue") return l.value.calendar.expired;
   if (status === "critical") return e.days_until === 0 ? l.value.calendar.expiredToday : l.value.calendar.dueSoon;
@@ -595,6 +619,14 @@ function expiryStatusLabel(e: ExpiryCalendarItem): string {
 }
 
 function expiryTimeLabel(e: ExpiryCalendarItem): string {
+  if (e.kind === "discovery") {
+    if (e.days_until < 0) return t("calendar.suggestionDaysAgo", {n: Math.abs(e.days_until)});
+    return e.days_until === 0 ? l.value.calendar.suggestionToday : t("calendar.suggestionInDays", {n: e.days_until});
+  }
+  if (e.kind === "invoice") {
+    if (e.days_until < 0) return t("calendar.paymentOverdueDays", {n: Math.abs(e.days_until)});
+    return e.days_until === 0 ? l.value.calendar.paymentToday : t("calendar.paymentInDays", {n: e.days_until});
+  }
   if (e.days_until < 0) return t("calendar.expiredDaysAgo", {n: Math.abs(e.days_until)});
   if (e.days_until === 0) return l.value.calendar.expiredToday;
   return t("calendar.daysUntil", {n: e.days_until});
@@ -767,6 +799,14 @@ function onNavigate(target: { type: "contract" | "document" | "reminder"; id: nu
 
 function onExpiryNavigate(item: ExpiryCalendarItem) {
   dayModalOpen.value = false;
+  if (item.kind === "discovery") {
+    router.push("/discover-reminders");
+    return;
+  }
+  if (item.kind === "invoice" && item.invoice_id) {
+    router.push(`/invoices/${item.invoice_id}`);
+    return;
+  }
   if (item.document_id) router.push(`/documents/${item.document_id}?from=calendar`);
   else router.push(`/contracts/${item.id}`);
 }
@@ -1143,6 +1183,9 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 
 /* ── Expiry pills ──────────────────────────────────────────────────────────── */
 .rcal__pill--expiry { font-style: italic; }
+/* Payment dates: same colours as expiries by urgency, but upright with a dashed edge so they read as a different kind. */
+.rcal__legend-dot--dashed { background: transparent; outline: 1px dashed currentColor; outline-offset: -1px; }
+.rcal__pill--invoice { font-style: normal; outline: 1px dashed rgba(255, 255, 255, 0.55); outline-offset: -2px; }
 .rcal__pill--expiry-overdue  { background: #d03050; }
 .rcal__pill--expiry-critical { background: #f0a020; }
 .rcal__pill--expiry-warning  { background: #e8c84a; color: #333; }

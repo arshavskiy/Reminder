@@ -5794,8 +5794,11 @@ paths:
       summary: Unpaid invoices due within N days
       tags:
         - Invoices
-      description: Includes invoices overdue by up to 30 days. Paid, receipt and
-        settled invoices are excluded.
+      description: "Two modes. Default: unpaid invoices due within `days` (and overdue
+        by up to 30 days), up to 20. Calendar mode: pass both `from` and `to`
+        (ISO dates, inclusive) to list every unpaid invoice whose payment date
+        falls in that range, up to 200, with no look-back limit. Paid, receipt,
+        income and archived invoices are excluded in both modes."
       parameters:
         - name: days
           in: query
@@ -5805,7 +5808,22 @@ paths:
             minimum: 1
             maximum: 90
             default: 14
-          description: Look-ahead window in days
+          description: Look-ahead window in days (default mode)
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: "Calendar mode: first day of the range. Needs `to`; a malformed or
+            half-given range falls back to the default mode."
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: "Calendar mode: last day of the range"
       responses:
         "200":
           description: Up to 20 unpaid invoices, soonest first
@@ -5816,6 +5834,15 @@ paths:
                 properties:
                   days:
                     type: integer
+                    description: Default mode only
+                  from:
+                    type: string
+                    format: date
+                    description: Calendar mode only
+                  to:
+                    type: string
+                    format: date
+                    description: Calendar mode only
                   items:
                     type: array
                     items:

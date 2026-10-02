@@ -18,7 +18,7 @@ import { inferInvoiceCashFlow, normalizeCashFlow, resolveVatAmount } from "../in
 import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoices/documentProof";
 import {sendEmailWithAttachments} from "../reminders/emailSender";
 import { toIlsMany } from "../invoices/fxRates";
-import { selectDueSoon } from "../invoices/dueSoon";
+import { invoiceIsPayable, selectDueInRange, selectDueSoon } from "../invoices/dueSoon";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -63,6 +63,8 @@ export function registerInvoiceRoutes(app: express.Application) {
     const currency = String(req.query.currency ?? "").trim().toUpperCase();
     const suppliers = parseMultiQuery(req.query.supplier);
     const duplicatesOnly = String(req.query.duplicatesOnly ?? "") === "1";
+    // Unpaid invoices that have a payment date: the "to pay" view.
+    const unpaidOnly = String(req.query.unpaidOnly ?? "") === "1";
     const sortBy = normalizeInvoiceSortBy(req.query.sortBy);
     const sortDir = normalizeSortDir(req.query.sortDir);
     const fromTs = parseDateTs(req.query.dateFrom);
@@ -104,6 +106,7 @@ export function registerInvoiceRoutes(app: express.Application) {
         if (status && row.status !== status) return false;
         if (documentCategory && row.document_category !== documentCategory) return false;
         if (duplicatesOnly && !duplicateIds.has(row.id)) return false;
+        if (unpaidOnly && !rowIsUnpaidWithDueDate(row)) return false;
         return true;
       })
       .sort((left, right) => compareInvoiceRows(left, right, sortBy, sortDir));
@@ -124,6 +127,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       visibleLimit,
       counts,
       duplicatesCount: duplicateIds.size,
+      unpaidDueCount: visibleFacetRows.filter(rowIsUnpaidWithDueDate).length,
       documentCategoryCounts: countBy(visibleFacetRows, (row) => row.document_category),
       types: uniqueSorted(visibleFacetRows.map((row) => row.type).filter(isNonEmptyString)),
       categories: uniqueSorted(visibleFacetRows.map((row) => row.provider_category ?? "").filter(isNonEmptyString)),
@@ -145,6 +149,10 @@ export function registerInvoiceRoutes(app: express.Application) {
       return;
     }
     const days = clampInt(req.query.days, 14, 1, 90);
+    // Calendar mode: ?from=YYYY-MM-DD&to=YYYY-MM-DD lists every unpaid invoice due in that range.
+    const rangeFrom = isoDateParam(req.query.from);
+    const rangeTo = isoDateParam(req.query.to);
+    const rangeMode = Boolean(rangeFrom && rangeTo);
     const invoices = await col("invoices")
       .find({ user_id: userId, payment_due_date: { $nin: [null, ""] } } as any, { projection: { preview_html: 0 } } as any)
       .sort({ payment_due_date: 1 } as any)
@@ -163,7 +171,10 @@ export function registerInvoiceRoutes(app: express.Application) {
       .map((invoice) => presentInvoice(invoice, documentMap.get(String(invoice.document_id)), undefined, providers))
       .map((row: any) => ({ ...row, payment_due_date: isoDate(row.payment_due_date) }));
     const today = new Date().toISOString().slice(0, 10);
-    const items = selectDueSoon(rows as any[], today, days).slice(0, 20).map((row: any) => ({
+    const picked = rangeMode
+      ? selectDueInRange(rows as any[], rangeFrom!, rangeTo!, today).slice(0, 200)
+      : selectDueSoon(rows as any[], today, days).slice(0, 20);
+    const items = picked.map((row: any) => ({
       id: row.id,
       supplier_name: row.supplier_name,
       amount_display: row.amount_display,
@@ -172,7 +183,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       daysLeft: row.daysLeft,
       document_category: row.document_category,
     }));
-    res.json({ items, days });
+    res.json(rangeMode ? { items, from: rangeFrom, to: rangeTo } : { items, days });
   });
 
   app.get("/api/invoices/expenses/monthly", async (req, res) => {
@@ -765,6 +776,15 @@ export function registerInvoiceRoutes(app: express.Application) {
   });
 }
 
+function rowIsUnpaidWithDueDate(row: ReturnType<typeof presentInvoice>): boolean {
+  return Boolean(isoDate(row.payment_due_date ?? null)) && invoiceIsPayable(row as any);
+}
+
+function isoDateParam(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) && Number.isFinite(Date.parse(`${text}T00:00:00Z`)) ? text : null;
+}
+
 function invoiceIsVisible(invoice: InvoiceRow, doc?: InvoiceRow): boolean {
   if (invoice.source === "gmail_inline" || invoice.inline_no_file === true) {
     return invoice.possible_not_invoice !== true;
@@ -1043,12 +1063,12 @@ function invoiceMatchesQuery(row: ReturnType<typeof presentInvoice>, q: string):
   ].join(" ")).includes(q);
 }
 
-type InvoiceSortBy = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount";
+type InvoiceSortBy = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount" | "dueDate";
 type SortDir = "asc" | "desc";
 
 function normalizeInvoiceSortBy(value: unknown): InvoiceSortBy {
   const raw = String(value ?? "").trim();
-  if (raw === "supplier" || raw === "status" || raw === "date" || raw === "client" || raw === "category" || raw === "type" || raw === "amount") {
+  if (raw === "supplier" || raw === "status" || raw === "date" || raw === "client" || raw === "category" || raw === "type" || raw === "amount" || raw === "dueDate") {
     return raw;
   }
   return "date";
@@ -1066,6 +1086,15 @@ function compareInvoiceRows(
 ): number {
   const direction = sortDir === "asc" ? 1 : -1;
   let result = 0;
+  if (sortBy === "dueDate") {
+    // Rows without a payment date always sort last, whichever way the column is sorted.
+    const l = isoDate(left.payment_due_date ?? null);
+    const r = isoDate(right.payment_due_date ?? null);
+    if (!l && !r) return 0;
+    if (!l) return 1;
+    if (!r) return -1;
+    return l.localeCompare(r) * direction;
+  }
   if (sortBy === "amount") {
     result = compareNumber(left.amount_ils ?? left.amount, right.amount_ils ?? right.amount);
   } else if (sortBy === "date") {
@@ -1076,7 +1105,7 @@ function compareInvoiceRows(
   return result * direction || compareNumber(invoiceDateTs(left), invoiceDateTs(right)) * -1;
 }
 
-function invoiceSortText(row: ReturnType<typeof presentInvoice>, sortBy: Exclude<InvoiceSortBy, "amount" | "date">): string {
+function invoiceSortText(row: ReturnType<typeof presentInvoice>, sortBy: Exclude<InvoiceSortBy, "amount" | "date" | "dueDate">): string {
   if (sortBy === "supplier") return row.supplier_name;
   if (sortBy === "status") return row.status;
   if (sortBy === "client") return row.client_name ?? "";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlanEntitlements } from "../plans/planEntitlements";
+import { buildPlanEntitlements, newTrialEndsAt, newUserSettingsDefaults } from "../plans/planEntitlements";
 import { TIER_FEATURE_FLAGS, featureFlagsForUser, planAllowsEmailIn } from "../plans/tierFeatures";
 
 describe("plan entitlements", () => {
@@ -109,5 +109,48 @@ describe("email-in entitlement", () => {
     for (const plan of ["expired", "trial", "digital", "basic"]) expect(planAllowsEmailIn(plan)).toBe(false);
     expect(buildPlanEntitlements({ plan: "business" }).emailIn).toBe(true);
     expect(buildPlanEntitlements({ plan: "basic" }).emailIn).toBe(false);
+  });
+});
+
+describe("entitlements of new accounts", () => {
+  const PLANS = ["trial", "digital", "basic", "business"] as const;
+  const trialEndsAt = newTrialEndsAt();
+
+  it("start on trial and carry every tier flag, including the newest ones", () => {
+    const defaults = newUserSettingsDefaults("user-1") as { plan_entitlements: Record<string, unknown> };
+    expect(defaults.plan_entitlements.plan).toBe("trial");
+    for (const key of Object.keys(TIER_FEATURE_FLAGS.trial)) {
+      expect(defaults.plan_entitlements, key).toHaveProperty(key);
+    }
+    expect(defaults.plan_entitlements.emailIn).toBe(false);
+    expect(defaults.plan_entitlements.googleCalendarSync).toBe(false);
+  });
+
+  it("give each plan its own flags when the account is created on that plan", () => {
+    for (const plan of PLANS) {
+      const entitlements = (newUserSettingsDefaults("user-1", { plan, role: "user", trial_ends_at: trialEndsAt }) as { plan_entitlements: Record<string, unknown> }).plan_entitlements;
+      for (const [key, value] of Object.entries(TIER_FEATURE_FLAGS[plan])) {
+        expect(entitlements[key], `${plan}.${key}`).toEqual(value);
+      }
+    }
+  });
+
+  it("would store the expired set if the trial end date were left out", () => {
+    // Regression: email sign-up once built the first snapshot without trial_ends_at.
+    const entitlements = (newUserSettingsDefaults("user-1", { plan: "trial", role: "user" }) as { plan_entitlements: { plan: string } }).plan_entitlements;
+    expect(entitlements.plan).toBe("expired");
+  });
+
+  it("enable email-in and the calendar feed only on business", () => {
+    const on = (plan: string) => buildPlanEntitlements({ plan, role: "user" });
+    expect(on("business")).toMatchObject({ emailIn: true, googleCalendarSync: true });
+    for (const plan of ["trial", "digital", "basic"]) {
+      expect(on(plan)).toMatchObject({ emailIn: false, googleCalendarSync: false });
+    }
+  });
+
+  it("keep the Discover reminders page off for new accounts until an admin enables it", () => {
+    const features = (newUserSettingsDefaults("user-1") as { features: { pages: Record<string, boolean> } }).features;
+    expect(features.pages.discovery).toBe(false);
   });
 });
