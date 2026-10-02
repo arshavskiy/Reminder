@@ -172,7 +172,7 @@
         @click="emit('update:collapsed', !collapsed)"
       >
         <n-icon
-          :component="collapsed ? ChevronBackOutline : ChevronForwardOutline"
+          :component="collapsed === (localeStore.dir === 'rtl') ? ChevronBackOutline : ChevronForwardOutline"
           :size="18"
         />
       </button>
