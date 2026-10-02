@@ -714,58 +714,6 @@
                   </div>
                 </div>
 
-                <div v-if="calendarAllowed" class="settings-subrow tour-feed">
-                  <span class="settings-panel__label">{{ l.profileSettings.feedTitle }}</span>
-                  <p class="settings-row__desc">{{ l.profileSettings.feedHint }}</p>
-                  <div v-if="calendarFeed?.enabled && calendarFeedUrl" class="inline-field__row">
-                    <n-input :value="calendarFeedUrl" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
-                    <n-button size="small" ghost @click="copyCalendarFeed">{{ l.profileSettings.feedCopy }}</n-button>
-                    <n-button size="small" ghost tag="a" :href="calendarFeedWebcal">{{ l.profileSettings.feedOpen }}</n-button>
-                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedRotate }}</n-button>
-                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="disableCalendarFeed">{{ l.profileSettings.feedDisable }}</n-button>
-                  </div>
-                  <n-button v-else size="small" ghost type="primary" :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedEnable }}</n-button>
-                </div>
-
-                <div v-if="inboundEmail?.configured && !inboundEmail.allowed" class="settings-subrow">
-                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
-                  <p class="settings-row__desc">{{ l.profileSettings.inboundBusinessOnly }}</p>
-                </div>
-                <div v-if="inboundEmail?.configured && inboundEmail.allowed" class="settings-subrow tour-inbound">
-                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
-                  <p class="settings-row__desc">{{ l.profileSettings.inboundHint }}</p>
-                  <div v-if="inboundEmail.enabled && inboundEmail.address" class="inline-field__row">
-                    <n-input :value="inboundEmail.address" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
-                    <n-button size="small" ghost @click="copyInboundAddress">{{ l.profileSettings.feedCopy }}</n-button>
-                    <n-button size="small" ghost :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundRotate }}</n-button>
-                    <n-button size="small" ghost :loading="inboundBusy" @click="disableInboundEmail">{{ l.profileSettings.feedDisable }}</n-button>
-                  </div>
-                  <n-button v-else size="small" ghost type="primary" :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundEnable }}</n-button>
-                </div>
-
-                <div class="settings-subrow tour-scans">
-                  <span class="settings-panel__label">{{ l.profileSettings.scansTitle }}</span>
-                  <p class="settings-row__desc">{{ l.profileSettings.scansHint }}</p>
-                  <label class="scan-switch-row">
-                    <n-switch :value="invoicesAutoScan" :loading="scanSaving" :disabled="!invoiceScanAllowed || !gmailStatus?.connected" @update:value="(v: boolean) => saveScanSetting({ invoices_auto_scan: v })" />
-                    <span>
-                      <strong>{{ l.profileSettings.scanInvoices }}</strong>
-                      <small>{{ !invoiceScanAllowed ? l.profileSettings.scanBusinessOnly : !gmailStatus?.connected ? l.profileSettings.scanNeedsGmail : l.profileSettings.scanInvoicesHint }}</small>
-                    </span>
-                  </label>
-                  <label v-if="discoveryScanAllowed" class="scan-switch-row">
-                    <n-switch :value="discoveryAutoScan" :loading="scanSaving" :disabled="!gmailStatus?.connected" @update:value="(v: boolean) => saveScanSetting({ discovery_auto_scan: v })" />
-                    <span>
-                      <strong>{{ l.profileSettings.scanDiscovery }}</strong>
-                      <small>{{ !gmailStatus?.connected ? l.profileSettings.scanNeedsGmail : l.profileSettings.scanDiscoveryHint }}</small>
-                    </span>
-                  </label>
-                  <div v-if="discoveryScanAllowed && discoveryAutoScan" class="scan-switch-row scan-switch-row--select">
-                    <span>{{ l.profileSettings.scanFrequency }}</span>
-                    <n-select :value="discoveryFrequency" size="small" :loading="scanSaving" :options="scanFrequencyOptions" @update:value="(v: 'daily' | 'weekly') => saveScanSetting({ discovery_scan_frequency: v })" />
-                  </div>
-                </div>
-
                 <div v-if="calendarAllowed && calendarStatus?.connected" class="settings-subrow">
                   <label class="settings-panel__label" for="calendar-name">{{ l.profileSettings.calendarNameLabel }}</label>
                   <div class="inline-field__row">
@@ -905,6 +853,71 @@
                 <n-button size="small" ghost type="warning" @click="reconnectGmailForDrive">
                   {{ l.profileSettings.reconnectGmail }}
                 </n-button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="MailOutline" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profileSettings.intakeTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.intakeDesc }}</p>
+                </div>
+              </div>
+              <div class="settings-rows">
+                <div v-if="calendarAllowed" class="settings-subrow tour-feed">
+                  <span class="settings-panel__label">{{ l.profileSettings.feedTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.feedHint }}</p>
+                  <div v-if="calendarFeed?.enabled && calendarFeedUrl" class="inline-field__row">
+                    <n-input :value="calendarFeedUrl" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
+                    <n-button size="small" ghost @click="copyCalendarFeed">{{ l.profileSettings.feedCopy }}</n-button>
+                    <n-button size="small" ghost tag="a" :href="calendarFeedWebcal">{{ l.profileSettings.feedOpen }}</n-button>
+                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedRotate }}</n-button>
+                    <n-button size="small" ghost :loading="calendarFeedBusy" @click="disableCalendarFeed">{{ l.profileSettings.feedDisable }}</n-button>
+                  </div>
+                  <n-button v-else size="small" ghost type="primary" :loading="calendarFeedBusy" @click="enableCalendarFeed">{{ l.profileSettings.feedEnable }}</n-button>
+                </div>
+
+                <div v-if="inboundEmail?.configured && !inboundEmail.allowed" class="settings-subrow">
+                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.inboundBusinessOnly }}</p>
+                </div>
+                <div v-if="inboundEmail?.configured && inboundEmail.allowed" class="settings-subrow tour-inbound">
+                  <span class="settings-panel__label">{{ l.profileSettings.inboundTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.inboundHint }}</p>
+                  <div v-if="inboundEmail.enabled && inboundEmail.address" class="inline-field__row">
+                    <n-input :value="inboundEmail.address" class="inline-field__input" size="small" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
+                    <n-button size="small" ghost @click="copyInboundAddress">{{ l.profileSettings.feedCopy }}</n-button>
+                    <n-button size="small" ghost :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundRotate }}</n-button>
+                    <n-button size="small" ghost :loading="inboundBusy" @click="disableInboundEmail">{{ l.profileSettings.feedDisable }}</n-button>
+                  </div>
+                  <n-button v-else size="small" ghost type="primary" :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundEnable }}</n-button>
+                </div>
+
+                <div class="settings-subrow tour-scans">
+                  <span class="settings-panel__label">{{ l.profileSettings.scansTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.scansHint }}</p>
+                  <label class="scan-switch-row">
+                    <n-switch :value="invoicesAutoScan" :loading="scanSaving" :disabled="!invoiceScanAllowed || !gmailStatus?.connected" @update:value="(v: boolean) => saveScanSetting({ invoices_auto_scan: v })" />
+                    <span>
+                      <strong>{{ l.profileSettings.scanInvoices }}</strong>
+                      <small>{{ !invoiceScanAllowed ? l.profileSettings.scanBusinessOnly : !gmailStatus?.connected ? l.profileSettings.scanNeedsGmail : l.profileSettings.scanInvoicesHint }}</small>
+                    </span>
+                  </label>
+                  <label v-if="discoveryScanAllowed" class="scan-switch-row">
+                    <n-switch :value="discoveryAutoScan" :loading="scanSaving" :disabled="!gmailStatus?.connected" @update:value="(v: boolean) => saveScanSetting({ discovery_auto_scan: v })" />
+                    <span>
+                      <strong>{{ l.profileSettings.scanDiscovery }}</strong>
+                      <small>{{ !gmailStatus?.connected ? l.profileSettings.scanNeedsGmail : l.profileSettings.scanDiscoveryHint }}</small>
+                    </span>
+                  </label>
+                  <div v-if="discoveryScanAllowed && discoveryAutoScan" class="scan-switch-row scan-switch-row--select">
+                    <span>{{ l.profileSettings.scanFrequency }}</span>
+                    <n-select :value="discoveryFrequency" size="small" :loading="scanSaving" :options="scanFrequencyOptions" @update:value="(v: 'daily' | 'weekly') => saveScanSetting({ discovery_scan_frequency: v })" />
+                  </div>
+                </div>
               </div>
             </div>
 
