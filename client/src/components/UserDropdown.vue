@@ -39,7 +39,7 @@
           <div class="user-dropdown__meta">
             <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
           </div>
-          <n-icon class="app-nav__chevron" :component="ChevronBackOutline" :size="16"/>
+          <n-icon class="app-nav__chevron" :component="chevronIcon" :size="16"/>
         </div>
       </template>
       <div class="user-menu" :dir="localeStore.dir">
@@ -81,7 +81,7 @@
       <n-icon
           class="app-nav__chevron"
           :class="{ 'app-nav__chevron--open': menuOpen }"
-          :component="ChevronBackOutline"
+          :component="chevronIcon"
           :size="16"
       />
     </button>
@@ -92,7 +92,7 @@
 import {computed, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NIcon, NPopover} from "naive-ui";
-import {ChevronBackOutline, PersonOutline} from "@vicons/ionicons5";
+import {ChevronBackOutline, ChevronForwardOutline, PersonOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
@@ -120,6 +120,7 @@ const featuresStore = useFeaturesStore();
 const walkthrough = useWalkthrough();
 const localeStore = useLocaleStore();
 const l = computed(() => localeStore.catalog);
+const chevronIcon = computed(() => (localeStore.dir === "rtl" ? ChevronBackOutline : ChevronForwardOutline));
 
 // Create avatar from email / name
 const avatarUrl = computed<string>(() => {

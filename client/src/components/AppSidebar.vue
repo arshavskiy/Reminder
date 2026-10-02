@@ -43,7 +43,7 @@
               <n-icon
                 v-if="showLabels"
                 class="app-nav__chevron"
-                :component="ChevronBackOutline"
+                :component="groupChevron"
                 :size="16"
               />
             </button>
@@ -92,7 +92,7 @@
               <n-icon
                 v-if="showLabels && item.children?.length"
                 class="app-nav__chevron"
-                :component="ChevronBackOutline"
+                :component="groupChevron"
                 :size="16"
               />
             </button>
@@ -237,6 +237,7 @@ const reviewQueue = useReviewQueueStore();
 void reviewQueue.refresh();
 const l = computed(() => localeStore.catalog);
 
+const groupChevron = computed(() => (localeStore.dir === "rtl" ? ChevronBackOutline : ChevronForwardOutline));
 const showLabels = computed(() => props.isMobile || !props.collapsed);
 const flyoutPlacement = computed(() => (localeStore.dir === "rtl" ? "left-start" : "right-start"));
 
