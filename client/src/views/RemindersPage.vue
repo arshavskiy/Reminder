@@ -410,7 +410,7 @@
 import MobileMappedValue from "../components/MobileMappedValue.vue";
 import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, h, onMounted, ref, type Component} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTimePicker, NTooltip, useMessage,} from "naive-ui";
 import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, DocumentTextOutline, EllipsisVerticalOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
@@ -472,6 +472,7 @@ const { confirm } = useConfirm();
 // testEmail: admin can configure a custom address in settings; all others default to their own email
 const testEmail = ref<string | null>(authStore.user?.email || "");
 const router = useRouter();
+const route = useRoute();
 const message = useMessage();
 
 const statusFilter = ref<string | null>(null);
@@ -770,6 +771,12 @@ onMounted(async () => {
     loadReminderCategories(),
   ]);
   load();
+  // Arriving from the dashboard's quick modal ("reminder to a client / by email"): open the full form.
+  if (route.query.new && reminderCreatesAllowed.value) {
+    await openCreate();
+    if (route.query.new === "client") onReminderKindChange("client");
+    router.replace({ query: { ...route.query, new: undefined } });
+  }
 });
 
 async function loadSenderInfo() {

@@ -7,6 +7,7 @@
       </button>
     </div>
     <WhatsNewCard @upload="showUploadModal = true" />
+    <QuickReminderModal v-model:show="showNewReminder" @created="refreshCalendar(true)" />
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div
@@ -48,6 +49,14 @@
             </template>
             {{ l.profile.upgradePlan }}
           </n-tooltip>
+          <button
+            v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
+            class="rbtn-sm rbtn-sm--primary"
+            type="button"
+            @click="showNewReminder = true"
+          >
+            + {{ l.reminders.newReminder }}
+          </button>
           <button
             v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
             class="rbtn-sm"
@@ -341,6 +350,7 @@ import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import WhatsNewCard from "../components/WhatsNewCard.vue";
+import QuickReminderModal from "../components/QuickReminderModal.vue";
 import type { UploadOptions } from "../components/UploadModal.vue";
 import ExtractRemindersModal from "../components/ExtractRemindersModal.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
@@ -540,6 +550,7 @@ async function loadInvoiceCounts() {
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
 // Extra calendar events beside the contract expiries: unpaid invoices (the "due soon"
 // panel) and new suggestions from the discovery page. Each loads only when its feature is on.
+const showNewReminder = ref(false);
 const calendarInvoices = ref<InvoiceDueSoon[]>([]);
 const calendarDiscoveries = ref<ObligationSuggestion[]>([]);
 const calendarExpiryItems = computed<ExpiryCalendarItem[]>(() => [
@@ -1091,6 +1102,17 @@ const data_cards = computed(() => modules.value);
 }
 .rbtn-sm:active { transform: scale(0.97); }
 .rbtn-sm :deep(.n-icon) { color: var(--brand-color); }
+.rbtn-sm--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+.rbtn-sm--primary:hover {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  filter: brightness(1.06);
+}
 .rbtn-sm--disabled {
   opacity: 0.5;
   cursor: not-allowed;
