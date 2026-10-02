@@ -200,6 +200,9 @@ export const SUMMARIES: Record<string, string | [string, string]> = {
   "POST /api/invoices/vendors/category": "Set a category for a vendor",
   "POST /api/invoices/delete-selected": "Delete several invoices",
   "GET /api/invoices/:id": "Get an invoice",
+  "POST /api/invoices/pairs/scan": ["Pair receipts with the invoices they paid", "Backfill: tries every receipt that has no pair yet and links it when exactly one invoice matches (same supplier, amount and currency, receipt dated within 90 days after the invoice)."],
+  "POST /api/invoices/:id/pair": ["Confirm an invoice/receipt pair by hand", "Body `with` is the id of the other half. One side must be an invoice, bill or payment request and the other a receipt. Replaces any earlier pair on either side."],
+  "DELETE /api/invoices/:id/pair": ["Break an invoice/receipt pair", "Both sides are freed and remembered as not matching, so the matcher does not re-link them."],
   "PUT /api/invoices/:id": "Edit an invoice",
   // ── Notifications and push ──
   "GET /api/notifications": "List in-app notifications",

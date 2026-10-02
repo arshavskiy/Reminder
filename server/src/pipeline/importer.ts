@@ -38,6 +38,7 @@ import {
   quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
 import {inferInvoiceCashFlow} from "../invoices/cashFlow";
+import { pairInvoiceByDocumentId } from "../invoices/pairingStore";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -3731,6 +3732,12 @@ async function saveInvoiceRecord(
     } as any,
     { upsert: true },
   );
+
+  // Link this invoice or receipt to its counterpart (if one is already imported) so the
+  // same payment is not counted twice. Best effort: never blocks the import.
+  void pairInvoiceByDocumentId(options.userId, documentId).catch((err) => {
+    logger.warn("invoice_pairing_failed", { document_id: documentId, error: err instanceof Error ? err.message : String(err) });
+  });
 
   await col("documents").updateOne(
     { _id: new ObjectId(documentId) } as any,

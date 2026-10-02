@@ -19,6 +19,9 @@ import { matchesExpenseProofFilter, normalizeExpenseProofFilter } from "../invoi
 import {sendEmailWithAttachments} from "../reminders/emailSender";
 import { toIlsMany } from "../invoices/fxRates";
 import { invoiceIsPayable, selectDueInRange, selectDueSoon } from "../invoices/dueSoon";
+import { invoiceDocumentCategory, type InvoiceDocumentCategory } from "../invoices/documentCategory";
+import { hasActivePair, roleOf, toPairRow } from "../invoices/pairing";
+import { linkPair, scanPairs, unlinkPair } from "../invoices/pairingStore";
 
 type InvoiceRow = Record<string, any>;
 const INVOICE_STATUSES = new Set(["new", "reviewed", "outgoing", "archived"]);
@@ -137,6 +140,57 @@ export function registerInvoiceRoutes(app: express.Application) {
     });
   });
 
+  // ── Invoice <-> receipt pairing ─────────────────────────────────────────────
+  // POST /api/invoices/pairs/scan — look for counterparts of every unpaired receipt.
+  app.post("/api/invoices/pairs/scan", async (req, res) => {
+    const userId = await pairingUserId(req, res);
+    if (!userId) return;
+    res.json(await scanPairs(userId));
+  });
+
+  // POST /api/invoices/:id/pair { with } — confirm a pair by hand (overrides the matcher).
+  app.post("/api/invoices/:id/pair", async (req, res) => {
+    const userId = await pairingUserId(req, res);
+    if (!userId) return;
+    const id = String(req.params.id ?? "");
+    const other = String(req.body?.with ?? "");
+    if (!ObjectId.isValid(id) || !ObjectId.isValid(other) || id === other) {
+      res.status(400).json({ error: "invalid_pair" });
+      return;
+    }
+    const rows = await col("invoices").find({ _id: { $in: [new ObjectId(id), new ObjectId(other)] }, user_id: userId } as any, { projection: { preview_html: 0 } } as any).toArray() as InvoiceRow[];
+    if (rows.length !== 2) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    const roles = rows.map((row) => toPairRow(row).role).sort();
+    if (roles[0] !== "invoice" || roles[1] !== "receipt") {
+      res.status(400).json({ error: "pair_needs_invoice_and_receipt" });
+      return;
+    }
+    // Free either side from an earlier pair first, so nothing is left pointing at a stale partner.
+    for (const row of rows) if (row.paired_with) await unlinkPair(userId, String(row._id));
+    await linkPair(userId, id, other, "confirmed");
+    res.json({ ok: true, paired_with: other });
+  });
+
+  // DELETE /api/invoices/:id/pair — break a wrong pair; the matcher will not re-link the two.
+  app.delete("/api/invoices/:id/pair", async (req, res) => {
+    const userId = await pairingUserId(req, res);
+    if (!userId) return;
+    const id = String(req.params.id ?? "");
+    if (!ObjectId.isValid(id)) {
+      res.status(400).json({ error: "Invalid invoice id" });
+      return;
+    }
+    const result = await unlinkPair(userId, id);
+    if (!result.ok) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    res.json({ ok: true, unpaired: result.partner });
+  });
+
   // Unpaid invoices due soon (or just overdue) for the dashboard. Registered
   // before /api/invoices/:id so "due-soon" is not read as an id.
   app.get("/api/invoices/due-soon", async (req, res) => {
@@ -225,6 +279,8 @@ export function registerInvoiceRoutes(app: express.Application) {
         const wantIncome = proofFilter === "income";
         if (wantIncome ? row.cash_flow !== "income" : row.cash_flow === "income") return false;
         if (!wantIncome && !matchesExpenseProofFilter(row.type, proofFilter)) return false;
+        // The receipt counts, not the invoice it settled, so one payment is not summed twice.
+        if (!wantIncome && proofFilter !== "requested" && row.pair_role === "invoice" && hasActivePair({ pairedWith: row.paired_with, pairStatus: row.pair_status })) return false;
         const rowTs = chartDateTs(row, dateBasis);
         if (fromTs && (!rowTs || rowTs < fromTs)) return false;
         if (toTs && (!rowTs || rowTs > toTs)) return false;
@@ -776,6 +832,16 @@ export function registerInvoiceRoutes(app: express.Application) {
   });
 }
 
+async function pairingUserId(req: express.Request, res: express.Response): Promise<string | null> {
+  try {
+    return (await requireAuth(req.headers.cookie)).userId;
+  } catch (e) {
+    const err = e as HTTPException;
+    res.status(err.status ?? 401).json({ error: err.message });
+    return null;
+  }
+}
+
 function rowIsUnpaidWithDueDate(row: ReturnType<typeof presentInvoice>): boolean {
   return Boolean(isoDate(row.payment_due_date ?? null)) && invoiceIsPayable(row as any);
 }
@@ -873,6 +939,9 @@ function presentInvoice(
     provider_label: invoice.provider_label ?? provider?.label ?? null,
     provider_category: normalizeProviderCategory(invoice.provider_category ?? invoice.fields?.provider_category ?? provider?.category ?? null),
     payment_status: invoice.payment_status ?? null,
+    paired_with: invoice.paired_with ? String(invoice.paired_with) : null,
+    pair_status: invoice.pair_status ?? null,
+    pair_role: roleOf(invoiceDocumentCategory(invoice.document_subtype ?? invoice.template_name ?? invoice.fields?.document_subtype)),
     note: invoice.note ?? null,
     status: normalizeInvoiceStatus(invoice.status),
     possible_not_invoice: Boolean(invoice.possible_not_invoice),
@@ -910,8 +979,6 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-type InvoiceDocumentCategory = "invoice" | "receipt" | "bill" | "payment_request" | "credit_note";
-
 const INVOICE_DOCUMENT_CATEGORIES: InvoiceDocumentCategory[] = [
   "invoice", "receipt", "bill", "payment_request", "credit_note",
 ];
@@ -924,17 +991,6 @@ function documentCategorySubtype(category: InvoiceDocumentCategory): string {
     case "credit_note": return "זיכוי";
     default: return "חשבונית";
   }
-}
-
-function invoiceDocumentCategory(value: unknown): InvoiceDocumentCategory {
-  const text = String(value ?? "").trim().toLowerCase();
-  // Checked first: "חשבונית זיכוי" and "חשבונית מס זיכוי" also contain the
-  // plain invoice and receipt words, so a later test would misclassify them.
-  if (/זיכוי|credit\s*note|credit\s*memo/.test(text)) return "credit_note";
-  if (/receipt|קבלה/.test(text)) return "receipt";
-  if (/bill|חשבון\s*תקופתי|חיוב/.test(text)) return "bill";
-  if (/דרישת\s*תשלום|payment\s*request/.test(text)) return "payment_request";
-  return "invoice";
 }
 
 /** Hebrew + English terms so a category is findable by free-text search. */
@@ -1204,6 +1260,8 @@ function findDuplicateIds(rows: ReturnType<typeof presentInvoice>[]): Set<string
   const groups = new Map<string, string[]>();
   for (const row of rows) {
     if (row.amount == null || !row.issue_date) continue;
+    // An invoice and the receipt that paid it share an amount and date by design.
+    if (hasActivePair({ pairedWith: row.paired_with, pairStatus: row.pair_status })) continue;
     const key = `${row.amount}|${row.issue_date}`;
     const group = groups.get(key);
     if (group) group.push(row.id);

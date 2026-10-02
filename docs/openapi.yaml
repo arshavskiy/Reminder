@@ -5762,6 +5762,15 @@ paths:
           required: false
           schema:
             type: string
+            enum:
+              - supplier
+              - status
+              - date
+              - client
+              - category
+              - type
+              - amount
+              - dueDate
         - name: sortDir
           in: query
           required: false
@@ -5777,6 +5786,15 @@ paths:
           required: false
           schema:
             type: string
+        - name: unpaidOnly
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "1"
+          description: 1 = only unpaid invoices that have a payment date (the "to pay"
+            view). A receipt-paired invoice counts as paid.
       responses:
         "200":
           description: Success
@@ -7999,6 +8017,164 @@ paths:
           description: Not signed in
         "403":
           description: Admin access required
+  /api/invoices/pairs/scan:
+    post:
+      summary: Pair receipts with the invoices they paid
+      tags:
+        - Invoices
+      description: "Backfill: tries every receipt that has no pair yet and links it
+        when exactly one invoice matches (same supplier, amount and currency,
+        receipt dated within 90 days after the invoice)."
+      responses:
+        "200":
+          description: Counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scanned:
+                    type: integer
+                    description: Unpaired receipts examined
+                  linked:
+                    type: integer
+                    description: Pairs created
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+  /api/invoices/{id}/pair:
+    post:
+      summary: Confirm an invoice/receipt pair by hand
+      tags:
+        - Invoices
+      description: Body `with` is the id of the other half. One side must be an
+        invoice, bill or payment request and the other a receipt. Replaces any
+        earlier pair on either side.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Invoice id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - with
+              properties:
+                with:
+                  type: string
+                  description: Id of the other half of the pair
+      responses:
+        "200":
+          description: Pair confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  paired_with:
+                    type: string
+        "400":
+          description: Bad ids, the same id twice, or both documents are the same kind
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: pair_needs_invoice_and_receipt
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+        "404":
+          description: One of the invoices was not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invoice not found
+    delete:
+      summary: Break an invoice/receipt pair
+      tags:
+        - Invoices
+      description: Both sides are freed and remembered as not matching, so the matcher
+        does not re-link them.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Invoice id
+      responses:
+        "200":
+          description: Pair broken
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  unpaired:
+                    type: string
+                    nullable: true
+                    description: Id of the former partner, null if it had none
+        "400":
+          description: Invalid invoice id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid invoice id
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+        "404":
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invoice not found
 
 tags:
   - name: Authentication

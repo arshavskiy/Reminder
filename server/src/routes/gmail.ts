@@ -29,6 +29,7 @@ import {
   documentImportQuotaErrorPayload,
     quotaCategoryFromTemplate,
 } from "../quotas/documentImportQuota";
+import { pairInvoiceById } from "../invoices/pairingStore";
 
 const GOOGLE_IDENTITY_SCOPE = "openid profile email";
 const GMAIL_SCOPE = `${GOOGLE_IDENTITY_SCOPE} https://www.googleapis.com/auth/gmail.readonly`;
@@ -1113,6 +1114,9 @@ export async function importInlineReceiptMessage(
   const savedId = saved?._id ?? (await col("invoices").findOne({ user_id: userId, document_id: documentKey } as any, { projection: { _id: 1 } } as any))?._id;
   const invoiceId = savedId?.toString?.() ?? documentKey;
   logger.info("gmail_inline_receipt_imported", { user_id: userId, messageId, vendor: receipt.vendor, transactionId: receipt.transactionId, invoiceId });
+  void pairInvoiceById(userId, invoiceId).catch((err) => {
+    logger.warn("invoice_pairing_failed", { invoice_id: invoiceId, error: err instanceof Error ? err.message : String(err) });
+  });
   return { invoiceId, receipt, subject };
 }
 
