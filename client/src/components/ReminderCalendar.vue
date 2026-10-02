@@ -72,10 +72,15 @@
           :key="filter.key"
           class="rcal__filter"
           :class="{ 'rcal__filter--active': activeFilter === filter.key }"
+          :aria-label="filter.label"
+          :aria-pressed="activeFilter === filter.key"
+          :title="filter.label"
           type="button"
           @click="activeFilter = filter.key"
         >
-          {{ filter.label }}
+          <!-- Phones show the icon only (the label is in the tooltip), like the table pages. -->
+          <n-icon :component="filterIcon(filter.key)" :size="16" class="rcal__filter-icon" />
+          <span class="rcal__filter-label">{{ filter.label }}</span>
         </button>
       </div>
       <div class="rcal__legend">
@@ -335,7 +340,18 @@
 import {computed, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {NButton, NIcon, NModal, NPopover, useMessage} from "naive-ui";
-import {CalendarOutline} from "@vicons/ionicons5";
+import {
+  AppsOutline,
+  BulbOutline,
+  CalendarOutline,
+  CardOutline,
+  ClipboardOutline,
+  MailOutline,
+  NotificationsOutline,
+  TimeOutline,
+  WarningOutline,
+  CheckmarkCircleOutline,
+} from "@vicons/ionicons5";
 import type {ReminderWithContext} from "@shared/types.js";
 import {api, type ExpiryCalendarItem} from "../services/apiService.js";
 import {useFeaturesStore} from "../stores/features.js";
@@ -436,6 +452,23 @@ function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFu
 
 const today = startOfDay(new Date());
 type CalendarFilterKey = "all" | "overdue" | "next30" | "month" | "sent" | "no_email" | "reminders" | "expiries" | "payments" | "mailbox";
+
+const FILTER_ICONS: Record<string, unknown> = {
+  all: AppsOutline,
+  overdue: WarningOutline,
+  next30: TimeOutline,
+  month: CalendarOutline,
+  sent: CheckmarkCircleOutline,
+  no_email: MailOutline,
+  reminders: NotificationsOutline,
+  expiries: ClipboardOutline,
+  payments: CardOutline,
+  mailbox: BulbOutline,
+};
+
+function filterIcon(key: CalendarFilterKey) {
+  return (FILTER_ICONS[key] ?? AppsOutline) as typeof CalendarOutline;
+}
 
 const calendarFilters = computed(() => [
   { key: "all" as CalendarFilterKey, label: l.value.calendar.filterAll },
@@ -961,6 +994,7 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   padding: 4px 11px;
   font-size: 12px;
 }
+.rcal__filter-icon { display: none; }
 .rcal__summary-chip:hover,
 .rcal__filter:hover {
   border-color: var(--brand-color);
@@ -1408,6 +1442,24 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     flex-wrap: wrap;
     overflow: visible;
     gap: 6px;
+  }
+
+  /* Icon-only filter buttons, as on the table pages. */
+  .rcal__filter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px 8px;
+  }
+
+  .rcal__filter-icon {
+    display: inline-flex;
+  }
+
+  .rcal__filter-label {
+    display: none;
   }
 
   .rcal__legend {
