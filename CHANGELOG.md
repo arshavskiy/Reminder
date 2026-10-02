@@ -20,6 +20,10 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Mobile Calendar
+
+- The dashboard calendar now fits a phone: the month shows seven equal columns with coloured dots (tap a day for its list) instead of scrolling sideways, and the filter chips wrap instead of scrolling off-screen.
+
 ### Scheduled Scans
 
 - Added a daily Gmail invoice scan (Business): a per-user switch on the Invoices page queues an import of the last 14 days of mail once a day and notifies the user when invoices were imported.

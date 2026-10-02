@@ -125,8 +125,14 @@
             'rcal__cell--has': cell.items.length > 0 || cell.expiryItems.length > 0,
           }"
           class="rcal__cell"
+          @click="onCellTap(cell)"
         >
           <div class="rcal__cell-num">{{ cell.day }}</div>
+          <!-- Phones: the pills do not fit seven to a row, so a cell shows coloured dots and opens the day on tap. -->
+          <div v-if="cell.items.length || cell.expiryItems.length" class="rcal__dots" aria-hidden="true">
+            <span v-for="(dot, i) in cellDots(cell)" :key="i" :class="dot" class="rcal__dot" />
+            <span v-if="cellExtraCount(cell) > 0" class="rcal__dots-more">+{{ cellExtraCount(cell) }}</span>
+          </div>
           <div v-if="cell.items.length || cell.expiryItems.length" class="rcal__cell-items">
             <n-popover
               v-for="r in visibleReminderItems(cell)"
@@ -386,6 +392,27 @@ useDevModal("calendar.day", dayModalOpen);
 const dayModalItems = ref<ReminderWithContext[]>([]);
 const dayModalExpiry = ref<ExpiryCalendarItem[]>([]);
 const dayModalLabel = ref("");
+
+const MAX_CELL_DOTS = 3;
+
+/** Colour classes for a cell's dots: reminders first, then expiries, payments and suggestions. */
+function cellDots(cell: { items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }): string[] {
+  const dots = [
+    ...cell.items.map((r) => `rcal__pill--${reminderVisualStatus(r)}`),
+    ...cell.expiryItems.map((e) => `rcal__pill--expiry-${expiryVisualStatus(e)}`),
+  ];
+  return dots.slice(0, MAX_CELL_DOTS);
+}
+
+function cellExtraCount(cell: { items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }): number {
+  return Math.max(0, cell.items.length + cell.expiryItems.length - MAX_CELL_DOTS);
+}
+
+/** On a phone a tap anywhere in a day opens its list; on larger screens the pills handle their own clicks. */
+function onCellTap(cell: { iso: string; items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }) {
+  if (!isMobileViewport() || !(cell.items.length || cell.expiryItems.length)) return;
+  openDay(cell);
+}
 
 function openDay(cell: { iso: string; items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }) {
   dayModalItems.value = cell.items;
@@ -1021,6 +1048,9 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 }
 .rcal__cell--today .rcal__cell-num { color: var(--brand-color); }
 .rcal__cell-items { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rcal__dots { display: none; }
+/* Base colour only; the status classes (rcal__pill--*) are declared later and override it. */
+.rcal__dot { background: var(--brand-color); }
 .rcal__pill {
   border: none;
   background: var(--brand-color);
@@ -1373,15 +1403,11 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     padding: 6px 10px;
   }
 
+  /* Wrap instead of scrolling sideways: a scrolling chip row hid its first chips off-screen. */
   .rcal__filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-
-  .rcal__filters::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 6px;
   }
 
   .rcal__legend {
@@ -1390,14 +1416,65 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     gap: 8px 12px;
   }
 
+  /* The month fits the screen: seven equal columns, small cells, dots instead of pills. */
   .rcal__month {
-    overflow-x: auto;
+    overflow: visible;
     padding-bottom: 4px;
   }
 
   .rcal__weekdays,
   .rcal__grid {
-    min-width: 680px;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .rcal__weekday {
+    font-size: 10px;
+    padding: 2px 0;
+  }
+
+  .rcal__cell {
+    min-height: 52px;
+    padding: 4px 3px;
+    border-radius: 6px;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .rcal__cell--has {
+    cursor: pointer;
+  }
+
+  .rcal__cell-num {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .rcal__cell-items,
+  .rcal__cell-all {
+    display: none;
+  }
+
+  .rcal__dots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .rcal__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .rcal__dots-more {
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 7px;
+    color: var(--text-secondary);
   }
 
   .rcal__agenda-item,
