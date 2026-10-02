@@ -58,7 +58,7 @@
           v-for="item in summaryFilters"
           :key="item.key"
           class="rcal__summary-chip"
-          :class="{ 'rcal__summary-chip--active': activeFilter === item.key }"
+          :class="{ 'rcal__summary-chip--active': activeFilter === item.key, 'rcal__summary-chip--empty': item.count === 0 && activeFilter !== item.key }"
           type="button"
           @click="activeFilter = item.key"
         >
@@ -71,7 +71,7 @@
           v-for="filter in calendarFilters"
           :key="filter.key"
           class="rcal__filter"
-          :class="{ 'rcal__filter--active': activeFilter === filter.key }"
+          :class="{ 'rcal__filter--active': activeFilter === filter.key, 'rcal__filter--empty': filter.key !== 'all' && filterCount(filter.key) === 0 && activeFilter !== filter.key }"
           :aria-label="filter.label"
           :aria-pressed="activeFilter === filter.key"
           :title="filter.label"
@@ -465,6 +465,13 @@ const FILTER_ICONS: Record<string, unknown> = {
   payments: CardOutline,
   mailbox: BulbOutline,
 };
+
+/** How many events a filter would show; filters with none are hidden on phones. */
+function filterCount(key: CalendarFilterKey): number {
+  const reminders = props.testsOnly ? 0 : props.rows.filter((row) => reminderMatchesFilter(row, key)).length;
+  const expiries = (props.expiryItems ?? []).filter((item) => expiryMatchesFilter(item, key)).length;
+  return reminders + expiries;
+}
 
 function filterIcon(key: CalendarFilterKey) {
   return (FILTER_ICONS[key] ?? AppsOutline) as typeof CalendarOutline;
@@ -1459,6 +1466,17 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   }
 
   .rcal__filter-label {
+    display: none;
+  }
+
+  /* Nothing to show for these: drop them rather than leave dead buttons (the active one always stays). */
+  .rcal__summary-chip--empty,
+  .rcal__filter--empty {
+    display: none;
+  }
+
+  /* No tile left in the summary box: hide the box too. */
+  .rcal__summary:not(:has(.rcal__summary-chip:not(.rcal__summary-chip--empty))) {
     display: none;
   }
 
