@@ -6,9 +6,9 @@
         <p>{{ l.reminders.subtitle }}</p>
       </div>
       <div class="reminders-actions">
-        <button class="rbtn rbtn--ghost" :disabled="store.loading" @click="load">
+        <button class="rbtn rbtn--ghost" :disabled="store.loading" :aria-label="l.common.refresh" :title="l.common.refresh" @click="load">
           <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
-          {{ l.common.refresh }}
+          <span class="rbtn__label">{{ l.common.refresh }}</span>
         </button>
         <button
             v-if="!reminderCreatesAllowed"
@@ -26,19 +26,20 @@
         >
           + {{ l.reminders.newReminder }}
         </button>
-        <button v-if="reminderCreatesAllowed" class="rbtn rbtn--ghost" type="button" @click="showImportModal = true">
+        <button v-if="reminderCreatesAllowed" class="rbtn rbtn--ghost" type="button" :aria-label="l.uploadModal.importRemindersTitle" :title="l.uploadModal.importRemindersTitle" @click="showImportModal = true">
           <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-          {{ l.uploadModal.importRemindersTitle }}
+          <span class="rbtn__label">{{ l.uploadModal.importRemindersTitle }}</span>
         </button>
         <div class="bulk-action-anchor">
           <button
             class="rbtn rbtn--ghost"
             :class="{ 'rbtn--ghost-active': bulkMode }"
             :title="l.reminders.multiSelect"
+            :aria-label="l.reminders.multiSelect"
             @click="toggleBulkMode"
           >
             <n-icon :component="CheckboxOutline" class="btn-icon"/>
-            {{ l.reminders.multiSelect }}
+            <span class="rbtn__label">{{ l.reminders.multiSelect }}</span>
           </button>
           <div v-if="bulkMode && selectedReminderKeys.length > 0" class="bulk-action-anchor__actions">
             <button
@@ -2293,9 +2294,40 @@ usePersistedTableState("reminders", {
     align-items: stretch;
   }
 
-  .reminders-actions,
-  .rbtn {
+  .reminders-actions {
     width: 100%;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .rbtn--primary {
+    order: -1;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+
+  /* Secondary actions: icon-only 40px squares (the label is in the tooltip/aria-label). */
+  .rbtn--ghost {
+    flex: 0 0 auto;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .rbtn__label {
+    display: none;
+  }
+
+  .bulk-action-anchor {
+    flex: 0 0 auto;
+  }
+
+  .bulk-action-anchor > .rbtn {
+    width: 40px;
   }
 
   .reminders-summary {
