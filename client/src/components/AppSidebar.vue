@@ -62,6 +62,7 @@
               @click="navigate(child)"
             >
               {{ child.label }}
+              <span v-if="child.badge" class="app-nav__badge">{{ child.badge }}</span>
             </button>
           </div>
         </n-popover>
@@ -123,6 +124,7 @@
               >
                 <span class="app-nav__subitem-dot" aria-hidden="true" />
                 <span class="app-nav__label">{{ child.label }}</span>
+                <span v-if="child.badge" class="app-nav__badge">{{ child.badge }}</span>
               </button>
             </template>
             {{ navLockLabel(child) }}
@@ -203,6 +205,7 @@ import type {Component} from "vue";
 import UserDropdown from "./UserDropdown.vue";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
+import {useReviewQueueStore} from "../stores/reviewQueue.js";
 import {localizedPath, stripLocalePrefix, useLocaleStore} from "../stores/locale.js";
 import {FEATURES} from "../shared/features.js";
 import {
@@ -230,6 +233,8 @@ const route = useRoute();
 const localeStore = useLocaleStore();
 const authStore = useAuthStore();
 const featuresStore = useFeaturesStore();
+const reviewQueue = useReviewQueueStore();
+void reviewQueue.refresh();
 const l = computed(() => localeStore.catalog);
 
 const showLabels = computed(() => props.isMobile || !props.collapsed);
@@ -252,6 +257,8 @@ type NavItem = {
     minPlan?: PlanId | PlanId[];
     minRole?: string;
     feature?: string;
+    /** Count shown beside the label (e.g. imports waiting for review). */
+    badge?: number;
   }>;
 };
 
@@ -306,6 +313,13 @@ const allNav = computed<NavItem[]>(() => {
           label: nav.quotes,
           key: "quotes",
           feature: FEATURES.pages.contracts,
+        },
+        {
+          label: localeStore.catalog.review.navLabel,
+          key: "review",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.documents,
+          badge: reviewQueue.pending,
         },
         {
           label: localeStore.catalog.documents.activityLog,
@@ -705,6 +719,22 @@ function goSubscription() {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.app-nav__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-inline-start: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-warning, #f0a020);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .app-nav__flyout-item {

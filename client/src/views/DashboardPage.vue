@@ -6,6 +6,11 @@
         {{ l.dashboard.completeSetup }}
       </button>
     </div>
+    <section v-if="reviewQueue.pending > 0" class="dash__review" role="status">
+      <n-icon :component="ShieldCheckmarkOutline" :size="20" />
+      <span>{{ t("review.bannerText", {n: reviewQueue.pending}) }}</span>
+      <router-link class="dash__review-cta" :to="href('/review')">{{ l.review.bannerCta }}</router-link>
+    </section>
     <WhatsNewCard @upload="showUploadModal = true" />
     <QuickReminderModal v-model:show="showNewReminder" @created="refreshCalendar(true)" />
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
@@ -313,6 +318,7 @@ import {NIcon, NSpin, NSwitch, NTooltip, useMessage} from "naive-ui";
 import {
   AddOutline,
   AlarmOutline,
+  ShieldCheckmarkOutline,
   CheckmarkCircleOutline,
   ClipboardOutline,
   CloudUploadOutline,
@@ -331,6 +337,7 @@ import {
 import {useDashboardStore} from "../stores/dashboard.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import {useAuthStore} from "../stores/auth.js";
+import {useReviewQueueStore} from "../stores/reviewQueue.js";
 import {
   PAID_PLAN_IDS,
   planAllowsDocumentImport,
@@ -551,6 +558,8 @@ const expiryItems = ref<ExpiryCalendarItem[]>([]);
 // Extra calendar events beside the contract expiries: unpaid invoices (the "due soon"
 // panel) and new suggestions from the discovery page. Each loads only when its feature is on.
 const showNewReminder = ref(false);
+const reviewQueue = useReviewQueueStore();
+void reviewQueue.refresh();
 const calendarInvoices = ref<InvoiceDueSoon[]>([]);
 const calendarDiscoveries = ref<ObligationSuggestion[]>([]);
 const calendarExpiryItems = computed<ExpiryCalendarItem[]>(() => [
@@ -992,6 +1001,26 @@ const data_cards = computed(() => modules.value);
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
+}
+
+.dash__review {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #f0a020) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--color-warning, #f0a020) 10%, var(--bg-card));
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.dash__review-cta {
+  margin-inline-start: auto;
+  font-weight: 600;
+  color: var(--brand-color);
+  text-decoration: none;
 }
 
 .dash__onboarding-reminder {

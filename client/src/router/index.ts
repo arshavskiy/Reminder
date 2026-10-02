@@ -121,6 +121,7 @@ const publicRoutes: RouteRecordRaw[] = [
 
 const appRoutes: RouteRecordRaw[] = [
         {path: "/discover-reminders", component: () => import("../views/DiscoverRemindersPage.vue"), meta: {feature: FEATURES.pages.discovery}},
+        {path: "/review", component: () => import("../views/ReviewQueuePage.vue"), meta: {feature: FEATURES.pages.documents}},
         {path: "/dashboard", component: DashboardPage, meta: {feature: FEATURES.pages.dashboard}},
         {path: "/documents", component: DocumentsPage, meta: {feature: FEATURES.pages.documents}},
         {path: "/documents/:id", component: DocumentDetailPage, meta: {feature: FEATURES.pages.documents}},

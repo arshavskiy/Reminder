@@ -29,6 +29,24 @@ export interface InboundEmailStatus {
   address: string | null;
 }
 
+export type ReviewReason = "low_confidence" | "missing_amount" | "missing_date" | "unknown_supplier" | "possible_not_invoice" | "missing_fields" | "no_expiry_date";
+
+/** An unattended import (Gmail, email-in, Drive) waiting for a person to look at it. */
+export interface ReviewItem {
+  id: string;
+  file_name: string;
+  document_type: string | null;
+  source: "gmail" | "email" | "drive" | string;
+  reasons: ReviewReason[];
+  flagged_at: string | null;
+  supplier: string | null;
+  amount_display: string | null;
+  issue_date: string | null;
+  invoice_id: string | null;
+  download_url: string | null;
+  thumbnail_url: string | null;
+}
+
 export interface InvoiceDueSoon {
   id: string;
   supplier_name: string | null;
@@ -1114,6 +1132,14 @@ export const api = {
     get: () => get<UserSettings>("/user-settings"),
     save: (body: Partial<PipelineFlags & Pick<UserSettings, "theme" | "email_from_name" | "reminder_advance_days" | "ocr_language" | "monthly_report_enabled" | "monthly_report_recipients" | "monthly_report_day" | "monthly_report_hour" | "monthly_report_formats" | "monthly_report_last_sent" | "monthly_report_last_error" | "report_config" | "calendar_next_tests_only" | "features" | "discovery_auto_scan" | "discovery_langs" | "whats_new_seen" | "discovery_scan_frequency" | "invoices_auto_scan">>) =>
       put<UserSettings>("/user-settings", body),
+  },
+
+  review: {
+    list: (params: { status?: "pending" | "approved" | "dismissed"; limit?: number; offset?: number } = {}) =>
+      get<{ items: ReviewItem[]; total: number }>(`/review${qs(params)}`, true),
+    count: () => get<{ pending: number }>("/review/count", true),
+    approve: (ids: string[]) => post<{ ok: boolean; approved: number; pending: number }>("/review/approve", { ids }),
+    dismiss: (id: string) => post<{ ok: boolean; remindersDismissed: number; pending: number }>(`/review/${encodeURIComponent(id)}/dismiss`),
   },
 
   features: {

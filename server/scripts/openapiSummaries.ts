@@ -252,6 +252,11 @@ export const SUMMARIES: Record<string, string | [string, string]> = {
   "PUT /api/profile/notifications/:id/read": "Mark a profile notification read",
   "POST /api/profile/onboarding-complete": "Mark onboarding complete",
   "POST /api/profile/account/delete": "Delete the account and its data",
+  // ── Import review queue ──
+  "GET /api/review": ["List imports waiting for review", "Documents that Gmail import, email-in or Drive brought in unattended and that look wrong (missing amount or date, unidentified supplier, low confidence, possibly not an invoice, no expiry date). Newest first."],
+  "GET /api/review/count": "Number of imports waiting for review (badge and dashboard banner)",
+  "POST /api/review/approve": ["Approve imports (looks right)", "Body `ids`. Clears the flag; an invoice flagged as possibly not an invoice starts counting as one."],
+  "POST /api/review/:id/dismiss": ["Dismiss an import (not wanted)", "Archives its invoice and dismisses the pending reminders created from the document."],
   // ── Reminders ──
   "GET /api/reminders/email-sender": "Sender address used for reminder emails",
   "GET /api/reminders/categories": "Reminder categories in use",

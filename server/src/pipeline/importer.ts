@@ -39,6 +39,7 @@ import {
 } from "../quotas/documentImportQuota";
 import {inferInvoiceCashFlow} from "../invoices/cashFlow";
 import { pairInvoiceByDocumentId } from "../invoices/pairingStore";
+import { evaluateReviewForDocument } from "../review/reviewStore";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -1689,6 +1690,11 @@ async function finishDocumentProcessing(
     { _id: new ObjectId(documentId) } as any,
     { $set: { processing_status: "done", updated_at: new Date() } },
   );
+  // Imports nobody watched (Gmail, email-in, Drive) are checked for things that look wrong
+  // and put in the review queue. Best effort: never blocks the import.
+  void evaluateReviewForDocument(documentId, userId, pipeline?.processingJobContext?.source).catch((err) => {
+    logger.warn("import_review_evaluation_failed", { document_id: documentId, error: err instanceof Error ? err.message : String(err) });
+  });
   if (mimeType === "application/pdf") {
     await generatePdfThumbnailForDocument(documentId, { filePath }).catch((err) => {
       logger.warn("document_thumbnail_generation_failed", { document_id: documentId, user_id: userId ?? null, error: err });

@@ -20,6 +20,10 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Import Review Queue
+
+- Documents imported unattended from Gmail, email forwarding or Drive are checked for signs they are wrong (missing amount or date, unidentified supplier, low confidence, possibly not an invoice, no expiry date) and listed on a new Review page, with a count badge in the sidebar and a dashboard banner. Approve, open or remove each one; removing archives the invoice and dismisses the reminders made from it.
+
 ### Mobile Calendar
 
 - The dashboard calendar now fits a phone: the month shows seven equal columns with coloured dots (tap a day for its list) instead of scrolling sideways, and the filter chips wrap instead of scrolling off-screen.
