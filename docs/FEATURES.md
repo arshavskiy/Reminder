@@ -1254,6 +1254,8 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 - Module cards (invoices, discovery, Gmail, field, quotes) shown only when the feature is enabled in settings
 - Invoice and receipt stat chips (business plan + `pages.invoices`)
 - "Due soon" invoices panel (`GET /api/invoices/due-soon`) with one-click add-reminder
+- The dashboard calendar also shows unpaid invoice payment dates (same Business-plan and invoices-page gate as the due-soon panel; `GET /api/invoices/due-soon?from=&to=` lists a month) and new suggestions from the discovery page (only when `pages.discovery` is on). Both use dashed pills coloured by urgency and open the invoice or the discovery page
+- Invoices page has a "לתשלום" chip (count of unpaid invoices that have a payment date; `GET /api/invoices?unpaidOnly=1`, `unpaidDueCount`) that filters to them sorted by payment date; the list also sorts by `dueDate` with undated rows last
 - `.dash__stats` cards are links: documents, clients, inspections, pending, expiring, invoices, receipts
 
 ### Push Notifications (users)

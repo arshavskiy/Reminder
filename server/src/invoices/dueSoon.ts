@@ -14,6 +14,17 @@ export interface DueSoonRow {
   payment_due_date?: string | null;
 }
 
+/**
+ * Whether a row is something still to be paid: not archived, not income, a payable
+ * document type and not already settled. It says nothing about the payment date.
+ */
+export function invoiceIsPayable(row: Pick<DueSoonRow, "status" | "cash_flow" | "document_category" | "payment_status">): boolean {
+  if (row.status === "archived") return false;
+  if (row.cash_flow === "income") return false;
+  if (row.document_category && !PAYABLE_CATEGORIES.has(row.document_category)) return false;
+  return !invoiceIsSettled(row);
+}
+
 export function invoiceIsSettled(row: Pick<DueSoonRow, "payment_status" | "document_category">): boolean {
   if (row.document_category === "receipt") return true;
   return SETTLED_STATUS_RE.test(String(row.payment_status ?? ""));
@@ -38,10 +49,7 @@ export function selectDueSoon<T extends DueSoonRow>(
   if (todayNumber === null) return [];
   const picked: (T & { daysLeft: number })[] = [];
   for (const row of rows) {
-    if (row.status === "archived") continue;
-    if (row.cash_flow === "income") continue;
-    if (row.document_category && !PAYABLE_CATEGORIES.has(row.document_category)) continue;
-    if (invoiceIsSettled(row)) continue;
+    if (!invoiceIsPayable(row)) continue;
     if (!row.payment_due_date) continue;
     const due = dayNumber(row.payment_due_date);
     if (due === null) continue;
@@ -50,4 +58,31 @@ export function selectDueSoon<T extends DueSoonRow>(
     picked.push({ ...row, daysLeft });
   }
   return picked.sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+/**
+ * Unpaid invoices whose payment date falls inside [from, to] (ISO dates,
+ * inclusive), for the calendar. Unlike selectDueSoon there is no look-back
+ * limit: a month that shows an old overdue invoice should keep showing it.
+ * `daysLeft` is relative to `today` and negative once overdue.
+ */
+export function selectDueInRange<T extends DueSoonRow>(
+  rows: T[],
+  from: string,
+  to: string,
+  today: string,
+): (T & { daysLeft: number })[] {
+  const fromNumber = dayNumber(from);
+  const toNumber = dayNumber(to);
+  const todayNumber = dayNumber(today);
+  if (fromNumber === null || toNumber === null || todayNumber === null || fromNumber > toNumber) return [];
+  const picked: (T & { daysLeft: number })[] = [];
+  for (const row of rows) {
+    if (!invoiceIsPayable(row)) continue;
+    if (!row.payment_due_date) continue;
+    const due = dayNumber(row.payment_due_date);
+    if (due === null || due < fromNumber || due > toNumber) continue;
+    picked.push({ ...row, daysLeft: due - todayNumber });
+  }
+  return picked.sort((a, b) => String(a.payment_due_date).localeCompare(String(b.payment_due_date)));
 }

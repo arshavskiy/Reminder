@@ -78,6 +78,30 @@ describe("GET /api/invoices/due-soon", () => {
     expect((await (await fetch(`${base}/api/invoices/due-soon?days=0`)).json()).days).toBe(1);
   });
 
+  it("lists every unpaid invoice due in a from/to range for the calendar", async () => {
+    memory.set("invoices", [
+      invoice("in-range", iso(40)),
+      invoice("also-in-range", iso(45)),
+      invoice("outside", iso(120)),
+      invoice("paid", iso(41), { payment_status: "paid" }),
+    ]);
+    const url = `${base}/api/invoices/due-soon?from=${iso(35)}&to=${iso(50)}`;
+    const body = await (await fetch(url)).json();
+    expect(body.items.map((item: any) => item.id)).toEqual(["in-range", "also-in-range"]);
+    expect(body.from).toBe(iso(35));
+    expect(body.to).toBe(iso(50));
+    expect(body).not.toHaveProperty("days");
+  });
+
+  it("falls back to the days window when the range is incomplete or malformed", async () => {
+    memory.set("invoices", [invoice("soon", iso(2))]);
+    for (const query of [`from=${iso(0)}`, "from=bad&to=worse", ""]) {
+      const body = await (await fetch(`${base}/api/invoices/due-soon?${query}`)).json();
+      expect(body.days).toBe(14);
+      expect(body.items.map((item: any) => item.id)).toEqual(["soon"]);
+    }
+  });
+
   it("caps the list at 20 items", async () => {
     memory.set("invoices", Array.from({ length: 30 }, (_, i) => invoice(`inv-${i}`, iso(1 + (i % 10)))));
     const body = await (await fetch(`${base}/api/invoices/due-soon?days=30`)).json();

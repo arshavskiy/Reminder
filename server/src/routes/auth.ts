@@ -434,6 +434,7 @@ export function registerAuthRoutes(app: express.Application) {
     const verificationToken = generateToken();
     const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    const trialEndsAt = newTrialEndsAt();
     const insert = await col("users").insertOne({
       email: emailLower,
       name: name?.trim() ?? null,
@@ -444,14 +445,16 @@ export function registerAuthRoutes(app: express.Application) {
       verification_token_expires: tokenExpiry,
       role: "user",
       plan: DEFAULT_NEW_USER_PLAN,
-      trial_ends_at: newTrialEndsAt(),
+      trial_ends_at: trialEndsAt,
       ...signupIntentFields(signupIntent),
       is_active: 1,
       created_at: new Date(),
       last_login_at: null,
     } as any);
     const userId = insert.insertedId.toString();
-    await ensureUserSettingsWithEntitlements(userId, { plan: DEFAULT_NEW_USER_PLAN, role: "user" });
+    // Pass the trial end date too: without it the plan resolves as a lapsed trial and the
+    // first stored entitlements would be the expired set until the next refresh.
+    await ensureUserSettingsWithEntitlements(userId, { plan: DEFAULT_NEW_USER_PLAN, role: "user", trial_ends_at: trialEndsAt });
       if (signupIntent?.billing === "one_time") {
           try {
               await rememberOneTimeIntentAndRemind({

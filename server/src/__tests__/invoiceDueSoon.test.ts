@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invoiceIsSettled, selectDueSoon } from "../invoices/dueSoon";
+import {invoiceIsSettled, selectDueSoon, selectDueInRange} from "../invoices/dueSoon";
 
 const TODAY = "2026-10-01";
 const row = (over: Record<string, unknown>) => ({ id: "x", document_category: "invoice", cash_flow: "expense", payment_status: null, payment_due_date: "2026-10-05", ...over }) as any;
@@ -44,5 +44,40 @@ describe("invoiceIsSettled", () => {
   it("treats standing orders and card charges as settled", () => {
     expect(invoiceIsSettled({ payment_status: "הוראת קבע" })).toBe(true);
     expect(invoiceIsSettled({ payment_status: "לתשלום" })).toBe(false);
+  });
+});
+
+describe("selectDueInRange", () => {
+  const row = (id: string, payment_due_date: string | null, extra: Record<string, unknown> = {}) => ({ id, payment_due_date, ...extra });
+
+  it("returns unpaid invoices due inside the range, in date order, inclusive of both ends", () => {
+    const rows = [row("c", "2026-10-31"), row("a", "2026-10-01"), row("b", "2026-10-15"), row("out", "2026-11-01"), row("before", "2026-09-30")];
+    const picked = selectDueInRange(rows, "2026-10-01", "2026-10-31", "2026-10-10");
+    expect(picked.map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(picked.map((r) => r.daysLeft)).toEqual([-9, 5, 21]);
+  });
+
+  it("keeps old overdue invoices when the range covers them", () => {
+    const picked = selectDueInRange([row("old", "2026-01-05")], "2026-01-01", "2026-01-31", "2026-10-10");
+    expect(picked).toHaveLength(1);
+    expect(picked[0].daysLeft).toBeLessThan(-200);
+  });
+
+  it("skips paid, receipts, income, archived and undated rows", () => {
+    const rows = [
+      row("paid", "2026-10-05", { payment_status: "paid" }),
+      row("receipt", "2026-10-05", { document_category: "receipt" }),
+      row("income", "2026-10-05", { cash_flow: "income" }),
+      row("archived", "2026-10-05", { status: "archived" }),
+      row("undated", null),
+      row("ok", "2026-10-05"),
+    ];
+    expect(selectDueInRange(rows, "2026-10-01", "2026-10-31", "2026-10-02").map((r) => r.id)).toEqual(["ok"]);
+  });
+
+  it("returns nothing for a malformed or reversed range", () => {
+    const rows = [row("a", "2026-10-05")];
+    expect(selectDueInRange(rows, "nope", "2026-10-31", "2026-10-02")).toEqual([]);
+    expect(selectDueInRange(rows, "2026-10-31", "2026-10-01", "2026-10-02")).toEqual([]);
   });
 });

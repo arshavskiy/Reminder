@@ -169,6 +169,17 @@
         :label="option.label"
       />
       <ResponsiveFilterButton
+        v-if="unpaidDueCount > 0 || filters.unpaidOnly"
+        type="button"
+        class="pill pill--compact"
+        :class="{ 'pill--active': filters.unpaidOnly }"
+        @click="toggleUnpaid"
+        :aria-pressed="filters.unpaidOnly"
+        :count="unpaidDueCount"
+        :label="l.invoicesMsg.toPay"
+        filter-key="unpaid"
+      />
+      <ResponsiveFilterButton
         v-if="duplicatesCount > 0"
         type="button"
         class="pill pill--compact pill--warn"
@@ -856,7 +867,7 @@ const selectedInvoiceIds = ref(new Set<string>());
 const dateRange = ref<[number, number] | null>(resolveDateRangePreset("3m"));
 const page = ref(1);
 const pageSize = ref(20);
-type InvoiceSortKey = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount";
+type InvoiceSortKey = "supplier" | "status" | "date" | "client" | "category" | "type" | "amount" | "dueDate";
 const sortBy = ref<InvoiceSortKey>("date");
 const sortDir = ref<"asc" | "desc">("desc");
 const counts = ref<Record<string, number>>({});
@@ -866,6 +877,7 @@ const categories = ref<string[]>([]);
 const suppliers = ref<string[]>([]);
 const currencies = ref<string[]>([]);
 const duplicatesCount = ref(0);
+const unpaidDueCount = ref(0);
 const filters = reactive({
   q: "",
   status: null as string | null,
@@ -876,11 +888,12 @@ const filters = reactive({
   currency: null as string | null,
   suppliers: [] as string[],
   duplicatesOnly: false,
+  unpaidOnly: false,
 });
 // Remember the filters, date range, sort and page size between visits. Free-text
 // search is left out on purpose: a forgotten search term makes the list look empty.
 const PAGE_SIZES = [10, 20, 50, 100] as const;
-const SORT_KEYS: InvoiceSortKey[] = ["supplier", "status", "date", "client", "category", "type", "amount"];
+const SORT_KEYS: InvoiceSortKey[] = ["supplier", "status", "date", "client", "category", "type", "amount", "dueDate"];
 usePersistedTableState("invoices", {
   snapshot: () => ({
     status: filters.status,
@@ -891,6 +904,7 @@ usePersistedTableState("invoices", {
     currency: filters.currency,
     suppliers: [...filters.suppliers],
     duplicatesOnly: filters.duplicatesOnly,
+    unpaidOnly: filters.unpaidOnly,
     dateRange: encodeDateRange(dateRange.value),
     sortBy: sortBy.value,
     sortDir: sortDir.value,
@@ -905,6 +919,7 @@ usePersistedTableState("invoices", {
     filters.currency = asString(saved.currency);
     filters.suppliers = asStringArray(saved.suppliers);
     filters.duplicatesOnly = saved.duplicatesOnly === true;
+    filters.unpaidOnly = saved.unpaidOnly === true;
     const range = decodeDateRange(saved.dateRange);
     if (range !== undefined) dateRange.value = range;
     sortBy.value = pickOne(saved.sortBy, SORT_KEYS, "date");
@@ -1039,6 +1054,7 @@ async function load(force = false) {
       currency: filters.currency ?? undefined,
       supplier: supplierFilterParam(),
       duplicatesOnly: filters.duplicatesOnly ? "1" : undefined,
+      unpaidOnly: filters.unpaidOnly ? "1" : undefined,
       sortBy: sortBy.value,
       sortDir: sortDir.value,
       dateFrom: dateFrom ? new Date(dateFrom).toISOString().slice(0, 10) : undefined,
@@ -1052,6 +1068,7 @@ async function load(force = false) {
     visibleLimit.value = result.visibleLimit;
     counts.value = result.counts;
     duplicatesCount.value = result.duplicatesCount ?? 0;
+    unpaidDueCount.value = result.unpaidDueCount ?? 0;
     documentCategoryCounts.value = result.documentCategoryCounts ?? {};
     types.value = result.types;
     categories.value = result.categories;
@@ -1186,6 +1203,16 @@ function toggleDuplicates() {
   load(true);
 }
 
+// "To pay": unpaid invoices that have a payment date, soonest first.
+function toggleUnpaid() {
+  filters.unpaidOnly = !filters.unpaidOnly;
+  if (filters.unpaidOnly) {
+    sortBy.value = "dueDate";
+    sortDir.value = "asc";
+  }
+  load(true);
+}
+
 function setDocumentCategory(value: string) {
   filters.documentCategory = isInvoiceDocumentCategory(value) ? value : null;
   load(true);
@@ -1260,6 +1287,7 @@ function sortAriaLabel(key: InvoiceSortKey): string {
     category: l.value.common.category,
     type: l.value.common.type,
     amount: l.value.common.amount,
+    dueDate: l.value.invoicesMsg.toPay,
   };
   const nextDirection = sortBy.value === key && sortDir.value === "asc"
     ? l.value.common.sortDesc

@@ -143,7 +143,7 @@
         v-if="hasFeature(FEATURES.dashboard.calendar)"
         :loading="calendarLoading"
         :rows="calendarRows"
-        :expiry-items="expiryItems"
+        :expiry-items="calendarExpiryItems"
         :tests-only="calendarNextTestsOnly"
         @open-monthly-report="openMonthlyReport"
         @month-change="onCalendarMonthChange"
@@ -333,7 +333,7 @@ import {
 import {useRescanModalStore} from "../stores/rescanModal.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
-import type {ExpiryCalendarItem, InvoiceDueSoon} from "../services/apiService.js";
+import type {ExpiryCalendarItem, InvoiceDueSoon, ObligationSuggestion} from "../services/apiService.js";
 import {api} from "../services/apiService.js";
 import type {DocTemplate} from "../shared/types.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
@@ -538,6 +538,15 @@ async function loadInvoiceCounts() {
   }
 }
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
+// Extra calendar events beside the contract expiries: unpaid invoices (the "due soon"
+// panel) and new suggestions from the discovery page. Each loads only when its feature is on.
+const calendarInvoices = ref<InvoiceDueSoon[]>([]);
+const calendarDiscoveries = ref<ObligationSuggestion[]>([]);
+const calendarExpiryItems = computed<ExpiryCalendarItem[]>(() => [
+  ...expiryItems.value,
+  ...calendarInvoices.value.map(invoiceCalendarItem),
+  ...calendarDiscoveries.value.map(discoveryCalendarItem),
+]);
 const loadingExpiryItems = ref(false);
 const calendarNextTestsOnly = ref(true);
 const savingCalendarPreference = ref(false);
@@ -624,6 +633,63 @@ function onCalendarMonthChange(range: { from: string; to: string }) {
   refreshCalendar(true);
 }
 
+function visibleCalendarRange(): { from: string; to: string } {
+  if (calendarRange.value) return calendarRange.value;
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return {from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, to: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(last)}`};
+}
+
+function dayDiffFromToday(iso: string): number {
+  const target = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+function invoiceCalendarItem(inv: InvoiceDueSoon): ExpiryCalendarItem {
+  return {
+    id: `invoice-${inv.id}`, invoice_id: inv.id, kind: "invoice", document_id: null,
+    expiry_date: inv.payment_due_date, contract_type: null, contract_number: null,
+    client_name: null, contact_person: null, contact_email: null, contact_phone: null, equipment_name: null,
+    supplier_name: inv.supplier_name, amount_display: inv.amount_display,
+    days_until: inv.daysLeft, urgency: inv.daysLeft < 0 ? "overdue" : inv.daysLeft <= 7 ? "critical" : "warning",
+  };
+}
+
+function discoveryCalendarItem(item: ObligationSuggestion): ExpiryCalendarItem {
+  const days = dayDiffFromToday(item.due_date);
+  return {
+    id: `discovery-${item.id}`, kind: "discovery", title: item.title, document_id: null,
+    expiry_date: item.due_date, contract_type: null, contract_number: null,
+    client_name: null, contact_person: null, contact_email: null, contact_phone: null, equipment_name: null,
+    days_until: days, urgency: days < 0 ? "overdue" : days <= 7 ? "critical" : "warning",
+  };
+}
+
+async function loadCalendarInvoices() {
+  if (!showInvoiceStats.value) { calendarInvoices.value = []; return; }
+  try {
+    const {from, to} = visibleCalendarRange();
+    calendarInvoices.value = (await api.invoices.dueInRange(from, to)).items;
+  } catch {
+    calendarInvoices.value = [];
+  }
+}
+
+async function loadCalendarDiscoveries() {
+  if (!hasFeature(FEATURES.pages.discovery)) { calendarDiscoveries.value = []; return; }
+  try {
+    const {from, to} = visibleCalendarRange();
+    // Only suggestions still waiting for a decision; created or dismissed ones are not events.
+    calendarDiscoveries.value = (await api.gmail.discoveries()).proposals
+      .filter((item) => item.status === "new" && item.due_date >= from && item.due_date <= to);
+  } catch {
+    calendarDiscoveries.value = [];
+  }
+}
+
 async function refreshCalendar(force: boolean) {
   if (force || !remindersStore.rows.length) {
     remindersStore.fetch({ limit: 200 }, force);
@@ -638,6 +704,9 @@ async function refreshCalendar(force: boolean) {
     expiryItems.value = await api.equipment.expiryCalendar(params);
   } catch {
     expiryItems.value = [];
+  }
+  try {
+    await Promise.all([loadCalendarInvoices(), loadCalendarDiscoveries()]);
   } finally {
     loadingExpiryItems.value = false;
   }

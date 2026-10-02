@@ -125,6 +125,7 @@ describe("updateUserTier", () => {
       gmailInspectionHistoryMonths: 24,
       gmailInvoiceHistoryMonths: 36,
       googleCalendarSync: true,
+      emailIn: true,
     });
   });
 

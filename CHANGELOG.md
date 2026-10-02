@@ -20,6 +20,12 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Calendar
+
+- Added calendar filter chips for payments and mailbox suggestions, and a "לתשלום" chip on the Invoices page (unpaid with a payment date, sorted soonest first).
+
+- The dashboard calendar now shows unpaid invoice payment dates and, when the discovery page is enabled, new suggestions found in the mailbox. `GET /api/invoices/due-soon` accepts `from` and `to` to list any month.
+
 ### Saved Table Views
 
 - Invoices now opens on the last 3 months by default.

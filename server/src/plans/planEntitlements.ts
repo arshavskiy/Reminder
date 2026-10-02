@@ -105,7 +105,7 @@ export const DEFAULT_EMAIL_TEMPLATE_ID = "6a11a1ec0c05f49738b08bfc";
 /** Defaults used when creating user_settings for a brand-new account (no entitlements — those go in $set). */
 export function newUserSettingsBase(
   userId: string,
-  user?: {plan?: string | null; role?: string | null} | null,
+  user?: {plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null} | null,
 ): Record<string, unknown> {
   // Cloud storage is a paid feature — a lapsed trial starts with it off, and the
   // digital plan has no file storage at all (tierFeatureFlags.fileStorage).
@@ -133,7 +133,7 @@ export function newUserSettingsBase(
 
 export function newUserSettingsDefaults(
   userId: string,
-  user: {plan?: string | null; role?: string | null} | null | undefined = {plan: DEFAULT_NEW_USER_PLAN, role: "user"},
+  user: {plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null} | null | undefined = {plan: DEFAULT_NEW_USER_PLAN, role: "user", trial_ends_at: newTrialEndsAt()},
 ): Record<string, unknown> {
   return {
     ...newUserSettingsBase(userId, user),
@@ -148,7 +148,7 @@ export function newUserSettingsDefaults(
  */
 export async function ensureUserSettingsWithEntitlements(
   userId: string,
-  user?: {plan?: string | null; role?: string | null} | null,
+  user?: {plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null} | null,
 ): Promise<PlanEntitlements> {
   let resolved = user ?? null;
   if (!resolved) {

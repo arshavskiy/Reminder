@@ -434,6 +434,13 @@ export interface ExpiryCalendarItem {
   equipment_name: string | null;
   days_until: number;
   urgency: "overdue" | "critical" | "warning" | "ok";
+  /** Set on items that are not contract expiries: `invoice` = an unpaid invoice payment date, `discovery` = a new suggestion found in the mailbox. */
+  kind?: "invoice" | "discovery";
+  invoice_id?: string;
+  /** Display title for non-contract items (a discovery title). */
+  title?: string | null;
+  amount_display?: string | null;
+  supplier_name?: string | null;
 }
 
 export interface PrintTemplateDraftSummary {
@@ -826,7 +833,9 @@ export const api = {
 
   invoices: {
     dueSoon: (days = 14) => get<{ items: InvoiceDueSoon[]; days: number }>(`/invoices/due-soon${qs({ days })}`, true),
-    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; currency?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean }, force = false) =>
+    /** Every unpaid invoice due between two ISO dates (inclusive), for the calendar. */
+    dueInRange: (from: string, to: string) => get<{ items: InvoiceDueSoon[]; from: string; to: string }>(`/invoices/due-soon${qs({ from, to })}`, true),
+    list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; currency?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean; duplicatesOnly?: string; unpaidOnly?: string }, force = false) =>
       get<{
         rows: ImportedInvoice[];
         total: number;
@@ -840,6 +849,9 @@ export const api = {
         categories: GmailSearchProvider["category"][];
         suppliers: string[];
         currencies?: string[];
+        duplicatesCount?: number;
+        /** Unpaid invoices that have a payment date (the "to pay" chip count). */
+        unpaidDueCount?: number;
       }>(`/invoices${qs(params)}`, force),
     get: (id: string, force = false) =>
       get<ImportedInvoice>(`/invoices/${id}`, force),
