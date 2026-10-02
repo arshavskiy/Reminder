@@ -90,3 +90,35 @@ describe("PUT /api/user-settings — whats_new_seen", () => {
     expect(rows("user_settings")).toHaveLength(0);
   });
 });
+
+describe("PUT /api/user-settings — scheduled scan options", () => {
+  it("saves the discovery scan frequency and rejects anything but daily or weekly", async () => {
+    for (const value of ["daily", "weekly"]) {
+      const res = await put({ discovery_scan_frequency: value });
+      expect(res.status).toBe(200);
+      expect((await res.json()).discovery_scan_frequency).toBe(value);
+    }
+    expect((await put({ discovery_scan_frequency: "hourly" })).status).toBe(400);
+    expect(rows("user_settings")[0].discovery_scan_frequency).toBe("weekly");
+  });
+
+  it("lets a business account switch the daily invoice scan on and off", async () => {
+    const on = await put({ invoices_auto_scan: true });
+    expect(on.status).toBe(200);
+    expect((await on.json()).invoices_auto_scan).toBe(true);
+    const off = await put({ invoices_auto_scan: false });
+    expect((await off.json()).invoices_auto_scan).toBe(false);
+  });
+
+  it("refuses the daily invoice scan on plans without Gmail invoice import, but still allows switching it off", async () => {
+    for (const plan of ["basic", "digital"]) {
+      seedPlan(plan);
+      const res = await put({ invoices_auto_scan: true });
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toBe("gmail_invoice_plan_required");
+    }
+    expect(rows("user_settings")).toHaveLength(0);
+    seedPlan("basic");
+    expect((await put({ invoices_auto_scan: false })).status).toBe(200);
+  });
+});

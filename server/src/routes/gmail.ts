@@ -21,7 +21,9 @@ import {
     PLAN_GATE_MESSAGES,
     tierFeatureFlags
 } from "../plans/tierFeatures";
-import { loadTemplate } from "../templates/seedTemplates";
+import { loadAllTemplates, loadTemplate } from "../templates/seedTemplates";
+import { INVOICE_SCAN_WINDOW_DAYS, invoiceImportDigest, limitQueryToRecentDays } from "../gmail/autoScan";
+import { sendToUser } from "../push/pushService";
 import {
   assertDocumentImportQuota,
   DOCUMENT_MONTHLY_QUOTA_ERROR,
@@ -63,6 +65,8 @@ type GmailImportJob = {
   user_id: string;
   status: GmailImportJobStatus;
   kind?: "inline";
+  /** "auto" = queued by the daily scan rather than by the user. */
+  source?: "auto";
   q: string;
   template_id: string | null;
   max_results: number;
@@ -1548,6 +1552,90 @@ async function completeGmailImportJob(
       },
     } as any
   );
+  if (job.source === "auto" && current.imported > 0) await notifyAutoInvoiceImport(job.user_id, current.imported);
+}
+
+/** Tells the user what the daily scan imported. Quiet when it found nothing new. */
+async function notifyAutoInvoiceImport(userId: string, imported: number) {
+  try {
+    const digest = invoiceImportDigest(imported);
+    await col("notifications").insertOne({
+      user_id: userId,
+      kind: "invoices_imported",
+      title: digest.title,
+      body: digest.body,
+      created_at: new Date(),
+      read_at: null,
+    } as any);
+    await sendToUser(userId, { title: digest.title, body: digest.body, data: { url: "/invoices", kind: "invoices_imported" } });
+  } catch (err) {
+    logger.warn("auto_invoice_import_notify_failed", { user_id: userId, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+export type AutoInvoiceImportResult =
+  | { ok: true; jobId: string }
+  | { ok: false; reason: "plan" | "gmail_not_connected" | "no_template" | "already_running" | "quota" | "error"; error?: string };
+
+/**
+ * Queues one Gmail invoice import for a user, as the daily scan does. It applies
+ * the same rules as the manual "import all" button (plan, invoice history window,
+ * import quota) but only looks at recent mail, and skips users who already have an
+ * import queued or running.
+ */
+export async function enqueueAutoInvoiceImport(user: {
+  _id?: unknown;
+  plan?: string | null;
+  role?: string | null;
+  trial_ends_at?: Date | string | null;
+}, userId: string, startWorker: () => void = startGmailImportJobWorker): Promise<AutoInvoiceImportResult> {
+  try {
+    if (!planAllowsDocumentImport(effectivePlanId(user))) return { ok: false, reason: "plan" };
+    if (!featureFlagsForUser(user).gmailInvoiceHistoryMonths) return { ok: false, reason: "plan" };
+    if (!(await resolveGmailToken(userId))) return { ok: false, reason: "gmail_not_connected" };
+
+    const active = await col<GmailImportJob>("gmail_import_jobs").findOne({ user_id: userId, status: { $in: ["queued", "running"] } } as any);
+    if (active) return { ok: false, reason: "already_running" };
+
+    const templates = await loadAllTemplates(userId);
+    const template = templates.find((item) => item.document_kind === "invoice" || /חשבונית|קבלה|דרישת\s*תשלום/i.test(item.name)) ?? null;
+    if (!template?.id) return { ok: false, reason: "no_template" };
+
+    const q = limitQueryToRecentDays(buildGmailQuery(undefined, template, gmailFeatureKey(user)), INVOICE_SCAN_WINDOW_DAYS);
+    await assertDocumentImportQuota(userId, effectivePlanId(user), 1, quotaCategoryFromTemplate(template), "email");
+    const now = new Date();
+    const insert = await col<GmailImportJob>("gmail_import_jobs").insertOne({
+      user_id: userId,
+      status: "queued",
+      source: "auto",
+      q,
+      template_id: String(template.id),
+      max_results: gmailPageSize(undefined),
+      total_messages: 0,
+      new_messages: 0,
+      processed_messages: 0,
+      imported: 0,
+      skipped: 0,
+      errors: 0,
+      attachments_found: 0,
+      stored: 0,
+      classified_invoices: 0,
+      rejected: 0,
+      ocr_failed: 0,
+      ai_retry_pending: 0,
+      results: [],
+      cursor: 0,
+      error: null,
+      quota: null,
+      created_at: now,
+      updated_at: now,
+    } as any);
+    startWorker();
+    return { ok: true, jobId: insert.insertedId.toString() };
+  } catch (err) {
+    if (err instanceof DocumentImportQuotaError) return { ok: false, reason: "quota" };
+    return { ok: false, reason: "error", error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 function presentGmailImportJob(job: GmailImportJob) {

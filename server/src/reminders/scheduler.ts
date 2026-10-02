@@ -23,10 +23,10 @@ import {checkBillingReminders} from "../plans/billingReminders";
 import {
   AUTO_SCAN_HISTORY_MONTHS,
   AUTO_SCAN_USERS_PER_TICK,
-  autoScanDue,
   discoveryDigest,
   newDiscoveryIds,
 } from "../gmail/autoDiscovery";
+import {INVOICE_SCAN_USERS_PER_TICK, normalizeScanFrequency, scanDue} from "../gmail/autoScan";
 import {obligationSearchParameters, parseObligationSearchLangs} from "../gmail/obligationSearch";
 import {effectivePlanId, planAllowsDocumentImport} from "../plans/tierFeatures";
 import {isFeatureEnabledForUser} from "../features";
@@ -88,6 +88,7 @@ export function startScheduler() {
     if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
     await runWithHealth("syncCalendars", syncAllCalendars);
     await runWithHealth("checkDiscoveryScans", checkDiscoveryScans);
+    await runWithHealth("checkInvoiceScans", checkInvoiceScans);
     await col("scheduler_health").updateOne(
       { name: "tick" },
       { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
@@ -111,7 +112,7 @@ export function stopScheduler() {
   }
 }
 
-// Weekly unattended discovery scan for users who opted in. Only deadlines that
+// Unattended discovery scan (daily or weekly, per user) for users who opted in. Only deadlines that
 // were not already saved raise a notification, so a rerun stays quiet.
 async function checkDiscoveryScans() {
   const now = new Date();
@@ -119,7 +120,7 @@ async function checkDiscoveryScans() {
   let scanned = 0;
   for (const row of rows) {
     if (scanned >= AUTO_SCAN_USERS_PER_TICK) break;
-    if (!autoScanDue(row.discovery_last_scan_at, now)) continue;
+    if (!scanDue(row.discovery_last_scan_at, now, normalizeScanFrequency(row.discovery_scan_frequency))) continue;
 
     const userId = String(row.user_id);
     const user = await col("users").findOne({_id: toObjectId(userId)}) as any;
@@ -154,6 +155,34 @@ async function checkDiscoveryScans() {
       read_at: null,
     } as any);
     await sendToUser(userId, {title: digest.title, body: digest.body, data: {url: "/discover-reminders", kind: "discovery_new"}});
+  }
+}
+
+// Daily unattended Gmail invoice import for users who switched it on. It queues the same
+// import job as the Invoices page button, limited to recent mail; the job's own
+// completion sends the "N invoices imported" notification.
+async function checkInvoiceScans() {
+  const now = new Date();
+  const rows = await col("user_settings").find({invoices_auto_scan: true}).toArray() as any[];
+  let started = 0;
+  for (const row of rows) {
+    if (started >= INVOICE_SCAN_USERS_PER_TICK) break;
+    if (!scanDue(row.invoices_last_scan_at, now, "daily")) continue;
+
+    const userId = String(row.user_id);
+    const user = await col("users").findOne({_id: toObjectId(userId)}) as any;
+    if (!user) continue;
+
+    // Marked before queueing so a failing account is retried next day, not every hour.
+    await col("user_settings").updateOne({user_id: row.user_id}, {$set: {invoices_last_scan_at: now}});
+    const {enqueueAutoInvoiceImport} = await import("../routes/gmail");
+    const result = await enqueueAutoInvoiceImport(user, userId);
+    if (result.ok) {
+      started += 1;
+      logger.info("invoice_auto_scan_queued", {user_id: userId, job_id: result.jobId});
+    } else {
+      logger.warn("invoice_auto_scan_skipped", {user_id: userId, reason: result.reason, error: result.error ?? null});
+    }
   }
 }
 

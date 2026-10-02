@@ -1247,6 +1247,7 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 - Languages: Hebrew, English, Russian (per-user `discovery_langs`); Russian kind/cue patterns and month names
 - Missed deadlines (last 90 days) in their own group beside urgent and upcoming; due chips and 4 stat cards
 - **Weekly auto-scan**: `discovery_auto_scan` switch ("סריקה שבועית והתראה"); scheduler `checkDiscoveryScans` (3 users per tick, production only) sends in-app notification + web push for new finds only
+- **Scan schedule per user**: the discovery scan runs daily or weekly (`discovery_scan_frequency`, default weekly; chosen on the Discover reminders page). The **daily invoice scan** (`invoices_auto_scan`, Business plan, switch on the Invoices page) queues the same Gmail import job as the "import all" button (`enqueueAutoInvoiceImport`), limited to the last 14 days, skipped while another import is queued or running; the finished job notifies the user (in-app and push) only when something was imported. Both run from the hourly scheduler (`checkDiscoveryScans`, `checkInvoiceScans`; production only), at most 3 users per tick, and a user is marked as scanned before the work starts so a failing account is retried next interval, not every hour. Daily means every 20 hours or more, so the hourly tick never skips a day. Code: `gmail/autoScan.ts`
 - Moovit/Pango public-transport receipts parsed inline (`parsePango`)
 
 ### Dashboard

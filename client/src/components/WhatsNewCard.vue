@@ -72,6 +72,9 @@ const items = computed<Item[]>(() => {
       list.push({id: "discovery", action: () => router.push(href("/discover-reminders")), tour: "discovery"});
     }
   }
+  if (planAllowsEmailIn(plan.value)) {
+    list.push({id: "invoiceScan", businessOnly: true, action: () => router.push(href("/invoices"))});
+  }
   list.push({id: "feed", businessOnly: true, locked: !planAllowsGoogleCalendar(plan.value), action: () => router.push({path: href("/profile"), query: {section: "settings"}}), tour: "profile"});
   list.push({id: "push"});
   if (canImport) list.push({id: "dueSoon"});

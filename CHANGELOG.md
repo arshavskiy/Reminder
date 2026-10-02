@@ -20,6 +20,11 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Scheduled Scans
+
+- Added a daily Gmail invoice scan (Business): a per-user switch on the Invoices page queues an import of the last 14 days of mail once a day and notifies the user when invoices were imported.
+- The discovery scan can now run daily or weekly (choice on the Discover reminders page).
+
 ### Invoice and Receipt Pairing
 
 - Invoices and the receipts that paid them are now matched (supplier or reference number, amount, currency, receipt within 90 days after the invoice) so one payment is not counted twice: a paired invoice counts as paid, is not a duplicate and is left out of expense totals. Pairing runs after each import, with a one-time backfill, a manual confirm and an unlink.

@@ -1222,6 +1222,21 @@ paths:
                   pattern: ^[\w.-]{1,32}$
                   example: 2026-10
                   description: Release id of the last What's new card the user dismissed
+                discovery_scan_frequency:
+                  type: string
+                  enum:
+                    - daily
+                    - weekly
+                  default: weekly
+                  description: How often the automatic discovery scan runs (needs
+                    `discovery_auto_scan`).
+                invoices_auto_scan:
+                  type: boolean
+                  description: Daily automatic import of new invoices and receipts from Gmail
+                    (last 14 days). Business plan only (403
+                    `gmail_invoice_plan_required` otherwise); needs Gmail
+                    connected to do anything. Notifies the user when invoices
+                    were imported.
               additionalProperties: true
       responses:
         "200":
@@ -1250,6 +1265,10 @@ paths:
                     example: error
                   message:
                     type: string
+        "403":
+          description: Plan does not allow the requested scan option
+            (`plan_no_document_import` for the discovery scan,
+            `gmail_invoice_plan_required` for the daily invoice scan)
   /api-docs.json:
     get:
       summary: This OpenAPI document as JSON

@@ -1,6 +1,8 @@
 // Minimal in-memory stand-in for the Mongo `col()` helper, enough for route
 // tests: equality / $in / $nin / $ne / $gte / $lte / $exists filters, findOne, find().sort().limit(),
 // updateOne with $set / $unset / upsert, insertOne and deleteOne.
+import { ObjectId } from "mongodb";
+
 export const memory = new Map<string, Record<string, any>[]>();
 
 function matches(row: any, filter: any): boolean {
@@ -35,7 +37,11 @@ export function col(name: string) {
   return {
     findOne: async (filter: any) => list().find((row) => matches(row, filter)) ?? null,
     find: (filter: any) => chain(list().filter((row) => matches(row, filter))),
-    insertOne: async (doc: any) => { list().push(doc); return { insertedId: doc._id }; },
+    insertOne: async (doc: any) => {
+      doc._id ??= new ObjectId();
+      list().push(doc);
+      return { insertedId: doc._id };
+    },
     deleteOne: async (filter: any) => {
       const index = list().findIndex((row) => matches(row, filter));
       if (index >= 0) list().splice(index, 1);

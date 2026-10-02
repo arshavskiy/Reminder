@@ -2106,6 +2106,9 @@ const he = {
   },
   invoicesMsg: {
     toPay: "לתשלום",
+    dailyScan: "סריקה יומית של חשבוניות מ-Gmail",
+    dailyScanHint: "פעם ביום מיובאות אוטומטית חשבוניות וקבלות חדשות מהדואר של 14 הימים האחרונים. תקבלו התראה כשיובאו חשבוניות חדשות.",
+    dailyScanNeedsGmail: "כדי להפעיל את הסריקה היומית יש לחבר את Gmail.",
     paidByReceipt: "שולם (קבלה)",
     receiptOfInvoice: "משויכת לחשבונית",
     pairedTooltip: "החשבונית והקבלה זוהו כאותו תשלום ונספרים פעם אחת",
@@ -4465,6 +4468,9 @@ const en = {
   },
   invoicesMsg: {
     toPay: "To pay",
+    dailyScan: "Daily invoice scan from Gmail",
+    dailyScanHint: "Once a day, new invoices and receipts from the last 14 days of your mail are imported automatically. You get a notification when new invoices were imported.",
+    dailyScanNeedsGmail: "Connect Gmail to turn on the daily scan.",
     paidByReceipt: "Paid (receipt)",
     receiptOfInvoice: "Linked to an invoice",
     pairedTooltip: "The invoice and receipt were recognised as the same payment and are counted once",
