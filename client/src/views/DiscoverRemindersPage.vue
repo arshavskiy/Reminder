@@ -24,6 +24,10 @@
         <n-switch :value="autoScan" :loading="autoScanSaving" :disabled="!connected || !allowed" @update:value="setAutoScan" />
         <span><strong>{{ c.autoScan }}</strong><small class="muted">{{ c.autoScanHint }}</small></span>
       </label>
+      <label v-if="autoScan" class="scan-frequency">
+        <span>{{ c.frequency }}</span>
+        <n-select v-model:value="frequency" size="small" :options="frequencyOptions" :loading="autoScanSaving" @update:value="setFrequency" />
+      </label>
       <p class="muted">{{ c.limit }}</p>
       <p v-if="scanning" role="status">{{ c.scanning }}</p>
     </section>
@@ -123,6 +127,11 @@ const auth = useAuthStore();
 const allowed = computed(() => planAllowsDocumentImport(resolveUserPlan(auth.user)));
 const userSettings = useUserSettingsStore();
 const autoScan = ref(false);
+const frequency = ref<"daily" | "weekly">("weekly");
+const frequencyOptions = computed(() => [
+  { label: c.value.daily, value: "daily" },
+  { label: c.value.weekly, value: "weekly" },
+]);
 const autoScanSaving = ref(false);
 const connected = ref(false);
 const email = ref<string | null>(null);
@@ -202,6 +211,15 @@ async function setAutoScan(value: boolean) {
   } catch (err) { error.value = errorText(err); }
   finally { autoScanSaving.value = false; }
 }
+async function setFrequency(value: "daily" | "weekly") {
+  autoScanSaving.value = true;
+  error.value = "";
+  try {
+    const row = await userSettings.save({ discovery_scan_frequency: value });
+    frequency.value = row.discovery_scan_frequency === "daily" ? "daily" : "weekly";
+  } catch (err) { error.value = errorText(err); }
+  finally { autoScanSaving.value = false; }
+}
 async function connect() {
   connecting.value = true;
   error.value = "";
@@ -250,6 +268,7 @@ onMounted(async () => {
   try {
     const row = await userSettings.load();
     autoScan.value = Boolean(row?.discovery_auto_scan);
+    frequency.value = row?.discovery_scan_frequency === "daily" ? "daily" : "weekly";
     if (row?.discovery_langs?.length) languages.value = [...row.discovery_langs];
   } catch { /* the switch just stays off */ }
   try { const status = await api.gmail.status(); connected.value = status.connected; email.value = status.email; }
@@ -268,6 +287,8 @@ h2, h3, p { margin: 0 0 8px; }
 h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
 .scan-controls { margin: 24px 0 12px; align-items: end; }
 .scan-controls label { display: grid; gap: 8px; flex: 1; min-width: 180px; }
+.scan-frequency { display: flex; align-items: center; gap: 10px; max-width: 280px; }
+.scan-frequency span { white-space: nowrap; color: var(--text-secondary); font-size: 13px; }
 .auto-scan { display: flex; align-items: center; gap: 12px; margin-top: 4px; cursor: pointer; }
 .auto-scan span { display: grid; gap: 2px; }
 .muted, .connection p { color: var(--text-secondary); font-size: 13px; }

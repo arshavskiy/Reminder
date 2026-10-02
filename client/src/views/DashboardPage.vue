@@ -7,6 +7,7 @@
       </button>
     </div>
     <WhatsNewCard @upload="showUploadModal = true" />
+    <QuickReminderModal v-model:show="showNewReminder" @created="refreshCalendar(true)" />
     <!-- ── Greeting + date ─────────────────────────────────────────────── -->
     <n-spin :show="store.loading">
       <div
@@ -48,6 +49,14 @@
             </template>
             {{ l.profile.upgradePlan }}
           </n-tooltip>
+          <button
+            v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
+            class="rbtn-sm rbtn-sm--primary"
+            type="button"
+            @click="showNewReminder = true"
+          >
+            + {{ l.reminders.newReminder }}
+          </button>
           <button
             v-if="writesAllowed && (hasFeature(FEATURES.pages.reminders) || hasFeature(FEATURES.dashboard.calendar))"
             class="rbtn-sm"
@@ -248,7 +257,7 @@
               >{{ l.dashboard.allReminders }}
             </router-link>
           </header>
-          <ul v-if="stats?.upcoming_reminders?.length" class="panel__list">
+          <ul v-if="stats?.upcoming_reminders?.length" class="panel__list panel__list--grid">
             <li
               v-for="r in stats.upcoming_reminders"
               :key="r.id"
@@ -341,6 +350,7 @@ import StatusBadge from "../components/StatusBadge.vue";
 import ReminderCalendar from "../components/ReminderCalendar.vue";
 import UploadModal from "../components/UploadModal.vue";
 import WhatsNewCard from "../components/WhatsNewCard.vue";
+import QuickReminderModal from "../components/QuickReminderModal.vue";
 import type { UploadOptions } from "../components/UploadModal.vue";
 import ExtractRemindersModal from "../components/ExtractRemindersModal.vue";
 import MonthlyReportModal from "../components/MonthlyReportModal.vue";
@@ -540,6 +550,7 @@ async function loadInvoiceCounts() {
 const expiryItems = ref<ExpiryCalendarItem[]>([]);
 // Extra calendar events beside the contract expiries: unpaid invoices (the "due soon"
 // panel) and new suggestions from the discovery page. Each loads only when its feature is on.
+const showNewReminder = ref(false);
 const calendarInvoices = ref<InvoiceDueSoon[]>([]);
 const calendarDiscoveries = ref<ObligationSuggestion[]>([]);
 const calendarExpiryItems = computed<ExpiryCalendarItem[]>(() => [
@@ -1091,6 +1102,17 @@ const data_cards = computed(() => modules.value);
 }
 .rbtn-sm:active { transform: scale(0.97); }
 .rbtn-sm :deep(.n-icon) { color: var(--brand-color); }
+.rbtn-sm--primary {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: var(--text-inverse, #fff);
+  font-weight: 600;
+}
+.rbtn-sm--primary:hover {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  filter: brightness(1.06);
+}
 .rbtn-sm--disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1407,31 +1429,41 @@ html[data-theme="light"] .module__icon {
     margin-bottom: 10px;
   }
 
+  /* Three stat cards per row on phones; each stacks its icon above the number so it fits. */
   .dash__stats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
     margin-bottom: 24px;
   }
 
   .stat {
     min-width: 0;
-    padding: 13px 14px;
+    padding: 10px 10px;
     border-radius: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .stat__icon {
+    margin-top: 0;
   }
 
   .stat__num {
-    font-size: 24px;
+    font-size: 22px;
   }
 
+  /* Two workspace cards per row on phones, with a compact card. */
   .module-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     margin-bottom: 28px;
   }
 
   .module {
-    padding: 18px;
+    padding: 12px;
+    gap: 8px;
     border-radius: 14px;
   }
 
@@ -1439,13 +1471,71 @@ html[data-theme="light"] .module__icon {
     transform: none;
   }
 
+  .module__icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+    border-radius: 10px;
+  }
+
   .module__title {
-    font-size: 15px;
+    font-size: 14px;
+  }
+
+  .module__desc {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .module__cta {
+    font-size: 12px;
   }
 
   .panel {
     padding: 16px;
     border-radius: 14px;
+  }
+
+  /* Upcoming reminders: two small cards per row instead of one long list. */
+  .panel__list--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .panel__list--grid .panel__row {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+  }
+
+  .panel__list--grid .panel__row:last-child {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .panel__list--grid .panel__row-stack {
+    width: 100%;
+  }
+
+  .panel__list--grid .panel__row-date {
+    order: -1;
+    font-weight: 600;
+    color: var(--brand-color);
+  }
+
+  .panel__list--grid .panel__row-date--late {
+    color: var(--color-error);
   }
 
   .panel__row {
@@ -1460,14 +1550,14 @@ html[data-theme="light"] .module__icon {
 
 @media (max-width: 430px) {
   .dash__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .stat {
     min-height: 0;
-    padding: 10px 12px;
-    gap: 8px;
+    padding: 8px 9px;
+    gap: 4px;
   }
 
   .stat__icon {

@@ -3,7 +3,7 @@
     <header class="rcal__head">
       <div class="rcal__title-wrap">
         <h3 class="rcal__title">{{ testsOnly ? l.calendar.journal : l.calendar.title }}</h3>
-        <div class="rcal__counts">
+        <div class="rcal__counts rcal__counts--head">
           <span v-if="!testsOnly" class="rcal__count">{{ t('calendar.remindersCount', {n: filteredRows.length}) }}</span>
           <span v-if="inspectionItemCount" class="rcal__expiry-count">
             {{ t('calendar.inspectionsCount', {n: inspectionItemCount}) }}
@@ -71,12 +71,24 @@
           v-for="filter in calendarFilters"
           :key="filter.key"
           class="rcal__filter"
-          :class="{ 'rcal__filter--active': activeFilter === filter.key }"
+          :class="{ 'rcal__filter--active': activeFilter === filter.key, 'rcal__filter--empty': filter.key !== 'all' && filterCount(filter.key) === 0 && activeFilter !== filter.key }"
+          :aria-label="filter.label"
+          :aria-pressed="activeFilter === filter.key"
+          :title="filter.label"
           type="button"
           @click="activeFilter = filter.key"
         >
-          {{ filter.label }}
+          <!-- Phones show the icon only (the label is in the tooltip), like the table pages. -->
+          <n-icon :component="filterIcon(filter.key)" :size="16" class="rcal__filter-icon" />
+          <span class="rcal__filter-label">{{ filter.label }}</span>
         </button>
+      </div>
+      <!-- Phones: the counts sit below the filters, not between the title and the buttons. -->
+      <div v-if="!testsOnly || inspectionItemCount" class="rcal__counts rcal__counts--below">
+        <span v-if="!testsOnly" class="rcal__count">{{ t('calendar.remindersCount', {n: filteredRows.length}) }}</span>
+        <span v-if="inspectionItemCount" class="rcal__expiry-count">
+          {{ t('calendar.inspectionsCount', {n: inspectionItemCount}) }}
+        </span>
       </div>
       <div class="rcal__legend">
         <span v-if="!testsOnly" class="rcal__legend-item">
@@ -125,8 +137,14 @@
             'rcal__cell--has': cell.items.length > 0 || cell.expiryItems.length > 0,
           }"
           class="rcal__cell"
+          @click="onCellTap(cell)"
         >
           <div class="rcal__cell-num">{{ cell.day }}</div>
+          <!-- Phones: the pills do not fit seven to a row, so a cell shows coloured dots and opens the day on tap. -->
+          <div v-if="cell.items.length || cell.expiryItems.length" class="rcal__dots" aria-hidden="true">
+            <span v-for="(dot, i) in cellDots(cell)" :key="i" :class="dot" class="rcal__dot" />
+            <span v-if="cellExtraCount(cell) > 0" class="rcal__dots-more">+{{ cellExtraCount(cell) }}</span>
+          </div>
           <div v-if="cell.items.length || cell.expiryItems.length" class="rcal__cell-items">
             <n-popover
               v-for="r in visibleReminderItems(cell)"
@@ -329,7 +347,18 @@
 import {computed, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {NButton, NIcon, NModal, NPopover, useMessage} from "naive-ui";
-import {CalendarOutline} from "@vicons/ionicons5";
+import {
+  AppsOutline,
+  BulbOutline,
+  CalendarOutline,
+  CardOutline,
+  ClipboardOutline,
+  MailOutline,
+  NotificationsOutline,
+  TimeOutline,
+  WarningOutline,
+  CheckmarkCircleOutline,
+} from "@vicons/ionicons5";
 import type {ReminderWithContext} from "@shared/types.js";
 import {api, type ExpiryCalendarItem} from "../services/apiService.js";
 import {useFeaturesStore} from "../stores/features.js";
@@ -359,7 +388,8 @@ const emit = defineEmits<{
 
 const router = useRouter();
 const message = useMessage();
-const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
+// Month is the default everywhere: on phones it now fits the screen (dots per day, tap for the list).
+const view = ref<"month" | "agenda">("month");
 const CURSOR_KEY = "calendar_last_month";
 function loadCursor(): Date {
   try {
@@ -387,6 +417,27 @@ const dayModalItems = ref<ReminderWithContext[]>([]);
 const dayModalExpiry = ref<ExpiryCalendarItem[]>([]);
 const dayModalLabel = ref("");
 
+const MAX_CELL_DOTS = 3;
+
+/** Colour classes for a cell's dots: reminders first, then expiries, payments and suggestions. */
+function cellDots(cell: { items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }): string[] {
+  const dots = [
+    ...cell.items.map((r) => `rcal__pill--${reminderVisualStatus(r)}`),
+    ...cell.expiryItems.map((e) => `rcal__pill--expiry-${expiryVisualStatus(e)}`),
+  ];
+  return dots.slice(0, MAX_CELL_DOTS);
+}
+
+function cellExtraCount(cell: { items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }): number {
+  return Math.max(0, cell.items.length + cell.expiryItems.length - MAX_CELL_DOTS);
+}
+
+/** On a phone a tap anywhere in a day opens its list; on larger screens the pills handle their own clicks. */
+function onCellTap(cell: { iso: string; items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }) {
+  if (!isMobileViewport() || !(cell.items.length || cell.expiryItems.length)) return;
+  openDay(cell);
+}
+
 function openDay(cell: { iso: string; items: ReminderWithContext[]; expiryItems: ExpiryCalendarItem[] }) {
   dayModalItems.value = cell.items;
   dayModalExpiry.value = cell.expiryItems;
@@ -409,6 +460,30 @@ function sameDay(a: Date, b: Date): boolean { return a.getFullYear() === b.getFu
 
 const today = startOfDay(new Date());
 type CalendarFilterKey = "all" | "overdue" | "next30" | "month" | "sent" | "no_email" | "reminders" | "expiries" | "payments" | "mailbox";
+
+const FILTER_ICONS: Record<string, unknown> = {
+  all: AppsOutline,
+  overdue: WarningOutline,
+  next30: TimeOutline,
+  month: CalendarOutline,
+  sent: CheckmarkCircleOutline,
+  no_email: MailOutline,
+  reminders: NotificationsOutline,
+  expiries: ClipboardOutline,
+  payments: CardOutline,
+  mailbox: BulbOutline,
+};
+
+/** How many events a filter would show; filters with none are hidden on phones. */
+function filterCount(key: CalendarFilterKey): number {
+  const reminders = props.testsOnly ? 0 : props.rows.filter((row) => reminderMatchesFilter(row, key)).length;
+  const expiries = (props.expiryItems ?? []).filter((item) => expiryMatchesFilter(item, key)).length;
+  return reminders + expiries;
+}
+
+function filterIcon(key: CalendarFilterKey) {
+  return (FILTER_ICONS[key] ?? AppsOutline) as typeof CalendarOutline;
+}
 
 const calendarFilters = computed(() => [
   { key: "all" as CalendarFilterKey, label: l.value.calendar.filterAll },
@@ -849,6 +924,7 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   gap: 6px;
   flex-wrap: wrap;
 }
+.rcal__counts--below { display: none; }
 .rcal__count {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
@@ -934,6 +1010,7 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
   padding: 4px 11px;
   font-size: 12px;
 }
+.rcal__filter-icon { display: none; }
 .rcal__summary-chip:hover,
 .rcal__filter:hover {
   border-color: var(--brand-color);
@@ -1021,6 +1098,9 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
 }
 .rcal__cell--today .rcal__cell-num { color: var(--brand-color); }
 .rcal__cell-items { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rcal__dots { display: none; }
+/* Base colour only; the status classes (rcal__pill--*) are declared later and override it. */
+.rcal__dot { background: var(--brand-color); }
 .rcal__pill {
   border: none;
   background: var(--brand-color);
@@ -1373,14 +1453,42 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     padding: 6px 10px;
   }
 
+  /* Wrap instead of scrolling sideways: a scrolling chip row hid its first chips off-screen. */
   .rcal__filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 6px;
   }
 
-  .rcal__filters::-webkit-scrollbar {
+  .rcal__counts--head {
+    display: none;
+  }
+
+  .rcal__counts--below {
+    display: flex;
+  }
+
+  /* Icon-only filter buttons, as on the table pages. */
+  .rcal__filter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px 8px;
+  }
+
+  .rcal__filter-icon {
+    display: inline-flex;
+  }
+
+  .rcal__filter-label {
+    display: none;
+  }
+
+  /* Icon buttons with nothing to show are dropped on phones (the active one always stays).
+     The summary tiles above keep their zero counts. */
+  .rcal__filter--empty {
     display: none;
   }
 
@@ -1390,14 +1498,65 @@ function onExpiryNavigate(item: ExpiryCalendarItem) {
     gap: 8px 12px;
   }
 
+  /* The month fits the screen: seven equal columns, small cells, dots instead of pills. */
   .rcal__month {
-    overflow-x: auto;
+    overflow: visible;
     padding-bottom: 4px;
   }
 
   .rcal__weekdays,
   .rcal__grid {
-    min-width: 680px;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .rcal__weekday {
+    font-size: 10px;
+    padding: 2px 0;
+  }
+
+  .rcal__cell {
+    min-height: 52px;
+    padding: 4px 3px;
+    border-radius: 6px;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .rcal__cell--has {
+    cursor: pointer;
+  }
+
+  .rcal__cell-num {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .rcal__cell-items,
+  .rcal__cell-all {
+    display: none;
+  }
+
+  .rcal__dots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .rcal__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .rcal__dots-more {
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 7px;
+    color: var(--text-secondary);
   }
 
   .rcal__agenda-item,

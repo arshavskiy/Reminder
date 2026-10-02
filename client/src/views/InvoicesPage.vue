@@ -333,6 +333,13 @@
         {{ importingFromGmail ? l.invoicesMsg.importing : l.invoicesMsg.importAll }}
       </button>
     </div>
+    <label v-if="gmailInvoiceScanAllowed" class="invoice-auto-scan" :title="gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : undefined">
+      <n-switch :value="invoicesAutoScan" :loading="invoicesAutoScanSaving" :disabled="gmailConnected === false" @update:value="setInvoicesAutoScan" />
+      <span>
+        <strong>{{ l.invoicesMsg.dailyScan }}</strong>
+        <small>{{ gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : l.invoicesMsg.dailyScanHint }}</small>
+      </span>
+    </label>
     <DriveExportJobStatus
       v-if="visibleDriveExportJob"
       :job="visibleDriveExportJob"
@@ -791,6 +798,7 @@ import {
   NPagination,
   NSelect,
   NSpin,
+  NSwitch,
   NTooltip,
   useMessage,
   type SelectOption
@@ -828,9 +836,10 @@ import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
 import { api, type DriveExportJob, type GmailImportJob, type GmailLinkOnlyEmail, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
-import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
+import {userAllowsGmailInvoiceImport, featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {usePersistedTableState} from "../composables/useTableState.js";
+import {useUserSettingsStore} from "../stores/userSettings.js";
 import {resolveDateRangePreset} from "../shared/dateRangePresets";
 import {asString, asStringArray, decodeDateRange, encodeDateRange, pickOne} from "../shared/tableState";
 
@@ -840,6 +849,7 @@ const intlLocale = computed(() => (locale.value === "en" ? "en-US" : "he-IL"));
 const message = useMessage();
 const {confirm} = useConfirm();
 const authStore = useAuthStore();
+const userSettingsStore = useUserSettingsStore();
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
 const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
 const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
@@ -1211,6 +1221,24 @@ function toggleDuplicates() {
 }
 
 // "To pay": unpaid invoices that have a payment date, soonest first.
+// Daily unattended Gmail import of new invoices (Business). The scheduler does the work;
+// this only stores the user's choice.
+const gmailInvoiceScanAllowed = computed(() => userAllowsGmailInvoiceImport(authStore.user));
+const invoicesAutoScan = ref(false);
+const invoicesAutoScanSaving = ref(false);
+async function setInvoicesAutoScan(value: boolean) {
+  invoicesAutoScanSaving.value = true;
+  try {
+    const row = await userSettingsStore.save({ invoices_auto_scan: value });
+    invoicesAutoScan.value = Boolean(row.invoices_auto_scan);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : String(err));
+  } finally {
+    invoicesAutoScanSaving.value = false;
+  }
+}
+void userSettingsStore.load().then((row) => { invoicesAutoScan.value = Boolean(row?.invoices_auto_scan); }).catch(() => undefined);
+
 function toggleUnpaid() {
   filters.unpaidOnly = !filters.unpaidOnly;
   if (filters.unpaidOnly) {
@@ -2459,6 +2487,16 @@ function replaceRow(updated: ImportedInvoice) {
   border-collapse: separate;
   border-spacing: 0;
 }
+
+.invoice-auto-scan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  cursor: pointer;
+}
+.invoice-auto-scan span { display: grid; gap: 2px; }
+.invoice-auto-scan small { color: var(--text-secondary); }
 
 .invoice-pair-tag {
   flex: none;

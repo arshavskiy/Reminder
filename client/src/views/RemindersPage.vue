@@ -6,9 +6,9 @@
         <p>{{ l.reminders.subtitle }}</p>
       </div>
       <div class="reminders-actions">
-        <button class="rbtn rbtn--ghost" :disabled="store.loading" @click="load">
+        <button class="rbtn rbtn--ghost" :disabled="store.loading" :aria-label="l.common.refresh" :title="l.common.refresh" @click="load">
           <n-icon :class="{ 'refresh-icon--spin': store.loading }" :component="RefreshOutline" class="btn-icon"/>
-          {{ l.common.refresh }}
+          <span class="rbtn__label">{{ l.common.refresh }}</span>
         </button>
         <button
             v-if="!reminderCreatesAllowed"
@@ -26,19 +26,20 @@
         >
           + {{ l.reminders.newReminder }}
         </button>
-        <button v-if="reminderCreatesAllowed" class="rbtn rbtn--ghost" type="button" @click="showImportModal = true">
+        <button v-if="reminderCreatesAllowed" class="rbtn rbtn--ghost" type="button" :aria-label="l.uploadModal.importRemindersTitle" :title="l.uploadModal.importRemindersTitle" @click="showImportModal = true">
           <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-          {{ l.uploadModal.importRemindersTitle }}
+          <span class="rbtn__label">{{ l.uploadModal.importRemindersTitle }}</span>
         </button>
         <div class="bulk-action-anchor">
           <button
             class="rbtn rbtn--ghost"
             :class="{ 'rbtn--ghost-active': bulkMode }"
             :title="l.reminders.multiSelect"
+            :aria-label="l.reminders.multiSelect"
             @click="toggleBulkMode"
           >
             <n-icon :component="CheckboxOutline" class="btn-icon"/>
-            {{ l.reminders.multiSelect }}
+            <span class="rbtn__label">{{ l.reminders.multiSelect }}</span>
           </button>
           <div v-if="bulkMode && selectedReminderKeys.length > 0" class="bulk-action-anchor__actions">
             <button
@@ -224,8 +225,8 @@
       <n-form label-placement="top" v-if="newReminder">
         <n-form-item :label="l.reminders.reminderKindLabel">
           <n-radio-group :value="isPersonalReminder ? 'personal' : 'client'" name="reminder-kind" @update:value="onReminderKindChange">
-            <n-radio-button value="client">{{ l.reminders.reminderKindClient }}</n-radio-button>
             <n-radio-button value="personal">{{ l.reminders.reminderKindPersonal }}</n-radio-button>
+            <n-radio-button value="client">{{ l.reminders.reminderKindClient }}</n-radio-button>
           </n-radio-group>
         </n-form-item>
         <p v-if="isPersonalReminder" class="personal-reminder-hint">{{ l.reminders.personalReminderHint }}</p>
@@ -409,7 +410,7 @@
 import MobileMappedValue from "../components/MobileMappedValue.vue";
 import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, h, onMounted, ref, type Component} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {NAlert, NButton, NCheckbox, NDataTable, NDatePicker, NDropdown, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NTimePicker, NTooltip, useMessage,} from "naive-ui";
 import {CalendarOutline, CheckboxOutline, CloseCircleOutline, CreateOutline, DocumentTextOutline, EllipsisVerticalOutline, EyeOutline, PaperPlaneOutline, RefreshOutline, TrashOutline,} from "@vicons/ionicons5";
 import {useRemindersStore} from "../stores/reminders.js";
@@ -471,6 +472,7 @@ const { confirm } = useConfirm();
 // testEmail: admin can configure a custom address in settings; all others default to their own email
 const testEmail = ref<string | null>(authStore.user?.email || "");
 const router = useRouter();
+const route = useRoute();
 const message = useMessage();
 
 const statusFilter = ref<string | null>(null);
@@ -769,6 +771,12 @@ onMounted(async () => {
     loadReminderCategories(),
   ]);
   load();
+  // Arriving from the dashboard's quick modal ("reminder to a client / by email"): open the full form.
+  if (route.query.new && reminderCreatesAllowed.value) {
+    await openCreate();
+    if (route.query.new === "client") onReminderKindChange("client");
+    router.replace({ query: { ...route.query, new: undefined } });
+  }
 });
 
 async function loadSenderInfo() {
@@ -812,9 +820,9 @@ async function openCreate() {
   attachMode.value = "none";
   attachReference.value = "";
   attachFile.value = null;
-  isPersonalReminder.value = false;
+  // A new reminder starts as a personal one; the user switches to client/email when needed.
+  onReminderKindChange("personal");
   createSyncCalendar.value = true;
-  createCalendarKind.value = "event";
   createEventTimeMs.value = defaultEventTimeMs();
   personalTargetDateMs.value = null;
   personalAlsoEmailSelf.value = false;
@@ -2293,9 +2301,40 @@ usePersistedTableState("reminders", {
     align-items: stretch;
   }
 
-  .reminders-actions,
-  .rbtn {
+  .reminders-actions {
     width: 100%;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .rbtn--primary {
+    order: -1;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+
+  /* Secondary actions: icon-only 40px squares (the label is in the tooltip/aria-label). */
+  .rbtn--ghost {
+    flex: 0 0 auto;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .rbtn__label {
+    display: none;
+  }
+
+  .bulk-action-anchor {
+    flex: 0 0 auto;
+  }
+
+  .bulk-action-anchor > .rbtn {
+    width: 40px;
   }
 
   .reminders-summary {

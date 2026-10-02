@@ -199,6 +199,18 @@ export function featureFlagsForUser(
   return tierFeatureFlags(user?.plan ?? user?.role);
 }
 
+/**
+ * Whether the account may import invoices from Gmail. The history window is a number of
+ * months, `null` for unlimited (admins) and 0 for plans without it, so "has any" must not
+ * be tested with plain truthiness: that locks out the unlimited case.
+ */
+export function userAllowsGmailInvoiceImport(
+  user: { plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
+): boolean {
+  const months = featureFlagsForUser(user).gmailInvoiceHistoryMonths;
+  return months === null || months > 0;
+}
+
 export function planAllowsGoogleCalendar(planOrRole: string | null | undefined): boolean {
   return tierFeatureFlags(planOrRole).googleCalendarSync;
 }

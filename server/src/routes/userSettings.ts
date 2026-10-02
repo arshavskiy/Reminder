@@ -4,7 +4,7 @@ import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
 import {buildPlanEntitlements, newUserSettingsBase, persistPlanEntitlements} from "../plans/planEntitlements";
-import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES, userAllowsGmailInvoiceImport} from "../plans/tierFeatures";
 import {obligationLangErrorBody, parseObligationSearchLangs} from "../gmail/obligationSearch";
 
 const DEFAULT_REPORT_CONFIG = {
@@ -142,6 +142,8 @@ export function registerUserSettingsRoutes(app: express.Application) {
       discovery_auto_scan?: boolean;
       discovery_langs?: string[] | string;
       whats_new_seen?: string | null;
+      discovery_scan_frequency?: string;
+      invoices_auto_scan?: boolean;
     };
 
     const patch: Record<string, unknown> = {};
@@ -187,6 +189,26 @@ export function registerUserSettingsRoutes(app: express.Application) {
         }
       }
       patch.discovery_auto_scan = enable;
+    }
+    if (body.discovery_scan_frequency !== undefined) {
+      if (body.discovery_scan_frequency !== "daily" && body.discovery_scan_frequency !== "weekly") {
+        res.status(400).json({ error: "invalid_scan_frequency" });
+        return;
+      }
+      patch.discovery_scan_frequency = body.discovery_scan_frequency;
+    }
+    if (body.invoices_auto_scan !== undefined) {
+      const enable = Boolean(body.invoices_auto_scan);
+      if (enable) {
+        // Same plan the manual Gmail invoice import needs: document import plus invoice history.
+        let planUser: any = null;
+        try { planUser = await col("users").findOne({ _id: new ObjectId(auth.userId) }); } catch { /* treated as no plan */ }
+        if (!planAllowsDocumentImport(effectivePlanId(planUser)) || !userAllowsGmailInvoiceImport(planUser)) {
+          res.status(403).json({ error: "gmail_invoice_plan_required", message: "סריקה יומית של חשבוניות מ-Gmail זמינה במסלול עסקי בלבד" });
+          return;
+        }
+      }
+      patch.invoices_auto_scan = enable;
     }
     if (body.whats_new_seen !== undefined) {
       // A release id such as "2026-10"; kept short so it cannot be used to store arbitrary text.
