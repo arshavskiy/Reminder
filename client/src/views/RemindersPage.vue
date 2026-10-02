@@ -1171,6 +1171,8 @@ function doDeleteFiltered() {
       try {
         await Promise.all(rowsToDelete.map((row) => store.remove(row.id)));
         message.success(t("remindersMsg.deletedMany", {count}));
+        selectedReminderKeys.value = [];
+        load();
       } catch (e) {
         message.error(String(e));
       }
