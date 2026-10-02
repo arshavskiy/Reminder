@@ -3204,7 +3204,10 @@ export function registerAdminRoutes(app: express.Application) {
  * others rather than special-casing one id in the response builder.
  */
 const SCHEDULER_HEALTH_NAMES: Partial<Record<ProcessId, string[]>> = {
-  scheduler: ["tick", "checkReminders", "checkMonthlyReports", "checkEscalations", "syncCalendars"],
+  scheduler: [
+    "tick", "checkReminders", "checkMonthlyReports", "checkBillingReminders", "checkEscalations",
+    "syncCalendars", "checkDiscoveryScans", "checkInvoiceScans",
+  ],
   unsubscribe_scan: ["unsubscribeScan"],
   email_campaigns: ["emailCampaignSend"],
 };

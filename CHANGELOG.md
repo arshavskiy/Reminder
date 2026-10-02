@@ -24,6 +24,7 @@
 
 - Added a daily Gmail invoice scan (Business): a per-user switch on the Invoices page queues an import of the last 14 days of mail once a day and notifies the user when invoices were imported.
 - The discovery scan can now run daily or weekly (choice on the Discover reminders page).
+- The scan switches are also on Profile → settings, and the new scheduler jobs (plus billing reminders and calendar sync, which were missing) now show on the admin process dashboard.
 
 ### Invoice and Receipt Pairing
 

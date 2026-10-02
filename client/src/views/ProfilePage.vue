@@ -743,6 +743,29 @@
                   <n-button v-else size="small" ghost type="primary" :loading="inboundBusy" @click="enableInboundEmail">{{ l.profileSettings.inboundEnable }}</n-button>
                 </div>
 
+                <div class="settings-subrow tour-scans">
+                  <span class="settings-panel__label">{{ l.profileSettings.scansTitle }}</span>
+                  <p class="settings-row__desc">{{ l.profileSettings.scansHint }}</p>
+                  <label class="scan-switch-row">
+                    <n-switch :value="invoicesAutoScan" :loading="scanSaving" :disabled="!invoiceScanAllowed || !gmailStatus?.connected" @update:value="(v: boolean) => saveScanSetting({ invoices_auto_scan: v })" />
+                    <span>
+                      <strong>{{ l.profileSettings.scanInvoices }}</strong>
+                      <small>{{ !invoiceScanAllowed ? l.profileSettings.scanBusinessOnly : !gmailStatus?.connected ? l.profileSettings.scanNeedsGmail : l.profileSettings.scanInvoicesHint }}</small>
+                    </span>
+                  </label>
+                  <label v-if="discoveryScanAllowed" class="scan-switch-row">
+                    <n-switch :value="discoveryAutoScan" :loading="scanSaving" :disabled="!gmailStatus?.connected" @update:value="(v: boolean) => saveScanSetting({ discovery_auto_scan: v })" />
+                    <span>
+                      <strong>{{ l.profileSettings.scanDiscovery }}</strong>
+                      <small>{{ !gmailStatus?.connected ? l.profileSettings.scanNeedsGmail : l.profileSettings.scanDiscoveryHint }}</small>
+                    </span>
+                  </label>
+                  <div v-if="discoveryScanAllowed && discoveryAutoScan" class="scan-switch-row scan-switch-row--select">
+                    <span>{{ l.profileSettings.scanFrequency }}</span>
+                    <n-select :value="discoveryFrequency" size="small" :loading="scanSaving" :options="scanFrequencyOptions" @update:value="(v: 'daily' | 'weekly') => saveScanSetting({ discovery_scan_frequency: v })" />
+                  </div>
+                </div>
+
                 <div v-if="calendarAllowed && calendarStatus?.connected" class="settings-subrow">
                   <label class="settings-panel__label" for="calendar-name">{{ l.profileSettings.calendarNameLabel }}</label>
                   <div class="inline-field__row">
@@ -1514,6 +1537,8 @@ import {
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "../stores/auth.js";
 import { useUserSettingsStore } from "../stores/userSettings.js";
+import { useFeaturesStore } from "../stores/features.js";
+import { FEATURES } from "../shared/features.js";
 import {api, type DriveExportJob, type DriveStatus, type InboundEmailStatus, type ProfileSubscription} from "../services/apiService.js";
 import {INSPECTION_PRINT_TEMPLATE_PRESETS} from "@shared/printTemplateLayout.js";
 import type { User, UserSettings } from "@shared/types.js";
@@ -2146,6 +2171,36 @@ async function loadDriveStatus() {
     driveFolderName.value = driveStatus.value.folderName || "RemindOCR";
   } catch {
     driveStatus.value = null;
+  }
+}
+
+// Scheduled Gmail scans. The same switches live on the Invoices and Discover reminders pages;
+// all of them store the choice in user settings and the scheduler does the work.
+const featuresStore = useFeaturesStore();
+const scanSaving = ref(false);
+const invoicesAutoScan = computed(() => Boolean(userSettings.value?.invoices_auto_scan));
+const discoveryAutoScan = computed(() => Boolean(userSettings.value?.discovery_auto_scan));
+const discoveryFrequency = computed<"daily" | "weekly">(() => userSettings.value?.discovery_scan_frequency === "daily" ? "daily" : "weekly");
+const invoiceScanAllowed = computed(() => Boolean(featureFlagsForUser(user.value).gmailInvoiceHistoryMonths));
+const discoveryScanAllowed = computed(() => featuresStore.hasFeature(FEATURES.pages.discovery) && featureFlagsForUser(user.value).documentImport);
+const scanFrequencyOptions = computed(() => [
+  { label: l.value.profileSettings.scanDaily, value: "daily" },
+  { label: l.value.profileSettings.scanWeekly, value: "weekly" },
+]);
+async function saveScanSetting(patch: Partial<UserSettings>) {
+  scanSaving.value = true;
+  try {
+    const row = await userSettingsStore.save(patch);
+    if (userSettings.value) Object.assign(userSettings.value, patch, {
+      invoices_auto_scan: row.invoices_auto_scan,
+      discovery_auto_scan: row.discovery_auto_scan,
+      discovery_scan_frequency: row.discovery_scan_frequency,
+    });
+    message.success(l.value.profileSettings.scanSaved);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : String(err));
+  } finally {
+    scanSaving.value = false;
   }
 }
 
@@ -3405,6 +3460,16 @@ function showGoogleConnectionErrorFromRoute() {
   max-width: 280px;
   flex: 1;
 }
+.scan-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.scan-switch-row span { display: grid; gap: 2px; }
+.scan-switch-row small { color: var(--text-secondary); }
+.scan-switch-row--select { cursor: default; max-width: 280px; }
+.scan-switch-row--select span { white-space: nowrap; font-size: 13px; color: var(--text-secondary); }
 .settings-subrow {
   display: flex;
   flex-direction: column;

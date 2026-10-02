@@ -2780,7 +2780,11 @@ const JOB_NAME_HE: Record<string, string> = {
   tick: "Main Loop",
   checkReminders: "Check Reminders",
   checkMonthlyReports: "Monthly Reports",
+  checkBillingReminders: "Billing Reminders",
   checkEscalations: "Escalations",
+  syncCalendars: "Calendar Sync",
+  checkDiscoveryScans: "Discovery Scans (daily/weekly)",
+  checkInvoiceScans: "Invoice Scans (daily Gmail import)",
 };
 
 // ── Background processes & temp files ───────────────────────────────────────
