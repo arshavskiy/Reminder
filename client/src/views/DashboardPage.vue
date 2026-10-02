@@ -1454,14 +1454,16 @@ html[data-theme="light"] .module__icon {
     font-size: 22px;
   }
 
+  /* Two workspace cards per row on phones, with a compact card. */
   .module-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     margin-bottom: 28px;
   }
 
   .module {
-    padding: 18px;
+    padding: 12px;
+    gap: 8px;
     border-radius: 14px;
   }
 
@@ -1469,8 +1471,30 @@ html[data-theme="light"] .module__icon {
     transform: none;
   }
 
+  .module__icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+    border-radius: 10px;
+  }
+
   .module__title {
-    font-size: 15px;
+    font-size: 14px;
+  }
+
+  .module__desc {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .module__cta {
+    font-size: 12px;
   }
 
   .panel {
