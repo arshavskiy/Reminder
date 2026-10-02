@@ -1407,21 +1407,29 @@ html[data-theme="light"] .module__icon {
     margin-bottom: 10px;
   }
 
+  /* Three stat cards per row on phones; each stacks its icon above the number so it fits. */
   .dash__stats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
     margin-bottom: 24px;
   }
 
   .stat {
     min-width: 0;
-    padding: 13px 14px;
+    padding: 10px 10px;
     border-radius: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .stat__icon {
+    margin-top: 0;
   }
 
   .stat__num {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .module-grid {
@@ -1460,14 +1468,14 @@ html[data-theme="light"] .module__icon {
 
 @media (max-width: 430px) {
   .dash__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .stat {
     min-height: 0;
-    padding: 10px 12px;
-    gap: 8px;
+    padding: 8px 9px;
+    gap: 4px;
   }
 
   .stat__icon {
