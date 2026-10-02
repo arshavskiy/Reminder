@@ -3409,6 +3409,8 @@ function showGoogleConnectionErrorFromRoute() {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Without this the buttons stretch across the whole card. */
+  align-items: flex-start;
   padding: 10px 0 2px;
 }
 
