@@ -388,7 +388,8 @@ const emit = defineEmits<{
 
 const router = useRouter();
 const message = useMessage();
-const view = ref<"month" | "agenda">(isMobileViewport() ? "agenda" : "month");
+// Month is the default everywhere: on phones it now fits the screen (dots per day, tap for the list).
+const view = ref<"month" | "agenda">("month");
 const CURSOR_KEY = "calendar_last_month";
 function loadCursor(): Date {
   try {
