@@ -257,7 +257,7 @@
               >{{ l.dashboard.allReminders }}
             </router-link>
           </header>
-          <ul v-if="stats?.upcoming_reminders?.length" class="panel__list">
+          <ul v-if="stats?.upcoming_reminders?.length" class="panel__list panel__list--grid">
             <li
               v-for="r in stats.upcoming_reminders"
               :key="r.id"
@@ -1500,6 +1500,42 @@ html[data-theme="light"] .module__icon {
   .panel {
     padding: 16px;
     border-radius: 14px;
+  }
+
+  /* Upcoming reminders: two small cards per row instead of one long list. */
+  .panel__list--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .panel__list--grid .panel__row {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+  }
+
+  .panel__list--grid .panel__row:last-child {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .panel__list--grid .panel__row-stack {
+    width: 100%;
+  }
+
+  .panel__list--grid .panel__row-date {
+    order: -1;
+    font-weight: 600;
+    color: var(--brand-color);
+  }
+
+  .panel__list--grid .panel__row-date--late {
+    color: var(--color-error);
   }
 
   .panel__row {
