@@ -91,6 +91,8 @@ export function col(name: string) {
       if (!row) {
         if (!options?.upsert) return { matchedCount: 0, modifiedCount: 0 };
         row = Object.fromEntries(Object.entries(filter).filter(([, v]) => typeof v !== "object"));
+        // $setOnInsert only applies when the upsert creates the row.
+        for (const [key, value] of Object.entries(update.$setOnInsert ?? {})) setPath(row, key, value);
         list().push(row);
       }
       applyUpdate(row, update);

@@ -91,7 +91,7 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "ravkav-online", category: "transport", label: "תחבורה - רב-קו אונליין", terms: ["ravkavonline.co.il", "רב-קו אונליין", "Rav-Kav Online"], sort_order: 650, enabled: true },
   { id: "ravpass", category: "transport", label: "תחבורה - רב-פס", terms: ["ravpass.co.il", "Rav-Pass", "רב-פס", "HopOn"], sort_order: 655, enabled: true },
   { id: "moovit", category: "transport", label: "תחבורה - Moovit", terms: ["moovitapp.com", "Moovit", "מוביט"], sort_order: 660, enabled: true },
-  { id: "pango", category: "transport", label: "תחבורה - פנגו", terms: ["moovit-pango.co.il", "pango.co.il", "Pango", "פנגו", "החשבון שלך בתחבורה ציבורית"], sort_order: 665, enabled: true },
+  { id: "moovit-pango", category: "transport", label: "תחבורה - פנגו", terms: ["moovit-pango.co.il", "pango.co.il", "Pango", "פנגו", "החשבון שלך בתחבורה ציבורית"], sort_order: 665, enabled: true },
   { id: "gett", category: "transport", label: "תחבורה - Gett", terms: ["gett.com", "Gett", "גט טקסי"], sort_order: 670, enabled: true },
   { id: "yango", category: "transport", label: "תחבורה - Yango", terms: ["yango.com", "Yango", "יאנגו"], sort_order: 680, enabled: true },
   { id: "bolt", category: "transport", label: "תחבורה - Bolt", terms: ["bolt.eu", "Your Bolt trip", "Bolt"], sort_order: 682, enabled: true },
@@ -283,6 +283,25 @@ export const DEFAULT_GMAIL_SEARCH_PROVIDERS: GmailSearchProvider[] = [
   { id: "resend", category: "development", label: "פיתוח - Resend", terms: ["resend.com", "Resend"], sort_order: 3000, enabled: true },
   { id: "namecheap", category: "development", label: "פיתוח - Namecheap", terms: ["namecheap.com", "Namecheap"], sort_order: 3010, enabled: true },
   { id: "godaddy", category: "development", label: "פיתוח - GoDaddy", terms: ["godaddy.com", "GoDaddy"], sort_order: 3020, enabled: true },
+  // Russian senders: marketplaces, airlines, rail, banks, telecom, utilities, government and OFD cash receipts.
+  { id: "ru-yandex", category: "retail", label: "רוסיה - Яндекс (Go, Плюс, Маркет)", terms: ["yandex.ru","yandex.com","Яндекс","Яндекс Go","Яндекс Маркет"], sort_order: 3100, enabled: true },
+  { id: "ru-ozon", category: "marketplace", label: "רוסיה - Ozon", terms: ["ozon.ru","Ozon","Озон"], sort_order: 3110, enabled: true },
+  { id: "ru-wildberries", category: "marketplace", label: "רוסיה - Wildberries", terms: ["wildberries.ru","Wildberries","Вайлдберриз"], sort_order: 3120, enabled: true },
+  { id: "ru-avito", category: "marketplace", label: "רוסיה - Авито", terms: ["avito.ru","Авито"], sort_order: 3130, enabled: true },
+  { id: "ru-aeroflot", category: "travel", label: "רוסיה - Аэрофлот", terms: ["aeroflot.ru","Аэрофлот"], sort_order: 3140, enabled: true },
+  { id: "ru-s7", category: "travel", label: "רוסיה - S7 Airlines", terms: ["s7.ru", "S7 Airlines", "С7"], sort_order: 3150, enabled: true },
+  { id: "ru-pobeda", category: "travel", label: "רוסיה - Победа", terms: ["pobeda.aero","flypobeda.ru","Победа"], sort_order: 3160, enabled: true },
+  { id: "ru-rzd", category: "travel", label: "רוסיה - РЖД", terms: ["rzd.ru","РЖД"], sort_order: 3170, enabled: true },
+  { id: "ru-tbank", category: "finance", label: "רוסיה - Т-Банк (Тинькофф)", terms: ["tbank.ru","tinkoff.ru","Т-Банк","Тинькофф"], sort_order: 3180, enabled: true },
+  { id: "ru-sber", category: "finance", label: "רוסיה - Сбербанк", terms: ["sberbank.ru","sber.ru","Сбербанк","СберБанк"], sort_order: 3190, enabled: true },
+  { id: "ru-vtb", category: "finance", label: "רוסיה - ВТБ / Альфа-Банк", terms: ["vtb.ru","alfabank.ru","ВТБ","Альфа-Банк"], sort_order: 3200, enabled: true },
+  { id: "ru-mts", category: "household", label: "רוסיה - МТС", terms: ["mts.ru","МТС"], sort_order: 3210, enabled: true },
+  { id: "ru-beeline", category: "household", label: "רוסיה - Билайн", terms: ["beeline.ru","Билайн"], sort_order: 3220, enabled: true },
+  { id: "ru-megafon", category: "household", label: "רוסיה - МегаФон", terms: ["megafon.ru","МегаФон"], sort_order: 3230, enabled: true },
+  { id: "ru-rostelecom", category: "household", label: "רוסיה - Ростелеком", terms: ["rostelecom.ru","Ростелеком"], sort_order: 3240, enabled: true },
+  { id: "ru-gosuslugi", category: "government", label: "רוסיה - Госуслуги / ФНС", terms: ["gosuslugi.ru","nalog.gov.ru","mos.ru","Госуслуги"], sort_order: 3250, enabled: true },
+  { id: "ru-ofd", category: "payment", label: "רוסיה - ОФД (чеки)", terms: ["ofd.ru","platformaofd.ru","taxcom.ru","1-ofd.ru","ofd-ya.ru","ОФД"], sort_order: 3260, enabled: true },
+  { id: "ru-utilities", category: "household", label: "רוסיה - ЖКХ / коммунальные платежи", terms: ["ЖКХ","коммунальные услуги","Мосэнергосбыт","Мосводоканал","Квитанция ЖКУ"], sort_order: 3270, enabled: true },
 ];
 
 export async function seedGmailSearchProviders(): Promise<void> {
@@ -313,7 +332,34 @@ export async function seedGmailSearchProviders(): Promise<void> {
   logger.info("gmail_search_providers_seeded", { count: DEFAULT_GMAIL_SEARCH_PROVIDERS.length });
 }
 
+// Providers added to the defaults after an account's table was first seeded are inserted once per
+// process, without touching rows an admin has edited or disabled.
+let missingDefaultsChecked = false;
+
+export async function seedMissingGmailSearchProviders(): Promise<number> {
+  const collection = col<any>("gmail_search_providers");
+  const existing = await collection.find({ id: { $in: DEFAULT_GMAIL_SEARCH_PROVIDERS.map((provider) => provider.id) } }).toArray();
+  const have = new Set(existing.map((row: any) => String(row.id)));
+  const now = new Date();
+  let added = 0;
+  for (const provider of DEFAULT_GMAIL_SEARCH_PROVIDERS) {
+    if (have.has(provider.id)) continue;
+    await collection.updateOne(
+      { id: provider.id },
+      { $setOnInsert: { id: provider.id, category: provider.category, label: provider.label, terms: provider.terms, sort_order: provider.sort_order, enabled: provider.enabled, created_at: now, updated_at: now } },
+      { upsert: true },
+    );
+    added += 1;
+  }
+  if (added) logger.info("gmail_search_providers_missing_seeded", { count: added });
+  return added;
+}
+
 export async function loadGmailSearchProviders(): Promise<GmailSearchProvider[]> {
+  if (!missingDefaultsChecked) {
+    missingDefaultsChecked = true;
+    try { await seedMissingGmailSearchProviders(); } catch (err) { missingDefaultsChecked = false; logger.warn("gmail_search_providers_seed_failed", { error: err instanceof Error ? err.message : String(err) }); }
+  }
   const rows = await col<any>("gmail_search_providers")
     .find({ enabled: { $ne: false } })
     .sort({ sort_order: 1, label: 1 })

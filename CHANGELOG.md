@@ -20,6 +20,12 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Russian Gmail Import
+
+- Invoices, receipts and cash receipts in Russian are found, classified and parsed: wider search terms, Russian document types (счет-фактура, УПД, кассовый чек, квитанция, ЕПД, кредит-нота), body-only receipts from Russian senders, Russian label hints for AI extraction, 18 Russian senders in the search providers, and a per-user OCR language that can include Russian.
+- VAT is no longer estimated at the Israeli 18% rate for non-ILS documents.
+- Fixed a duplicate `pango` provider id that made the parking entry overwrite the Moovit/Pango one when seeding.
+
 ### Import Review Queue
 
 - Documents imported unattended from Gmail, email forwarding or Drive are checked for signs they are wrong (missing amount or date, unidentified supplier, low confidence, possibly not an invoice, no expiry date) and listed on a new Review page, with a count badge in the sidebar and a dashboard banner. Approve, open or remove each one; removing archives the invoice and dismisses the reminders made from it.

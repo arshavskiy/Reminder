@@ -104,6 +104,17 @@ export function buildPromptForTemplate(tpl: DocTemplate, inspector?: InspectorPr
   - For receipts, use document_subtype="קבלה"; for invoices, use document_subtype="חשבונית".`
     : "";
 
+  // Russian invoices, receipts and cash receipts (чеки), including OFD receipts and tax invoices.
+  const russianInvoiceSection = isInvoiceTemplate
+    ? `
+• Russian invoice / receipt label handling (documents written in Russian):
+  - Map labels directly: "Счет" / "Счёт" / "Счет-фактура" / "Счёт-фактура" / "УПД" / "Акт" / "Накладная" → document_subtype="חשבונית"; "Счет на оплату" / "Квитанция на оплату" / "ЕПД" → document_subtype="דרישת תשלום" (or "חשבון תקופתי" for utility bills); "Кассовый чек" / "Товарный чек" / "Чек" / "Квитанция" / "Подтверждение оплаты" / "Маршрутная квитанция" → document_subtype="קבלה"; "Кредит-нота" / "Корректировочный счёт-фактура" → document_subtype="זיכוי".
+  - "Номер" / "№" / "Счет №" / "Чек №" / "ФД" → invoice_number (or receipt_number for receipts); "Дата" / "Дата выставления" / "от" → issue_date; "Срок оплаты" / "Оплатить до" → payment_due_date; "Продавец" / "Поставщик" / "Исполнитель" / "Организация" → supplier_name; "ИНН" → supplier_id; "Покупатель" / "Плательщик" / "Заказчик" → client_company/client_name.
+  - "Итого" / "Всего к оплате" / "К оплате" / "Сумма" → amount (the final total, not a line item); "Сумма без НДС" → amount_before_vat; "НДС" / "в т.ч. НДС" → vat_amount.
+  - Amounts use a space as the thousands separator and a comma as the decimal separator: "1 250,00" is 1250.00, "34 820" is 34820. Dates are day.month.year ("03.10.2026" is 2026-10-03) or worded ("3 октября 2026 г.").
+  - Currency: "₽", "руб.", "р.", "RUB" → currency="RUB". Keep Cyrillic company names exactly as written (e.g. ООО «Ромашка»); never transliterate them.
+  - Payment words: "Оплачено", "Оплата прошла", "Оплата получена" → payment_status="paid"."`
+    : "";
   const inspectorExclusionNote = buildInspectorExclusionNote(inspector);
 
   return `You are a document intelligence assistant specializing in Hebrew business documents.
@@ -127,7 +138,7 @@ GENERAL RULES:
 • If a field cannot be determined, use null (or [] for list types).
 • Do not invent data. Do not add fields not in the schema.
 • The text may have residual bidi/encoding artifacts from PDF extraction — use context.
-${invoiceSection}
+${invoiceSection}${russianInvoiceSection}
 • BiDi table columns: Hebrew PDFs often reverse the order of column header words in equipment tables.
   Common reversed headers and their correct mapping:
     "ירודיס 'סמ" / "ירודיס רפסמ"  →  מספר סידורי  →  serial_number

@@ -39,6 +39,8 @@
     "invoices:known-receipts:dry": "tsx src/scripts/backfillKnownInvoiceReceipts.ts",
     "invoices:rejection-labels": "tsx src/scripts/backfillInvoiceRejectionLabels.ts --apply",
     "invoices:rejection-labels:dry": "tsx src/scripts/backfillInvoiceRejectionLabels.ts",
+    "invoices:dedupe": "tsx src/scripts/removeDuplicateInvoices.ts --apply",
+    "invoices:dedupe:dry": "tsx src/scripts/removeDuplicateInvoices.ts",
     "doc-templates:seed": "tsx src/scripts/seedDocTemplates.ts",
     "print-templates:seed-inspections": "tsx src/scripts/seedInspectionPrintTemplates.ts",
     "print-templates:seed-inspections:apply": "tsx src/scripts/seedInspectionPrintTemplates.ts --apply",

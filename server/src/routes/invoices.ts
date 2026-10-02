@@ -914,6 +914,7 @@ function presentInvoice(
     amount_ils: currency === "ILS" ? amount : null,
     vat_amount: resolveVatAmount({
       amount,
+      currency,
       vat_amount: invoice.vat_amount,
       amount_before_vat: invoice.amount_before_vat,
       fields: invoice.fields,

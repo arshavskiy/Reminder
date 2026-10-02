@@ -13,9 +13,10 @@ const PDF_OCR_DPI = 220;
 
 const execFile = promisify(execFileCb);
 
-export async function ocrFile(filePath: string): Promise<string> {
+/** `language` overrides the server default, e.g. "heb+eng+rus" for an account that receives Russian documents. */
+export async function ocrFile(filePath: string, language?: string): Promise<string> {
   const settings = getSettings();
-  const lang = settings.ocrLanguage; // e.g. "heb+eng"
+  const lang = language || settings.ocrLanguage; // e.g. "heb+eng"
   const imagePaths = isPdfPath(filePath) ? await renderPdfToImages(filePath) : [filePath];
 
   const worker = await createWorker(lang);
