@@ -224,8 +224,8 @@
       <n-form label-placement="top" v-if="newReminder">
         <n-form-item :label="l.reminders.reminderKindLabel">
           <n-radio-group :value="isPersonalReminder ? 'personal' : 'client'" name="reminder-kind" @update:value="onReminderKindChange">
-            <n-radio-button value="client">{{ l.reminders.reminderKindClient }}</n-radio-button>
             <n-radio-button value="personal">{{ l.reminders.reminderKindPersonal }}</n-radio-button>
+            <n-radio-button value="client">{{ l.reminders.reminderKindClient }}</n-radio-button>
           </n-radio-group>
         </n-form-item>
         <p v-if="isPersonalReminder" class="personal-reminder-hint">{{ l.reminders.personalReminderHint }}</p>
@@ -812,9 +812,9 @@ async function openCreate() {
   attachMode.value = "none";
   attachReference.value = "";
   attachFile.value = null;
-  isPersonalReminder.value = false;
+  // A new reminder starts as a personal one; the user switches to client/email when needed.
+  onReminderKindChange("personal");
   createSyncCalendar.value = true;
-  createCalendarKind.value = "event";
   createEventTimeMs.value = defaultEventTimeMs();
   personalTargetDateMs.value = null;
   personalAlsoEmailSelf.value = false;
