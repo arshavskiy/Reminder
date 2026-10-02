@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPlanEntitlements, newTrialEndsAt, newUserSettingsDefaults } from "../plans/planEntitlements";
-import { TIER_FEATURE_FLAGS, featureFlagsForUser, planAllowsEmailIn } from "../plans/tierFeatures";
+import { TIER_FEATURE_FLAGS, featureFlagsForUser, planAllowsEmailIn, userAllowsGmailInvoiceImport } from "../plans/tierFeatures";
 
 describe("plan entitlements", () => {
     it("treats a lapsed trial as expired for quotas and import flags", () => {
@@ -152,5 +152,20 @@ describe("entitlements of new accounts", () => {
   it("keep the Discover reminders page off for new accounts until an admin enables it", () => {
     const features = (newUserSettingsDefaults("user-1") as { features: { pages: Record<string, boolean> } }).features;
     expect(features.pages.discovery).toBe(false);
+  });
+});
+
+describe("userAllowsGmailInvoiceImport", () => {
+  it("treats unlimited history (admin, stored as null) as allowed, not as none", () => {
+    expect(featureFlagsForUser({ role: "admin", plan: "basic" }).gmailInvoiceHistoryMonths).toBeNull();
+    expect(userAllowsGmailInvoiceImport({ role: "admin", plan: "basic" })).toBe(true);
+  });
+
+  it("is allowed on business and an active trial, not on basic, digital or a lapsed trial", () => {
+    expect(userAllowsGmailInvoiceImport({ plan: "business" })).toBe(true);
+    expect(userAllowsGmailInvoiceImport({ plan: "trial", trial_ends_at: new Date(Date.now() + 86_400_000) })).toBe(true);
+    expect(userAllowsGmailInvoiceImport({ plan: "basic" })).toBe(false);
+    expect(userAllowsGmailInvoiceImport({ plan: "digital" })).toBe(false);
+    expect(userAllowsGmailInvoiceImport({ plan: "trial", trial_ends_at: "2020-01-01T00:00:00Z" })).toBe(false);
   });
 });

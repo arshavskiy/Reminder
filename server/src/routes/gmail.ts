@@ -19,7 +19,8 @@ import {
     featureFlagsForUser,
     planAllowsDocumentImport,
     PLAN_GATE_MESSAGES,
-    tierFeatureFlags
+    tierFeatureFlags,
+    userAllowsGmailInvoiceImport
 } from "../plans/tierFeatures";
 import { loadAllTemplates, loadTemplate } from "../templates/seedTemplates";
 import { INVOICE_SCAN_WINDOW_DAYS, invoiceImportDigest, limitQueryToRecentDays } from "../gmail/autoScan";
@@ -1591,7 +1592,7 @@ export async function enqueueAutoInvoiceImport(user: {
 }, userId: string, startWorker: () => void = startGmailImportJobWorker): Promise<AutoInvoiceImportResult> {
   try {
     if (!planAllowsDocumentImport(effectivePlanId(user))) return { ok: false, reason: "plan" };
-    if (!featureFlagsForUser(user).gmailInvoiceHistoryMonths) return { ok: false, reason: "plan" };
+    if (!userAllowsGmailInvoiceImport(user)) return { ok: false, reason: "plan" };
     if (!(await resolveGmailToken(userId))) return { ok: false, reason: "gmail_not_connected" };
 
     const active = await col<GmailImportJob>("gmail_import_jobs").findOne({ user_id: userId, status: { $in: ["queued", "running"] } } as any);

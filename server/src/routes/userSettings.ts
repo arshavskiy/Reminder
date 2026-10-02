@@ -4,7 +4,7 @@ import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
 import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
 import {buildPlanEntitlements, newUserSettingsBase, persistPlanEntitlements} from "../plans/planEntitlements";
-import {effectivePlanId, featureFlagsForUser, planAllowsDocumentImport, PLAN_GATE_MESSAGES} from "../plans/tierFeatures";
+import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES, userAllowsGmailInvoiceImport} from "../plans/tierFeatures";
 import {obligationLangErrorBody, parseObligationSearchLangs} from "../gmail/obligationSearch";
 
 const DEFAULT_REPORT_CONFIG = {
@@ -203,7 +203,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         // Same plan the manual Gmail invoice import needs: document import plus invoice history.
         let planUser: any = null;
         try { planUser = await col("users").findOne({ _id: new ObjectId(auth.userId) }); } catch { /* treated as no plan */ }
-        if (!planAllowsDocumentImport(effectivePlanId(planUser)) || !featureFlagsForUser(planUser).gmailInvoiceHistoryMonths) {
+        if (!planAllowsDocumentImport(effectivePlanId(planUser)) || !userAllowsGmailInvoiceImport(planUser)) {
           res.status(403).json({ error: "gmail_invoice_plan_required", message: "סריקה יומית של חשבוניות מ-Gmail זמינה במסלול עסקי בלבד" });
           return;
         }

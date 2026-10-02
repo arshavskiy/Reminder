@@ -74,6 +74,11 @@ describe("enqueueAutoInvoiceImport", () => {
     expect(rows("gmail_import_jobs")).toHaveLength(0);
   });
 
+  it("queues for an admin, whose invoice history is unlimited rather than a number of months", async () => {
+    const row = seed({ plan: "basic", role: "admin" });
+    expect((await enqueueAutoInvoiceImport(row, userId, noWorker)).ok).toBe(true);
+  });
+
   it("does nothing when Gmail is not connected", async () => {
     const row = seed({ gmail_access_token: undefined });
     expect(await enqueueAutoInvoiceImport(row, userId, noWorker)).toEqual({ ok: false, reason: "gmail_not_connected" });

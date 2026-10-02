@@ -836,7 +836,7 @@ import DriveExportJobStatus from "../components/DriveExportJobStatus.vue";
 import { api, type DriveExportJob, type GmailImportJob, type GmailLinkOnlyEmail, type ImportedInvoice } from "../services/apiService.js";
 import type { DocTemplate } from "../shared/types.js";
 import {useAuthStore} from "../stores/auth.js";
-import {featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
+import {userAllowsGmailInvoiceImport, featureFlagsForUser, planAllowsGoogleDrive, planAllowsExcelExport, resolveUserPlan, PLAN_GATE_MESSAGES} from "../shared/pricingPlans.js";
 import {useConfirm} from "../composables/useConfirm.js";
 import {usePersistedTableState} from "../composables/useTableState.js";
 import {useUserSettingsStore} from "../stores/userSettings.js";
@@ -1223,7 +1223,7 @@ function toggleDuplicates() {
 // "To pay": unpaid invoices that have a payment date, soonest first.
 // Daily unattended Gmail import of new invoices (Business). The scheduler does the work;
 // this only stores the user's choice.
-const gmailInvoiceScanAllowed = computed(() => Boolean(featureFlagsForUser(authStore.user).gmailInvoiceHistoryMonths));
+const gmailInvoiceScanAllowed = computed(() => userAllowsGmailInvoiceImport(authStore.user));
 const invoicesAutoScan = ref(false);
 const invoicesAutoScanSaving = ref(false);
 async function setInvoicesAutoScan(value: boolean) {

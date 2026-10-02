@@ -110,6 +110,13 @@ describe("PUT /api/user-settings — scheduled scan options", () => {
     expect((await off.json()).invoices_auto_scan).toBe(false);
   });
 
+  it("lets an admin switch the daily invoice scan on whatever the stored plan (unlimited history)", async () => {
+    seedPlan("basic", { role: "admin" });
+    const res = await put({ invoices_auto_scan: true });
+    expect(res.status).toBe(200);
+    expect((await res.json()).invoices_auto_scan).toBe(true);
+  });
+
   it("refuses the daily invoice scan on plans without Gmail invoice import, but still allows switching it off", async () => {
     for (const plan of ["basic", "digital"]) {
       seedPlan(plan);

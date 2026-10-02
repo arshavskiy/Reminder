@@ -1563,6 +1563,7 @@ import {
   planAllowsGoogleCalendar,
   planAllowsAutomaticEmailReminders,
   featureFlagsForUser,
+  userAllowsGmailInvoiceImport,
   planAllowsFileStorage,
   PLAN_GATE_MESSAGES,
   type PlanId,
@@ -2181,7 +2182,7 @@ const scanSaving = ref(false);
 const invoicesAutoScan = computed(() => Boolean(userSettings.value?.invoices_auto_scan));
 const discoveryAutoScan = computed(() => Boolean(userSettings.value?.discovery_auto_scan));
 const discoveryFrequency = computed<"daily" | "weekly">(() => userSettings.value?.discovery_scan_frequency === "daily" ? "daily" : "weekly");
-const invoiceScanAllowed = computed(() => Boolean(featureFlagsForUser(user.value).gmailInvoiceHistoryMonths));
+const invoiceScanAllowed = computed(() => userAllowsGmailInvoiceImport(user.value));
 const discoveryScanAllowed = computed(() => featuresStore.hasFeature(FEATURES.pages.discovery) && featureFlagsForUser(user.value).documentImport);
 const scanFrequencyOptions = computed(() => [
   { label: l.value.profileSettings.scanDaily, value: "daily" },

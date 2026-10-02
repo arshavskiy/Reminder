@@ -234,6 +234,12 @@ export function planAllowsGoogleDrive(planId: PlanId | string | null | undefined
     return tierFeatureFlags(planId).googleDriveSync;
 }
 
+/** Gmail invoice import: months of history, null = unlimited (admin), 0 = not included. */
+export function userAllowsGmailInvoiceImport(user: { plan?: string | null; role?: string | null; trial_ends_at?: string | Date | null } | null | undefined): boolean {
+    const months = featureFlagsForUser(user).gmailInvoiceHistoryMonths;
+    return months === null || months > 0;
+}
+
 /** Google Calendar sync is a business-plan feature. */
 export function planAllowsGoogleCalendar(planId: PlanId | string | null | undefined): boolean {
     return tierFeatureFlags(planId).googleCalendarSync;
