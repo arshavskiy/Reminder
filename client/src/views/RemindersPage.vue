@@ -456,7 +456,7 @@ function msToLocalDateStr(ms: number): string {
 }
 
 const store = useRemindersStore();
-const {l, href, t, dir, locale} = useI18n();
+const {l, href, t, dir, locale, intl} = useI18n();
 const { refresh: refreshNotifications } = useNotifications();
 const settingsStore = useSettingsStore();
 const clientsStore = useClientsStore();
@@ -1266,7 +1266,7 @@ async function doQuickTest() {
       source_type: "manual",
       trigger_date: today,
       advance_days: 0,
-      title: `${l.value.remindersMsg.testPrefix} — ${new Date().toLocaleString(locale.value === "en" ? "en-US" : "he-IL")}`,
+      title: `${l.value.remindersMsg.testPrefix} — ${new Date().toLocaleString(intl.value)}`,
       body: l.value.remindersMsg.testBody,
       email_to: JSON.stringify([testEmail.value]),
       email_template_id: canSelectEmailTemplates.value ? quickTestTemplateId.value : null,

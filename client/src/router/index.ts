@@ -22,31 +22,32 @@ const AdminPage = () => import("../views/AdminPage.vue");
 import {trackPageView} from "../analytics.js";
 import {applySeo} from "../seo.js";
 import {useAuthStore} from "../stores/auth.js";
-import {dashboardPath, isEnglishPath, localeFromPath, localizedPath, loginPath, useLocaleStore, wantsEnglishPrefix} from "../stores/locale.js";
+import {dashboardPath, isPrefixedPath, localeFromPath, localizedPath, loginPath, prefixLocaleOf, useLocaleStore, wantedPrefixLocale, type PrefixedLocale} from "../stores/locale.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
 import {PAID_PLAN_IDS, planMeetsMinimum, type PlanId, resolveUserPlan} from "../shared/pricingPlans.js";
 
-function englishRedirect(path: string): string {
-    if (!path.startsWith("/") || path.startsWith("/en")) return path;
-    return `/en${path}`;
+function prefixedRedirect(path: string, prefix: PrefixedLocale): string {
+    if (!path.startsWith("/") || path === `/${prefix}` || path.startsWith(`/${prefix}/`)) return path;
+    return `/${prefix}${path}`;
 }
 
-function prefixEnglishRoute(route: RouteRecordRaw): RouteRecordRaw {
+/** The same route under /en or /ru (Hebrew is the unprefixed default). */
+function prefixRoute(route: RouteRecordRaw, prefix: PrefixedLocale): RouteRecordRaw {
     const prefixed: RouteRecordRaw = {
         ...route,
-        path: route.path === "/" ? "/en" : `/en${route.path}`,
+        path: route.path === "/" ? `/${prefix}` : `/${prefix}${route.path}`,
     };
-    if (route.name) prefixed.name = `${String(route.name)}__en`;
+    if (route.name) prefixed.name = `${String(route.name)}__${prefix}`;
     if (typeof route.redirect === "string") {
-        prefixed.redirect = englishRedirect(route.redirect);
+        prefixed.redirect = prefixedRedirect(route.redirect, prefix);
     } else if (typeof route.redirect === "function") {
         const original = route.redirect;
         prefixed.redirect = (to) => {
             const result = original(to);
-            if (typeof result === "string") return englishRedirect(result);
+            if (typeof result === "string") return prefixedRedirect(result, prefix);
             if (result && typeof result === "object" && "path" in result && typeof result.path === "string") {
-                return {...result, path: englishRedirect(result.path)};
+                return {...result, path: prefixedRedirect(result.path, prefix)};
             }
             return result;
         };
@@ -115,6 +116,37 @@ const publicRoutes: RouteRecordRaw[] = [
                 robots: "noindex,nofollow",
                 title: "Reset password - RemindOCR",
                 description: "Reset your RemindOCR password.",
+            },
+        },
+        {
+            path: "/ru",
+            component: LoginPage,
+            meta: {
+                public: true,
+                canonicalPath: "/ru",
+                title: "RemindOCR - EXTRACT • TRACK • AUTOMATE",
+                description: "RemindOCR: инспекции, документы, клиенты и напоминания с OCR, извлечением данных и импортом счетов и чеков из Gmail.",
+            },
+        },
+        {
+            path: "/ru/login",
+            component: LoginPage,
+            meta: {
+                public: true,
+                canonicalPath: "/ru/login",
+                robots: "noindex,nofollow",
+                title: "Вход - RemindOCR",
+                description: "Вход в аккаунт RemindOCR.",
+            },
+        },
+        {
+            path: "/ru/reset-password",
+            component: ResetPasswordPage,
+            meta: {
+                public: true,
+                robots: "noindex,nofollow",
+                title: "Сброс пароля - RemindOCR",
+                description: "Сброс пароля RemindOCR.",
             },
         },
 ];
@@ -243,7 +275,7 @@ const appRoutes: RouteRecordRaw[] = [
 
 export const router = createRouter({
     history: createWebHistory(),
-    routes: [...publicRoutes, ...appRoutes, ...appRoutes.map(prefixEnglishRoute)],
+    routes: [...publicRoutes, ...appRoutes, ...appRoutes.map((route) => prefixRoute(route, "en")), ...appRoutes.map((route) => prefixRoute(route, "ru"))],
 });
 
 router.afterEach((to) => {
@@ -259,11 +291,13 @@ router.beforeEach(async (to) => {
         if (!authStore.initialized) {
             await authStore.fetchMe();
         }
-        const loginHome = to.path === "/" || to.path === "/en" || to.path === "/login" || to.path === "/en/login";
+        const loginHome = ["/", "/en", "/ru", "/login", "/en/login", "/ru/login"].includes(to.path);
         if (authStore.user && loginHome) {
-            const loc = isEnglishPath(to.path) || (to.path === "/" && wantsEnglishPrefix())
-                ? "en"
-                : (localeFromPath(to.path) ?? (wantsEnglishPrefix() ? "en" : "he"));
+            const loc = prefixLocaleOf(to.path)
+                ?? (to.path === "/" ? wantedPrefixLocale() : null)
+                ?? localeFromPath(to.path)
+                ?? wantedPrefixLocale()
+                ?? "he";
             if (to.query.billing === "one_time") {
                 return {path: localizedPath("/profile", loc), query: {section: "subscription"}};
             }
@@ -278,14 +312,16 @@ router.beforeEach(async (to) => {
     }
 
     const locale = localeFromPath(to.path)
-        ?? (isEnglishPath(to.path) || wantsEnglishPrefix(to.path) ? "en" : "he");
+        ?? prefixLocaleOf(to.path)
+        ?? wantedPrefixLocale(to.path)
+        ?? "he";
 
     if (!authStore.user) {
         return {path: loginPath(locale), query: to.query};
     }
 
-    if (locale === "en" && !isEnglishPath(to.path)) {
-        return {path: localizedPath(to.path, "en"), query: to.query, hash: to.hash};
+    if (locale !== "he" && !isPrefixedPath(to.path)) {
+        return {path: localizedPath(to.path, locale), query: to.query, hash: to.hash};
     }
 
     const deny = (path: string) => ({path: localizedPath(path, locale)});

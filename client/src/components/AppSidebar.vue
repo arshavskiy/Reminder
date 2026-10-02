@@ -353,7 +353,7 @@ const allNav = computed<NavItem[]>(() => {
       ],
     },
     {
-      label: localeStore.locale === "en" ? "Discover reminders" : "גילוי תזכורות",
+      label: localeStore.locale === "en" ? "Discover reminders" : localeStore.locale === "ru" ? "Поиск напоминаний" : "גילוי תזכורות",
       key: "discover-reminders",
       icon: SearchOutline,
       feature: FEATURES.pages.discovery,

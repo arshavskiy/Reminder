@@ -19,7 +19,7 @@
           </template>
           {{ isDark ? t.copy.themeLight : t.copy.themeDark }}
         </n-tooltip>
-        <a class="nav-lang" :href="t.otherPath" :hreflang="t.otherHreflang" :lang="t.otherHreflang" @click.prevent="switchLocale">{{ t.copy.langSwitch }}</a>
+        <a v-for="lang in t.otherLanguages" :key="lang.code" class="nav-lang" :href="lang.path" :hreflang="lang.code" :lang="lang.code" :aria-label="lang.name" @click.prevent="switchLocale(lang.path)">{{ lang.name }}</a>
         <a class="nav-cta" href="#login-card">{{ t.copy.navCta }}</a>
       </div>
     </nav>
@@ -51,7 +51,7 @@
 
           <n-alert v-if="route.query.billing === 'one_time'" style="margin-bottom:16px" type="info">
             {{
-              localeStore.locale === "en"
+              localeStore.locale !== "he"
                   ? "One-time payment for the number of months purchased. After payment verification, we’ll remind you by email and in the app when that period ends. Already registered? Sign in to your existing account."
                   : "תשלום חד־פעמי למספר החודשים שנרכשו. לאחר אימות התשלום נזכיר לכם באימייל ובאפליקציה בסיום התקופה ששולמה. כבר נרשמתם? התחברו לחשבון הקיים."
             }}
@@ -324,6 +324,7 @@ import {useContractsStore} from "../stores/contracts.js";
 import {useClientsStore} from "../stores/clients.js";
 import {useRemindersStore} from "../stores/reminders.js";
 import {dashboardPath, localizedPath, marketingUrl, useLocaleStore} from "../stores/locale.js";
+import {LANGUAGE_NAMES} from "../locales/authMessages.js";
 import {INTENT_KEY, parseIntent, readIntent} from "../shared/signupIntent";
 import GoogleSignIn from "../components/GoogleSignIn.vue";
 import {useDevModal} from "../composables/useDevModal.js";
@@ -341,15 +342,14 @@ const localeStore = useLocaleStore();
 const route = useRoute();
 const router = useRouter();
 const t = computed(() => {
-  const english = localeStore.locale === "en";
   const loginish = route.path.endsWith("/login");
+  const pathFor = (code: "he" | "en" | "ru") => (code === "he" ? (loginish ? "/login" : "/") : (loginish ? `/${code}/login` : `/${code}`));
   return {
     copy: localeStore.messages,
     dir: localeStore.dir,
-    otherHreflang: english ? "he" : "en",
-    otherPath: english
-      ? (loginish ? "/login" : "/")
-      : (loginish ? "/en/login" : "/en"),
+    otherLanguages: (["he", "en", "ru"] as const)
+      .filter((code) => code !== localeStore.locale)
+      .map((code) => ({code, name: LANGUAGE_NAMES[code], path: pathFor(code)})),
   };
 });
 const darkPref = ref(localStorage.getItem("theme") === "dark");
@@ -384,8 +384,8 @@ const errorMsg = computed(() => {
   return null;
 });
 
-function switchLocale() {
-  router.replace({path: t.value.otherPath, query: route.query});
+function switchLocale(path: string) {
+  router.replace({path, query: route.query});
 }
 
 function clearError() {

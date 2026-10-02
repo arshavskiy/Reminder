@@ -18,7 +18,7 @@ const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 const localeStore = useLocaleStore();
 
 function redirectToGoogle() {
-  const locale = localeStore.locale === "en" ? "en" : "he";
+  const locale = localeStore.locale;
   const query = new URLSearchParams({locale});
   const intent = readIntent();
   if (intent.plan && intent.billing) {

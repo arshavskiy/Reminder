@@ -1585,7 +1585,7 @@ import {localizedPath, marketingUrl} from "../stores/locale.js";
 
 const route = useRoute();
 const router = useRouter();
-const {l, t, locale} = useI18n();
+const {l, t, locale, intl} = useI18n();
 const securityUrl = computed(() => marketingUrl("/security", locale.value));
 const settingsReturnPath = computed(() => `${localizedPath("/profile", locale.value)}?section=settings`);
 
@@ -1783,7 +1783,7 @@ const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value, 
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", {
+  return new Date(d).toLocaleDateString(intl.value, {
     year: "numeric",
     month: "long",
     day: "numeric",

@@ -1,3 +1,4 @@
+import {buildRussianMessages} from "./ruMessages";
 import {authMessages, type UiLocale} from "./authMessages.js";
 
 export type {UiLocale};
@@ -4815,7 +4816,8 @@ const en = {
   },
 } as const;
 
-export const appMessages = {he, en};
+// Russian is the English catalog with the Russian translations applied (see ruMessages.ts).
+export const appMessages = {he, en, ru: {...(buildRussianMessages(en) as typeof en), auth: authMessages.ru as unknown as typeof en.auth}};
 
 export type AppMessages = (typeof appMessages)[UiLocale];
 

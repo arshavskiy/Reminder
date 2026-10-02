@@ -20,6 +20,12 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Russian UI Language
+
+- Third UI language alongside Hebrew and English: `/ru` URL prefix, language links on the login page and in the user menu, Russian date/number formatting (`ru-RU`), Russian Naive UI components, left-to-right layout.
+- The Russian catalog is the English one with translations laid over it (`client/src/locales/ru/*.ts`, flat dotted paths); anything untranslated shows in English. Translated: sign-in, dashboard, calendar, reminders, invoices and expenses, documents, review queue, profile and billing, table import, templates. Inspector-only screens (inspection modal, contract card, equipment, field page, client detail) stay English.
+- Test: `russianCatalog.test.ts` (no unknown paths, placeholders preserved, fallback intact).
+
 ### Russian Gmail Import
 
 - Invoices, receipts and cash receipts in Russian are found, classified and parsed: wider search terms, Russian document types (счет-фактура, УПД, кассовый чек, квитанция, ЕПД, кредит-нота), body-only receipts from Russian senders, Russian label hints for AI extraction, 18 Russian senders in the search providers, and a per-user OCR language that can include Russian.

@@ -368,7 +368,7 @@ import {useOnboarding} from "../composables/useOnboarding.js";
 import {useI18n} from "../composables/useI18n.js";
 
 const hydraulicModalRef = ref<InstanceType<typeof HydraulicCheckModal> | null>(null);
-const {l, t, href, locale, canCreateInspection} = useI18n();
+const {l, t, href, locale, canCreateInspection, intl} = useI18n();
 function onTableImported() {
   calendarNextTestsOnly.value = false;
   store.fetch(true);
@@ -845,7 +845,7 @@ const greeting = computed(() => {
 // Hebrew-formatted date: יום רביעי, 20 במאי 2026
 const dateLine = computed(() => {
   const d = new Date();
-  return d.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", {
+  return d.toLocaleDateString(intl.value, {
     weekday: "long",
     day: "numeric",
     month: "long",

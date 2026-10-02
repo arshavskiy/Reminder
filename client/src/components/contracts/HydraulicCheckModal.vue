@@ -714,7 +714,7 @@ const emit = defineEmits<{
 }>();
 
 const visible = defineModel<boolean>("show", {default: false});
-const {l, t, locale, dir} = useI18n();
+const {l, t, locale, dir, intl} = useI18n();
 
 const store = useContractsStore();
 const authStore = useAuthStore();
@@ -1163,7 +1163,7 @@ const computedReminderDate = computed(() => {
   if (!expiryDateMs.value) return "—";
   const expiry = new Date(expiryDateMs.value);
   expiry.setDate(expiry.getDate() - reminderDaysBefore.value);
-  return expiry.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL");
+  return expiry.toLocaleDateString(intl.value);
 });
 
 const HYDRAULIC_PRINT_TEMPLATE_ID = "6a7cfbee5e95a7b2e1e4b606";
@@ -1375,7 +1375,7 @@ const draftSavedAtLabel = computed(() => {
   const date = new Date(savedAt);
   return Number.isNaN(date.getTime())
       ? ""
-      : date.toLocaleString(locale.value === "en" ? "en-US" : "he-IL", {dateStyle: "short", timeStyle: "short"});
+      : date.toLocaleString(intl.value, {dateStyle: "short", timeStyle: "short"});
 });
 
 const suggestedContractNumber = computed(() => {

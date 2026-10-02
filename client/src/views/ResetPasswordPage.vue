@@ -70,7 +70,7 @@ const route = useRoute();
 const router = useRouter();
 const localeStore = useLocaleStore();
 const t = computed(() => localeStore.messages);
-const loginPath = computed(() => (localeStore.locale === "en" ? "/en/login" : "/login"));
+const loginPath = computed(() => (localeStore.locale === "he" ? "/login" : `/${localeStore.locale}/login`));
 
 const token = ref("");
 const password = ref("");

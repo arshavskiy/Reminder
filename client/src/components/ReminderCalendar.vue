@@ -370,7 +370,7 @@ import {useI18n} from "../composables/useI18n.js";
 import {useDevModal} from "../composables/useDevModal.js";
 
 const featuresStore = useFeaturesStore();
-const {l, t, locale, dir} = useI18n();
+const {l, t, locale, dir, intl} = useI18n();
 const confirmDialogClass = CONFIRM_DIALOG_CLASS;
 
 interface Props {
@@ -442,7 +442,7 @@ function openDay(cell: { iso: string; items: ReminderWithContext[]; expiryItems:
   dayModalItems.value = cell.items;
   dayModalExpiry.value = cell.expiryItems;
   const d = new Date(cell.iso + "T00:00:00");
-  dayModalLabel.value = d.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  dayModalLabel.value = d.toLocaleDateString(intl.value, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   dayModalOpen.value = true;
 }
 
@@ -729,7 +729,7 @@ const expiryByIso = computed(() => {
   return m;
 });
 
-const monthLabel = computed(() => cursor.value.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", { month: "long", year: "numeric" }));
+const monthLabel = computed(() => cursor.value.toLocaleDateString(intl.value, { month: "long", year: "numeric" }));
 
 const monthCells = computed(() => {
   const c = cursor.value;
@@ -800,7 +800,7 @@ const agendaGroups = computed(() => {
       expiryItems: (expiryByIso.value.get(iso) ?? []),
       isToday: sameDay(d, today),
       isPast: d.getTime() < now,
-      label: d.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      label: d.toLocaleDateString(intl.value, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     };
   });
 });

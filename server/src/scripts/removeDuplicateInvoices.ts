@@ -10,13 +10,14 @@
  * Options:
  *   --loose   also match rows without a document number (same type, supplier, amount, date)
  *   --apply   delete; removed invoices and documents are first saved to data/backups/
+ *             (MongoDB extended JSON; restore with BSON.EJSON.parse + insertMany)
  *
- * Runs against the local database unless MONGODB_TARGET=production.
+ * Uses the database from .env.local / .env (MONGODB_TARGET=production selects the production slot).
  */
-import "dotenv/config";
+import "./loadEnv";
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
-import { ObjectId } from "mongodb";
+import { BSON, ObjectId } from "mongodb";
 import { closeDb, col, connectDb, getDbTargetStatus } from "../db/db";
 import { planInvoiceDedup, type DedupPlan, type DuplicateCandidate } from "../invoices/duplicates";
 import { getDataDir } from "../settings";
@@ -94,12 +95,13 @@ async function applyPlan(userId: string, plan: DedupPlan, backupDir: string) {
       : Promise.resolve([]),
   ]);
   const backupPath = join(backupDir, `invoice-dedup-${userId}-${Date.now()}.json`);
-  writeFileSync(backupPath, JSON.stringify({ user_id: userId, created_at: new Date(), plan: {
+  // Extended JSON keeps ObjectId and Date types, so rows can be re-inserted as they were.
+  writeFileSync(backupPath, BSON.EJSON.stringify({ user_id: userId, created_at: new Date(), plan: {
     keeperOf: Object.fromEntries(plan.keeperOf),
     documentKeeperOf: Object.fromEntries(plan.documentKeeperOf),
     relinks: plan.relinks,
     clearPairs: plan.clearPairs,
-  }, invoices, documents }, null, 2));
+  }, invoices, documents }, undefined, 2));
   console.log(`  backup: ${backupPath}`);
 
   for (const [keeperId, fill] of plan.fills) {
@@ -195,7 +197,8 @@ async function applyPlan(userId: string, plan: DedupPlan, backupDir: string) {
 async function main() {
   await connectDb();
   const target = getDbTargetStatus();
-  console.log(`[invoice-dedup] db=${target.primary} mode=${apply ? "apply" : "dry-run"}${loose ? " loose" : ""}`);
+  const db = target.primary === "production" ? target.production : target.local;
+  console.log(`[invoice-dedup] db=${db.dbName} host=${db.host} mode=${apply ? "apply" : "dry-run"}${loose ? " loose" : ""}`);
 
   const backupDir = join(getDataDir(), "backups");
   if (apply) mkdirSync(backupDir, { recursive: true });
