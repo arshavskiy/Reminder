@@ -535,6 +535,12 @@
                     {{ paymentVendorName(row) }}
                   </n-tooltip>
                   <span class="invoice-cell-truncate" dir="auto" :title="row.supplier_name">{{ row.supplier_name }}</span>
+                  <n-tooltip v-if="row.paired_with" placement="top">
+                    <template #trigger>
+                      <span class="invoice-pair-tag">{{ row.pair_role === 'receipt' ? l.invoicesMsg.receiptOfInvoice : l.invoicesMsg.paidByReceipt }}</span>
+                    </template>
+                    {{ l.invoicesMsg.pairedTooltip }}
+                  </n-tooltip>
                   <span v-if="row.inline_no_file" class="invoice-nofile-flag">
                     <n-icon :component="MailOutline" :size="12" />
                     {{ l.invoicesMsg.noFile }}
@@ -1021,6 +1027,7 @@ function updateIsMobile() {
 
 onMounted(() => {
   load();
+  void backfillPairsOnce();
   refreshGmailStatus();
   updateIsMobile();
   window.addEventListener("resize", updateIsMobile);
@@ -1783,6 +1790,7 @@ function invoiceActionOptions(row: ImportedInvoice) {
       disabled: !row.download_url,
       icon: renderActionIcon(DownloadOutline),
     },
+    ...(row.paired_with ? [{ label: c.invoicesMsg.unpair, key: "unpair" }] : []),
     { type: "divider", key: "d1" },
     {
       label: c.invoices.assignClient,
@@ -1830,6 +1838,7 @@ function invoiceActionOptions(row: ImportedInvoice) {
 async function handleInvoiceAction(key: string, row: ImportedInvoice) {
   if (key === "open") return openDocument(row);
   if (key === "download") return download(row);
+  if (key === "unpair") return unpairInvoice(row);
   if (key === "archive") return updateInvoiceStatus(row, "archived");
   if (key === "delete") return confirmDeleteInvoice(row);
   if (key === "business:custom") return openBusinessModal(row);
@@ -1837,6 +1846,33 @@ async function handleInvoiceAction(key: string, row: ImportedInvoice) {
   if (key.startsWith("category:")) return updateInvoiceMeta(row, { expense_category: key.slice("category:".length) });
   if (key === "cashFlow:income") return updateInvoiceMeta(row, { cash_flow: "income" });
   if (key === "cashFlow:expense") return updateInvoiceMeta(row, { cash_flow: "expense" });
+}
+
+async function unpairInvoice(row: ImportedInvoice) {
+  try {
+    await api.invoices.unpair(row.id);
+    message.success(l.value.invoicesMsg.unpaired);
+    await load(false);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : String(err));
+  }
+}
+
+// Existing invoices and receipts imported before pairing existed are matched once, quietly,
+// the first time this page opens for a user; later imports are paired as they arrive.
+async function backfillPairsOnce() {
+  const key = `invoices.pairScan.v1.${authStore.user?.id ?? "anon"}`;
+  try {
+    if (localStorage.getItem(key)) return;
+    const result = await api.invoices.pairScan();
+    localStorage.setItem(key, String(Date.now()));
+    if (result.linked > 0) {
+      message.info(t("invoicesMsg.pairsFound", { n: result.linked }));
+      await load(false);
+    }
+  } catch {
+    /* try again on the next visit */
+  }
 }
 
 function openBusinessModal(row: ImportedInvoice) {
@@ -2422,6 +2458,18 @@ function replaceRow(updated: ImportedInvoice) {
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.invoice-pair-tag {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+  white-space: nowrap;
 }
 
 .invoice-table__col--select {

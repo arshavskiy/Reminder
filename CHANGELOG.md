@@ -20,6 +20,10 @@
 - Added camera capture in the upload modal and PWA share-to-app.
 - Added email-in: forward documents to a personal `in+<token>@in.remindocr.com` address, imported through the existing pipeline.
 
+### Invoice and Receipt Pairing
+
+- Invoices and the receipts that paid them are now matched (supplier or reference number, amount, currency, receipt within 90 days after the invoice) so one payment is not counted twice: a paired invoice counts as paid, is not a duplicate and is left out of expense totals. Pairing runs after each import, with a one-time backfill, a manual confirm and an unlink.
+
 ### Calendar
 
 - Added calendar filter chips for payments and mailbox suggestions, and a "לתשלום" chip on the Invoices page (unpaid with a payment date, sorted soonest first).

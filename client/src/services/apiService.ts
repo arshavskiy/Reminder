@@ -225,6 +225,10 @@ export interface ImportedInvoice {
   provider_label: string | null;
   provider_category: GmailSearchProvider["category"] | null;
   payment_status: string | null;
+  /** Id of the receipt (for an invoice) or invoice (for a receipt) this row is paired with. */
+  paired_with?: string | null;
+  pair_status?: "auto" | "confirmed" | null;
+  pair_role?: "invoice" | "receipt" | null;
   note: string | null;
   status: string;
   possible_not_invoice: boolean;
@@ -833,6 +837,8 @@ export const api = {
 
   invoices: {
     dueSoon: (days = 14) => get<{ items: InvoiceDueSoon[]; days: number }>(`/invoices/due-soon${qs({ days })}`, true),
+    pairScan: () => post<{ scanned: number; linked: number }>("/invoices/pairs/scan"),
+    unpair: (id: string) => del(`/invoices/${id}/pair`),
     /** Every unpaid invoice due between two ISO dates (inclusive), for the calendar. */
     dueInRange: (from: string, to: string) => get<{ items: InvoiceDueSoon[]; from: string; to: string }>(`/invoices/due-soon${qs({ from, to })}`, true),
     list: (params?: { q?: string; status?: string; type?: string; documentCategory?: ImportedInvoice["document_category"]; cashFlow?: string; category?: string; currency?: string; supplier?: string; sortBy?: string; sortDir?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number; export?: boolean; duplicatesOnly?: string; unpaidOnly?: string }, force = false) =>

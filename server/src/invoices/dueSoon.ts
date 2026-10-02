@@ -12,21 +12,25 @@ export interface DueSoonRow {
   document_category?: string | null;
   payment_status?: string | null;
   payment_due_date?: string | null;
+  /** Set when a receipt has been paired with this invoice: the receipt is the proof it was paid. */
+  paired_with?: string | null;
+  pair_status?: string | null;
 }
 
 /**
  * Whether a row is something still to be paid: not archived, not income, a payable
  * document type and not already settled. It says nothing about the payment date.
  */
-export function invoiceIsPayable(row: Pick<DueSoonRow, "status" | "cash_flow" | "document_category" | "payment_status">): boolean {
+export function invoiceIsPayable(row: Pick<DueSoonRow, "status" | "cash_flow" | "document_category" | "payment_status" | "paired_with" | "pair_status">): boolean {
   if (row.status === "archived") return false;
   if (row.cash_flow === "income") return false;
   if (row.document_category && !PAYABLE_CATEGORIES.has(row.document_category)) return false;
   return !invoiceIsSettled(row);
 }
 
-export function invoiceIsSettled(row: Pick<DueSoonRow, "payment_status" | "document_category">): boolean {
+export function invoiceIsSettled(row: Pick<DueSoonRow, "payment_status" | "document_category" | "paired_with" | "pair_status">): boolean {
   if (row.document_category === "receipt") return true;
+  if (row.paired_with && (row.pair_status === "auto" || row.pair_status === "confirmed")) return true;
   return SETTLED_STATUS_RE.test(String(row.payment_status ?? ""));
 }
 
