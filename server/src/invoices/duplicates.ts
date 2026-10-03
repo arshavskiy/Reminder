@@ -7,8 +7,9 @@ import { hasActivePair, isIdentifiedSupplier, normalizeCurrency, normalizeSuppli
  * copy to keep. Pure; scripts/removeDuplicateInvoices.ts applies the plan to the database.
  *
  * Two rows are the same document when they share type, supplier, amount, currency and
- * issue date, and the same document number. Rows without a number only match in loose
- * mode, and never when the candidates carry two different numbers. Inline Gmail receipts
+ * issue date, and the same document number (ignoreDate drops the date for numbered rows).
+ * Rows without a number only match in loose mode, and never when the candidates carry
+ * two different numbers. Inline Gmail receipts
  * (no file) are only matched with each other: removing one in favour of a PDF would let
  * the inline import bring it back.
  */
@@ -101,6 +102,11 @@ function timestamp(value: unknown): number {
 
 export interface DedupOptions {
   loose?: boolean;
+    /**
+     * Match a shared document number regardless of issue date (the same receipt read once
+     * with the bill date and once with the payment date). Never applies to unnumbered rows.
+     */
+    ignoreDate?: boolean;
   /** Document ids that exist. When given, file-backed rows pointing elsewhere are orphans. */
   existingDocumentIds?: Set<string>;
 }
@@ -163,8 +169,8 @@ export function compareKeepPreference(a: DuplicateCandidate, b: DuplicateCandida
   return a.id.localeCompare(b.id);
 }
 
-function baseKey(c: DuplicateCandidate): string {
-  return [c.inline ? "inline" : "file", c.category, c.supplier, c.currency, Math.round(c.amount * 100), c.issueDate ?? ""].join("|");
+function baseKey(c: DuplicateCandidate, ignoreDate: boolean): string {
+    return [c.inline ? "inline" : "file", c.category, c.supplier, c.currency, Math.round(c.amount * 100), ignoreDate ? "" : c.issueDate ?? ""].join("|");
 }
 
 function toGroup(match: DuplicateMatch, members: DuplicateCandidate[]): DuplicateGroup {
@@ -173,11 +179,12 @@ function toGroup(match: DuplicateMatch, members: DuplicateCandidate[]): Duplicat
 }
 
 export function findDuplicateGroups(raws: Record<string, any>[], options: DedupOptions = {}): DuplicateGroup[] {
+    if (options.loose && options.ignoreDate) throw new Error("loose and ignoreDate cannot be combined");
   const buckets = new Map<string, DuplicateCandidate[]>();
   for (const raw of raws) {
     const candidate = toDuplicateCandidate(raw, options.existingDocumentIds);
     if (!candidate?.id) continue;
-    const key = baseKey(candidate);
+      const key = baseKey(candidate, Boolean(options.ignoreDate));
     const bucket = buckets.get(key);
     if (bucket) bucket.push(candidate);
     else buckets.set(key, [candidate]);

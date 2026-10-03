@@ -80,6 +80,27 @@ describe("findDuplicateGroups", () => {
     expect(findDuplicateGroups([row({ invoice_number: null, issue_date: null }), row({ invoice_number: null, issue_date: null })], { loose: true })).toEqual([]);
   });
 
+    it("matches a shared number across different dates only with ignoreDate", () => {
+        const billDate = row({issue_date: "2025-03-10"});
+        const paidDate = row({issue_date: "2025-04-03"});
+        expect(findDuplicateGroups([billDate, paidDate])).toEqual([]);
+        const groups = findDuplicateGroups([billDate, paidDate], {ignoreDate: true});
+        expect(groups).toHaveLength(1);
+        expect(groups[0].match).toBe("number");
+    });
+
+    it("ignoreDate never joins rows without a number, or different numbers", () => {
+        expect(findDuplicateGroups([row({invoice_number: null, issue_date: "2025-01-01"}), row({
+            invoice_number: null,
+            issue_date: "2025-02-01"
+        })], {ignoreDate: true})).toEqual([]);
+        expect(findDuplicateGroups([row({issue_date: "2025-01-01"}), row({
+            invoice_number: "INV-1002",
+            issue_date: "2025-02-01"
+        })], {ignoreDate: true})).toEqual([]);
+        expect(() => findDuplicateGroups([], {ignoreDate: true, loose: true})).toThrow();
+    });
+
   it("does not match an inline Gmail receipt with a file-backed copy", () => {
     const inline = row({ source: "gmail_inline", inline_no_file: true, document_id: "gmail-inline:x" });
     expect(findDuplicateGroups([inline, row()])).toEqual([]);

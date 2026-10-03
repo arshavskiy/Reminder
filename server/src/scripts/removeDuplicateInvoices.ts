@@ -9,6 +9,8 @@
  *
  * Options:
  *   --loose   also match rows without a document number (same type, supplier, amount, date)
+ *   --ignore-date  match a shared document number even when the issue dates differ
+ *                  (cannot be combined with --loose)
  *   --apply   delete; removed invoices and documents are first saved to data/backups/
  *             (MongoDB extended JSON; restore with BSON.EJSON.parse + insertMany)
  *
@@ -25,6 +27,7 @@ import { deleteFromSpaces } from "../storage/spaces";
 
 const apply = process.argv.includes("--apply");
 const loose = process.argv.includes("--loose");
+const ignoreDate = process.argv.includes("--ignore-date");
 const allUsers = process.argv.includes("--all-users");
 
 function arg(name: string): string | undefined {
@@ -64,6 +67,7 @@ function describe(c: DuplicateCandidate): string {
   return [
     c.id,
     c.inline ? "inline" : `doc ${c.documentId}`,
+      c.issueDate ?? "no date",
     `#${c.number ?? "-"}`,
     c.status,
     c.orphan ? "document missing" : null,
@@ -75,7 +79,7 @@ function printPlan(userId: string, plan: DedupPlan) {
   console.log(`\n[invoice-dedup] user=${userId} groups=${plan.groups.length} remove=${plan.removeIds.length}`);
   for (const group of plan.groups) {
     const { keep } = group;
-    console.log(`  ${keep.supplierLabel} | ${keep.category} | ${keep.amount} ${keep.currency} | ${keep.issueDate ?? "no date"} | match=${group.match}`);
+      console.log(`  ${keep.supplierLabel} | ${keep.category} | ${keep.amount} ${keep.currency} | match=${group.match}`);
     console.log(`    keep   ${describe(keep)}`);
     for (const removed of group.remove) console.log(`    remove ${describe(removed)}`);
   }
@@ -195,10 +199,11 @@ async function applyPlan(userId: string, plan: DedupPlan, backupDir: string) {
 }
 
 async function main() {
+    if (loose && ignoreDate) throw new Error("--loose and --ignore-date cannot be combined.");
   await connectDb();
   const target = getDbTargetStatus();
   const db = target.primary === "production" ? target.production : target.local;
-  console.log(`[invoice-dedup] db=${db.dbName} host=${db.host} mode=${apply ? "apply" : "dry-run"}${loose ? " loose" : ""}`);
+    console.log(`[invoice-dedup] db=${db.dbName} host=${db.host} mode=${apply ? "apply" : "dry-run"}${loose ? " loose" : ""}${ignoreDate ? " ignore-date" : ""}`);
 
   const backupDir = join(getDataDir(), "backups");
   if (apply) mkdirSync(backupDir, { recursive: true });
@@ -213,7 +218,11 @@ async function main() {
     const existing = documentIds.length
       ? await col<any>("documents").find({ user_id: userId, _id: { $in: objectIds(documentIds) } } as any, { projection: { _id: 1 } } as any).toArray()
       : [];
-    const plan = planInvoiceDedup(rows, { loose, existingDocumentIds: new Set(existing.map((doc: any) => String(doc._id))) });
+      const plan = planInvoiceDedup(rows, {
+          loose,
+          ignoreDate,
+          existingDocumentIds: new Set(existing.map((doc: any) => String(doc._id)))
+      });
     if (!plan.groups.length) continue;
     totalGroups += plan.groups.length;
     totalRemoved += plan.removeIds.length;
