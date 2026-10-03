@@ -671,6 +671,34 @@ function adminHeaders(extra?: HeadersInit, target: AdminDbTarget = getAdminDbTar
   return headers;
 }
 
+/**
+ * Server responses carry `*_url` fields as `/api/...` paths. In production the
+ * session cookie lives on the API host (VITE_API_BASE), so those paths must be
+ * loaded from there, not from the app domain.
+ */
+export function apiUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  return SERVER && path.startsWith("/api/") ? `${SERVER}${path}` : path;
+}
+
+function withApiHost<T>(value: T): T {
+  if (!SERVER || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) value[i] = withApiHost(value[i]);
+    return value;
+  }
+  const obj = value as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    const v = obj[key];
+    if (typeof v === "string") {
+      if (key.endsWith("_url")) obj[key] = apiUrl(v);
+    } else if (v && typeof v === "object") {
+      obj[key] = withApiHost(v);
+    }
+  }
+  return value;
+}
+
 async function get<T>(path: string, force = false): Promise<T> {
   const res = await fetch(BASE + path, {
     credentials: "include",
@@ -681,7 +709,7 @@ async function get<T>(path: string, force = false): Promise<T> {
     err.status = res.status;
     throw err;
   }
-  return res.json() as Promise<T>;
+  return withApiHost(await res.json()) as T;
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
@@ -696,7 +724,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     err.status = res.status;
     throw err;
   }
-  return res.json() as Promise<T>;
+  return withApiHost(await res.json()) as T;
 }
 
 async function put<T>(path: string, body: unknown): Promise<T> {
@@ -711,7 +739,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     err.status = res.status;
     throw err;
   }
-  return res.json() as Promise<T>;
+  return withApiHost(await res.json()) as T;
 }
 
 async function del(path: string): Promise<void> {
