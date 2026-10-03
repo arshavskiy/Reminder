@@ -39,7 +39,7 @@
           <div class="user-dropdown__meta">
             <span v-if="userName" class="user-dropdown__name">{{ userName }}</span>
           </div>
-          <n-icon class="app-nav__chevron" :component="ChevronBackOutline" :size="16"/>
+          <n-icon class="app-nav__chevron" :component="chevronIcon" :size="16"/>
         </div>
       </template>
       <div class="user-menu" :dir="localeStore.dir">
@@ -81,7 +81,7 @@
       <n-icon
           class="app-nav__chevron"
           :class="{ 'app-nav__chevron--open': menuOpen }"
-          :component="ChevronBackOutline"
+          :component="chevronIcon"
           :size="16"
       />
     </button>
@@ -92,13 +92,14 @@
 import {computed, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {NIcon, NPopover} from "naive-ui";
-import {ChevronBackOutline, PersonOutline} from "@vicons/ionicons5";
+import {ChevronBackOutline, ChevronForwardOutline, PersonOutline} from "@vicons/ionicons5";
 import {useAuthStore} from "../stores/auth.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {FEATURES} from "../shared/features.js";
 import {featureFlagsForUser, PAID_PLAN_IDS, planMeetsMinimum, resolveUserPlan} from "../shared/pricingPlans.js";
 import {useWalkthrough} from "../composables/useWalkthrough.js";
-import {localizedPath, useLocaleStore} from "../stores/locale.js";
+import {ALL_LOCALES, localizedPath, stripLocalePrefix, useLocaleStore} from "../stores/locale.js";
+import {LANGUAGE_NAMES} from "../locales/authMessages.js";
 
 interface Props {
   userName?: string | null;
@@ -119,6 +120,7 @@ const featuresStore = useFeaturesStore();
 const walkthrough = useWalkthrough();
 const localeStore = useLocaleStore();
 const l = computed(() => localeStore.catalog);
+const chevronIcon = computed(() => (localeStore.dir === "rtl" ? ChevronBackOutline : ChevronForwardOutline));
 
 // Create avatar from email / name
 const avatarUrl = computed<string>(() => {
@@ -173,6 +175,9 @@ const menuEntries = computed(() => {
     ...templates,
     ...(props.userRole === "admin" ? [{label: l.value.chrome.menu.admin, key: "admin"}] : []),
     {label: "", key: "divider", divider: true},
+    // Language: each name is written in its own language so it is findable from any UI language.
+    ...ALL_LOCALES.map((code) => ({label: LANGUAGE_NAMES[code], key: `lang:${code}`})),
+    {label: "", key: "divider-lang", divider: true},
     {label: l.value.chrome.menu.tour, key: "tour"},
     {label: l.value.chrome.menu.logout, key: "logout"},
   ];
@@ -195,13 +200,18 @@ const activeMenuKey = computed(() => {
 const templateActive = computed(() => TEMPLATE_KEYS.has(activeMenuKey.value));
 
 function isItemActive(key: string) {
+  if (key.startsWith("lang:")) return key === `lang:${localeStore.locale}`;
   return key === activeMenuKey.value || (key === "templates" && templateActive.value);
 }
 
 async function handleSelect(key: string) {
   menuOpen.value = false;
   emit("navigated");
-  if (key === "profile") {
+  if (key.startsWith("lang:")) {
+    // Same page, other language: the URL prefix carries the language.
+    const code = key.slice("lang:".length) as "he" | "en" | "ru";
+    if (code !== localeStore.locale) router.push({path: localizedPath(stripLocalePrefix(route.path), code), query: route.query, hash: route.hash});
+  } else if (key === "profile") {
     router.push({path: localizedPath("/profile"), query: {section: "personal"}});
   } else if (key === "engineer") {
     router.push({path: localizedPath("/profile"), query: {section: "engineer"}});

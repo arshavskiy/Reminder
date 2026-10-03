@@ -239,8 +239,8 @@ import {useI18n} from "../composables/useI18n.js";
 import StorageSyncIcons from "../components/StorageSyncIcons.vue";
 
 const route = useRoute();
-const {l, t, href, dir, locale} = useI18n();
-const intlLocale = computed(() => (locale.value === "en" ? "en-US" : "he-IL"));
+const {l, t, href, dir, locale, intl} = useI18n();
+const intlLocale = computed(() => (intl.value));
 const router = useRouter();
 const message = useMessage();
 

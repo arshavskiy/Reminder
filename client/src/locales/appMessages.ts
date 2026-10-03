@@ -1,3 +1,4 @@
+import {buildRussianMessages} from "./ruMessages";
 import {authMessages, type UiLocale} from "./authMessages.js";
 
 export type {UiLocale};
@@ -2118,6 +2119,35 @@ const he = {
     digital: "דיגיטל",
     development: "פיתוח",
     general: "כללי",
+  },
+  review: {
+    navLabel: "ייבואים לבדיקה",
+    title: "ייבואים לבדיקה",
+    subtitle: "מסמכים שהגיעו אוטומטית מ-Gmail, מהעברה בדואר או מ-Drive ונראים חשודים. אשרו או הסירו אותם לפני שישפיעו על התזכורות והדוחות.",
+    empty: "אין ייבואים שממתינים לבדיקה. הכול נראה תקין.",
+    untitled: "ללא שם",
+    approve: "אישור",
+    approveAll: "אשר הכול ({n})",
+    approved: "אושר",
+    approvedMany: "אושרו {n} ייבואים",
+    open: "פתיחת המסמך",
+    dismiss: "הסרה",
+    dismissed: "הוסר",
+    dismissTitle: "להסיר את הייבוא?",
+    dismissBody: "החשבונית תועבר לארכיון והתזכורות שנוצרו ממנה יבוטלו.",
+    cancel: "ביטול",
+    bannerText: "{n} ייבואים אוטומטיים ממתינים לבדיקה",
+    bannerCta: "לבדיקה",
+    sources: { gmail: "Gmail", email: "העברה בדואר", drive: "Drive" },
+    reasons: {
+      low_confidence: "ביטחון נמוך בחילוץ",
+      missing_amount: "חסר סכום",
+      missing_date: "חסר תאריך",
+      unknown_supplier: "ספק לא מזוהה",
+      possible_not_invoice: "ייתכן שאינה חשבונית",
+      missing_fields: "חסרים שדות חובה",
+      no_expiry_date: "חסר תאריך תוקף",
+    },
   },
   invoicesMsg: {
     toPay: "לתשלום",
@@ -4496,6 +4526,35 @@ const en = {
     development: "Development",
     general: "General",
   },
+  review: {
+    navLabel: "Imports to review",
+    title: "Imports to review",
+    subtitle: "Documents that arrived automatically from Gmail, email forwarding or Drive and look suspicious. Approve or remove them before they affect reminders and reports.",
+    empty: "No imports are waiting for review. Everything looks fine.",
+    untitled: "Untitled",
+    approve: "Approve",
+    approveAll: "Approve all ({n})",
+    approved: "Approved",
+    approvedMany: "{n} imports approved",
+    open: "Open document",
+    dismiss: "Remove",
+    dismissed: "Removed",
+    dismissTitle: "Remove this import?",
+    dismissBody: "The invoice is archived and the reminders created from it are dismissed.",
+    cancel: "Cancel",
+    bannerText: "{n} automatic imports are waiting for review",
+    bannerCta: "Review",
+    sources: { gmail: "Gmail", email: "Email forwarding", drive: "Drive" },
+    reasons: {
+      low_confidence: "Low extraction confidence",
+      missing_amount: "Amount missing",
+      missing_date: "Date missing",
+      unknown_supplier: "Supplier not identified",
+      possible_not_invoice: "May not be an invoice",
+      missing_fields: "Required fields missing",
+      no_expiry_date: "No expiry date",
+    },
+  },
   invoicesMsg: {
     toPay: "To pay",
     dailyScan: "Daily invoice scan from Gmail",
@@ -4757,7 +4816,8 @@ const en = {
   },
 } as const;
 
-export const appMessages = {he, en};
+// Russian is the English catalog with the Russian translations applied (see ruMessages.ts).
+export const appMessages = {he, en, ru: {...(buildRussianMessages(en) as typeof en), auth: authMessages.ru as unknown as typeof en.auth}};
 
 export type AppMessages = (typeof appMessages)[UiLocale];
 

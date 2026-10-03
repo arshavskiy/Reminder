@@ -1,4 +1,5 @@
 import { parseInlineReceipt } from "./inlineReceiptParser";
+import { isRussianReceiptSender } from "./russianReceipt";
 
 // Document files are excluded so the scan's page budget is spent on receipts
 // that have no PDF. The old query matched the newest invoice mail, which is
@@ -56,6 +57,8 @@ export function buildInlineReceiptQueries(keywordQuery: string, historyMonths: n
     { query: withHistory("from:grab.com subject:\"E-Receipt\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:noreply-payments@booking.com subject:\"your receipt\"", historyMonths), ...KNOWN_SENDER_WINDOW },
     { query: withHistory("from:airbnb.com subject:\"receipt from Airbnb\"", historyMonths), ...KNOWN_SENDER_WINDOW },
+    // Russian senders: OFD cash receipts, marketplaces, airlines, rail, banks, telecom.
+    { query: withHistory("from:(ofd.ru OR platformaofd.ru OR taxcom.ru OR 1-ofd.ru OR ofd-ya.ru OR ozon.ru OR wildberries.ru OR yandex.ru OR aeroflot.ru OR s7.ru OR rzd.ru OR tbank.ru OR tinkoff.ru OR sberbank.ru OR mts.ru OR beeline.ru OR megafon.ru) (чек OR оплата OR заказ OR квитанция OR билет)", historyMonths), ...KNOWN_SENDER_WINDOW },
     // Broad catch-all stays short. It matches ordinary mail, not a receipt sender.
     { query: withHistory(keywords, historyMonths), pages: 1, pageSize: 500, budget: 500 },
   ];
@@ -68,6 +71,7 @@ function looksLikeKnownInlineReceipt(from: string, subject: string): boolean {
   if (/@hyp\.co\.il$/i.test(email) && /אישור תשלום|payment/i.test(subject)) return true;
   if (/@(support\.facebook\.com|business-updates\.facebook\.com)$/i.test(email) && /receipt/i.test(subject)) return true;
   if (/@moovit-pango\.co\.il$/i.test(email) && /תחבורה ציבורית/.test(subject)) return true;
+  if (isRussianReceiptSender(email) && /чек|оплат|заказ|квитанц|билет|платеж|платёж/i.test(subject)) return true;
   return false;
 }
 

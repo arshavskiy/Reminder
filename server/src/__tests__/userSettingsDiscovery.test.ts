@@ -129,3 +129,17 @@ describe("PUT /api/user-settings — scheduled scan options", () => {
     expect((await put({ invoices_auto_scan: false })).status).toBe(200);
   });
 });
+
+describe("PUT /api/user-settings — OCR language", () => {
+  it("accepts Hebrew, English and Russian packs and stores them normalised", async () => {
+    const res = await put({ ocr_language: "rus+eng+heb" });
+    expect(res.status).toBe(200);
+    expect((await res.json()).ocr_language).toBe("heb+eng+rus");
+  });
+
+  it("rejects unsupported languages without writing anything", async () => {
+    expect((await put({ ocr_language: "fra" })).status).toBe(400);
+    expect((await put({ ocr_language: "" })).status).toBe(400);
+    expect(rows("user_settings")).toHaveLength(0);
+  });
+});

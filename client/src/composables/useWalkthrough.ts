@@ -458,9 +458,11 @@ const TOURS_EN: Record<string, WalkthroughStep[]> = {
   ],
 };
 
-const TOURS_BY_LOCALE: Record<"he" | "en", Record<string, WalkthroughStep[]>> = {
+const TOURS_BY_LOCALE: Record<"he" | "en" | "ru", Record<string, WalkthroughStep[]>> = {
   he: TOURS_HE,
   en: TOURS_EN,
+  // Tours are written in Hebrew and English; Russian users get the English steps.
+  ru: TOURS_EN,
 };
 
 export function useWalkthrough() {

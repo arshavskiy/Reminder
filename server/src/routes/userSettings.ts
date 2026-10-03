@@ -6,6 +6,7 @@ import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFe
 import {buildPlanEntitlements, newUserSettingsBase, persistPlanEntitlements} from "../plans/planEntitlements";
 import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES, userAllowsGmailInvoiceImport} from "../plans/tierFeatures";
 import {obligationLangErrorBody, parseObligationSearchLangs} from "../gmail/obligationSearch";
+import {normalizeOcrLanguage} from "../pipeline/ocrLanguage";
 
 const DEFAULT_REPORT_CONFIG = {
   all_fields: [
@@ -150,7 +151,15 @@ export function registerUserSettingsRoutes(app: express.Application) {
     if (body.theme !== undefined)                  patch.theme = body.theme;
     if (body.email_from_name !== undefined)        patch.email_from_name = body.email_from_name ?? null;
     if (body.reminder_advance_days !== undefined)  patch.reminder_advance_days = body.reminder_advance_days;
-    if (body.ocr_language !== undefined)           patch.ocr_language = body.ocr_language;
+    if (body.ocr_language !== undefined) {
+      // Hebrew, English and Russian packs only, in any order ("heb+eng+rus").
+      const language = normalizeOcrLanguage(body.ocr_language);
+      if (!language) {
+        res.status(400).json({ error: "invalid_ocr_language" });
+        return;
+      }
+      patch.ocr_language = language;
+    }
     if (body.monthly_report_enabled !== undefined) {
       const entitlements = await persistPlanEntitlements(auth.userId);
       if (Boolean(body.monthly_report_enabled) && !entitlements.automaticMonthlyReports) {

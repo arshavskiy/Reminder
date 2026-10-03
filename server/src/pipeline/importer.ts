@@ -39,6 +39,8 @@ import {
 } from "../quotas/documentImportQuota";
 import {inferInvoiceCashFlow} from "../invoices/cashFlow";
 import { pairInvoiceByDocumentId } from "../invoices/pairingStore";
+import { evaluateReviewForDocument } from "../review/reviewStore";
+import { ocrLanguageForUser } from "./ocrLanguage";
 
 type PushFn = (event: Record<string, unknown>) => void;
 
@@ -1032,7 +1034,7 @@ export async function processDocument(
       pageCount = pdfResult.pageCount;
       if (pdfResult.needsOcr) {
         push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
-        rawText = await ocrFile(filePath);
+        rawText = await ocrFile(filePath, await ocrLanguageForUser(userId));
         textSource = "ocr";
       } else {
         rawText = pdfResult.text;
@@ -1040,7 +1042,7 @@ export async function processDocument(
       }
     } else if (mimeType.startsWith("image/")) {
       push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 25 });
-      rawText = await ocrFile(filePath);
+      rawText = await ocrFile(filePath, await ocrLanguageForUser(userId));
       textSource = "ocr";
     } else if (ext === ".docx") {
       rawText = await parseDocx(filePath);
@@ -1409,7 +1411,7 @@ export async function processDocument(
         if (shouldTryOcrForInvoice && normalizedFields) {
           try {
             push?.({ type: "document:progress", documentId: documentId as any, stage: "ocr", progress: 62 });
-            const ocrText = await ocrFile(filePath);
+            const ocrText = await ocrFile(filePath, await ocrLanguageForUser(userId));
             const ocrRun = await extractWithTemplate(ocrText, template, documentId, docRow?.file_name, inspector as any, systemPrompt);
             const ocrFields = normalizeExtractionFieldsForTemplate(ocrText, template, ocrRun.fields, inspector);
             const nativeMissing = invoiceMissingRequiredFieldsFromFields(normalizedFields, extractionText);
@@ -1689,6 +1691,11 @@ async function finishDocumentProcessing(
     { _id: new ObjectId(documentId) } as any,
     { $set: { processing_status: "done", updated_at: new Date() } },
   );
+  // Imports nobody watched (Gmail, email-in, Drive) are checked for things that look wrong
+  // and put in the review queue. Best effort: never blocks the import.
+  void evaluateReviewForDocument(documentId, userId, pipeline?.processingJobContext?.source).catch((err) => {
+    logger.warn("import_review_evaluation_failed", { document_id: documentId, error: err instanceof Error ? err.message : String(err) });
+  });
   if (mimeType === "application/pdf") {
     await generatePdfThumbnailForDocument(documentId, { filePath }).catch((err) => {
       logger.warn("document_thumbnail_generation_failed", { document_id: documentId, user_id: userId ?? null, error: err });

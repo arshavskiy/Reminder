@@ -4,6 +4,8 @@
 // layout has been verified against real samples; anything else returns null
 // rather than guessing at an unfamiliar format.
 
+import { isRussianReceiptSender, parseRussianReceiptText } from "./russianReceipt";
+
 export interface ParsedInlineReceipt {
   vendor: string; // display name, e.g. "PayPal", "Hyp / iPos", "Meta Ads"
   transactionId: string;
@@ -374,5 +376,7 @@ export function parseInlineReceipt(from: string, html: string, subject: string):
   for (const { senderPattern, parse } of INLINE_RECEIPT_PARSERS) {
     if (senderPattern.test(email)) return parse(html, subject);
   }
+  // Russian senders (OFD cash receipts, marketplaces, airlines, rail, banks, telecom).
+  if (isRussianReceiptSender(email)) return parseRussianReceiptText(stripTags(html), email, subject);
   return null;
 }

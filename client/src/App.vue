@@ -138,7 +138,9 @@ import {useRoute} from "vue-router";
 import {
   darkTheme,
   dateEnUS,
+  dateRuRU,
   enUS,
+  ruRU,
   NConfigProvider,
   NDialogProvider,
   NIcon,
@@ -216,11 +218,11 @@ const rtlConfig = [
 const route = useRoute();
 const localeStore = useLocaleStore();
 const authStore = useAuthStore();
-const naiveUsesEnglish = computed(() => localeStore.locale === "en");
+const naiveUsesLatin = computed(() => localeStore.locale !== "he");
 const l = computed(() => localeStore.catalog);
-const naiveRtl = computed(() => (naiveUsesEnglish.value ? [] : rtlConfig));
-const naiveLocale = computed(() => (naiveUsesEnglish.value ? enUS : heIL));
-const naiveDateLocale = computed(() => (naiveUsesEnglish.value ? dateEnUS : dateHeIL));
+const naiveRtl = computed(() => (naiveUsesLatin.value ? [] : rtlConfig));
+const naiveLocale = computed(() => (localeStore.locale === "ru" ? ruRU : naiveUsesLatin.value ? enUS : heIL));
+const naiveDateLocale = computed(() => (localeStore.locale === "ru" ? dateRuRU : naiveUsesLatin.value ? dateEnUS : dateHeIL));
 const featuresStore = useFeaturesStore();
 const userSettingsStore = useUserSettingsStore();
 const pwa = usePwa();

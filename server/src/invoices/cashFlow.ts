@@ -9,7 +9,7 @@ const ENGLISH_VENDOR_RECEIPT_RE = /\breceipt\b/;
 // A credit note refunds money the user already paid, so it offsets spending
 // rather than adding to it. Expense analytics excludes income rows, so leaving
 // these as "expense" would inflate reported costs.
-const CREDIT_NOTE_RE = /זיכוי|credit\s*note|credit\s*memo/;
+const CREDIT_NOTE_RE = /זיכוי|credit\s*note|credit\s*memo|кредит[- ]?нот|корректировочн[а-я]*\s+сч[её]т|сторно/;
 
 export function normalizeCashFlow(value: unknown): InvoiceCashFlow | null {
   const text = String(value ?? "").trim().toLowerCase();
@@ -39,7 +39,7 @@ export function inferInvoiceCashFlow(input: {
 
   // Tested before the vendor/provider hints below: a credit note from a known
   // vendor is still a refund, and those hints would otherwise force "expense".
-  const subtype = String(input.document_subtype ?? input.type ?? input.fields?.document_subtype ?? "").toLowerCase();
+  const subtype = String(input.document_subtype ?? input.type ?? input.fields?.document_subtype ?? "").toLowerCase().replace(/ё/g, "е");
   if (CREDIT_NOTE_RE.test(subtype)) return "income";
 
   if (input.provider_id) return "expense";
@@ -56,6 +56,8 @@ export function inferInvoiceCashFlow(input: {
 
 export function resolveVatAmount(input: {
   amount?: number | null;
+  /** ISO code. The 18% estimate below is Israeli VAT, so it is only applied to ILS (or unknown) documents. */
+  currency?: string | null;
   vat_amount?: unknown;
   amount_before_vat?: unknown;
   fields?: Record<string, unknown> | null;
@@ -68,7 +70,10 @@ export function resolveVatAmount(input: {
     : parseMoney(input.fields?.amount);
   const before = parseMoney(input.amount_before_vat ?? input.fields?.amount_before_vat ?? input.fields?.subtotal);
   if (amount != null && before != null && amount > before) return roundMoney(amount - before);
-  if (amount != null) return roundMoney(amount * ISRAEL_VAT_INCLUDED_FACTOR);
+  // Foreign documents (RUB, USD, ...) have their own VAT rates; without a stated or derivable
+  // figure it is better to report none than a wrong Israeli-rate estimate.
+  const currency = String(input.currency ?? "ILS").trim().toUpperCase();
+  if (amount != null && (currency === "ILS" || currency === "")) return roundMoney(amount * ISRAEL_VAT_INCLUDED_FACTOR);
   return null;
 }
 

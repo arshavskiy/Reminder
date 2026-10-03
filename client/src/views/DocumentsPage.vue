@@ -1999,7 +1999,7 @@ async function doDeleteAll() {
   deletingAll.value = true;
   try {
     const ids = filteredRows.value.map((r) => r.id);
-    await Promise.all(ids.map((id) => store.deleteDoc(id)));
+    await Promise.all(ids.map((id) => api.documents.delete(id)));
     message.success(t("documentsMsg.docsDeleted", {count: ids.length}));
     await store.fetch(undefined, true);
   } catch {

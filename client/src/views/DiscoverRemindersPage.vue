@@ -119,8 +119,8 @@ import { useUserSettingsStore } from "../stores/userSettings";
 import { planAllowsDocumentImport, resolveUserPlan } from "../shared/pricingPlans";
 import { discoveryMessages } from "../locales/discoveryMessages";
 
-const { locale, dir, href } = useI18n();
-const c = computed(() => discoveryMessages[locale.value]);
+const { uiLocale, intl, dir, href } = useI18n();
+const c = computed(() => discoveryMessages[uiLocale.value]);
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
@@ -140,7 +140,7 @@ const connecting = ref(false);
 const scanning = ref(false);
 const error = ref("");
 const success = ref("");
-const languages = ref<string[]>([locale.value]);
+const languages = ref<string[]>([uiLocale.value]);
 const months = ref(3);
 const scanned = ref<number | null>(null);
 const proposals = ref<ObligationSuggestion[]>([]);
@@ -199,7 +199,7 @@ async function dismiss(item: ObligationSuggestion) {
   try { await api.gmail.updateDiscovery(item.id, "dismissed"); dismissed.value.add(item.id); }
   catch (err) { error.value = errorText(err); }
 }
-function formatDate(value: string) { return new Intl.DateTimeFormat(locale.value === "he" ? "he-IL" : "en-GB").format(new Date(`${value}T12:00:00`)); }
+function formatDate(value: string) { return new Intl.DateTimeFormat(uiLocale.value === "en" ? "en-GB" : intl.value).format(new Date(`${value}T12:00:00`)); }
 function emailLink(id: string) { return `https://mail.google.com/mail/u/${email.value ? `?authuser=${encodeURIComponent(email.value)}` : '0/'}#all/${encodeURIComponent(id)}`; }
 function errorText(err: unknown) { return err instanceof Error ? err.message : c.value.failed; }
 async function setAutoScan(value: boolean) {

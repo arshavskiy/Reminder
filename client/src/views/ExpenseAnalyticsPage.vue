@@ -273,8 +273,8 @@ echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, Can
 type ExpenseChartType = "stacked" | "grouped" | "line" | "pie";
 
 const message = useMessage();
-const {l, dir, t, locale} = useI18n();
-const intlLocale = computed(() => (locale.value === "en" ? "en-US" : "he-IL"));
+const {l, dir, t, locale, intl} = useI18n();
+const intlLocale = computed(() => (intl.value));
 const tooltipCss = computed(() => (dir.value === "rtl"
   ? "direction: rtl; text-align: right; max-width: 280px;"
   : "direction: ltr; text-align: left; max-width: 280px;"));

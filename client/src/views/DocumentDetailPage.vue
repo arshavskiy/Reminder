@@ -480,7 +480,7 @@ const props = defineProps<{ docId?: string }>();
 
 const authStore = useAuthStore();
 const message = useMessage();
-const {l, t, href, locale, dir} = useI18n();
+const {l, t, href, locale, dir, intl} = useI18n();
 const {confirm} = useConfirm();
 const router = useRouter();
 
@@ -730,10 +730,10 @@ function formatDate(d: string | null | undefined) {
   const iso = parseDateOnly(d);
   if (iso) {
     const [year, month, day] = iso.split("-").map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL");
+    return new Date(year, month - 1, day).toLocaleDateString(intl.value);
   }
   const parsed = new Date(d);
-  return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString(locale.value === "en" ? "en-US" : "he-IL");
+  return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString(intl.value);
 }
 function formatSize(bytes: number | null | undefined) {
   if (!bytes) return "—";

@@ -41,7 +41,7 @@ import {WHATS_NEW_RELEASE, whatsNewMessages, type WhatsNewItemId} from "../local
 
 const emit = defineEmits<{ (e: "upload"): void }>();
 
-const {href, locale, dir} = useI18n();
+const {href, uiLocale, dir} = useI18n();
 const router = useRouter();
 const walkthrough = useWalkthrough();
 const authStore = useAuthStore();
@@ -50,7 +50,7 @@ const settingsStore = useUserSettingsStore();
 const saving = ref(false);
 const hiddenNow = ref(false);
 
-const m = computed(() => whatsNewMessages[locale.value === "en" ? "en" : "he"]);
+const m = computed(() => whatsNewMessages[uiLocale.value]);
 const plan = computed(() => resolveUserPlan(authStore.user));
 
 interface Item {

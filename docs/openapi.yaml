@@ -8194,6 +8194,244 @@ paths:
                   error:
                     type: string
                     example: Invoice not found
+  /api/review:
+    get:
+      summary: List imports waiting for review
+      tags:
+        - Import Review
+      description: Documents that Gmail import, email-in or Drive brought in
+        unattended and that look wrong (missing amount or date, unidentified
+        supplier, low confidence, possibly not an invoice, no expiry date).
+        Newest first.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+              - approved
+              - dismissed
+            default: pending
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Review items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Document id
+                        file_name:
+                          type: string
+                        document_type:
+                          type: string
+                          nullable: true
+                        source:
+                          type: string
+                          enum:
+                            - gmail
+                            - email
+                            - drive
+                        reasons:
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - low_confidence
+                              - missing_amount
+                              - missing_date
+                              - unknown_supplier
+                              - possible_not_invoice
+                              - missing_fields
+                              - no_expiry_date
+                        flagged_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        supplier:
+                          type: string
+                          nullable: true
+                        amount_display:
+                          type: string
+                          nullable: true
+                        issue_date:
+                          type: string
+                          format: date
+                          nullable: true
+                        invoice_id:
+                          type: string
+                          nullable: true
+                        download_url:
+                          type: string
+                          nullable: true
+                        thumbnail_url:
+                          type: string
+                          nullable: true
+                  total:
+                    type: integer
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+  /api/review/count:
+    get:
+      summary: Number of imports waiting for review (badge and dashboard banner)
+      tags:
+        - Import Review
+      responses:
+        "200":
+          description: Pending count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    type: integer
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+  /api/review/approve:
+    post:
+      summary: Approve imports (looks right)
+      tags:
+        - Import Review
+      description: Body `ids`. Clears the flag; an invoice flagged as possibly not an
+        invoice starts counting as one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ids
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 500
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  approved:
+                    type: integer
+                  pending:
+                    type: integer
+                    description: Items still waiting
+        "400":
+          description: No ids
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: ids required
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+  /api/review/{id}/dismiss:
+    post:
+      summary: Dismiss an import (not wanted)
+      tags:
+        - Import Review
+      description: Archives its invoice and dismisses the pending reminders created
+        from the document.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Document id
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  remindersDismissed:
+                    type: integer
+                  pending:
+                    type: integer
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+        "404":
+          description: Not in the review queue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Not found in the review queue
 
 tags:
   - name: Authentication
@@ -8223,6 +8461,8 @@ tags:
     description: Gmail connection and invoice import
   - name: Google Drive
     description: Google Drive export
+  - name: Import Review
+    description: Queue of unattended imports that need a person to look at them
   - name: Invoices
     description: Invoices, expenses and the due-soon list
   - name: Notifications
