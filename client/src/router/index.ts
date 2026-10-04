@@ -22,7 +22,7 @@ const AdminPage = () => import("../views/AdminPage.vue");
 import {trackPageView} from "../analytics.js";
 import {applySeo} from "../seo.js";
 import {useAuthStore} from "../stores/auth.js";
-import {dashboardPath, isPrefixedPath, localeFromPath, localizedPath, loginPath, prefixLocaleOf, useLocaleStore, wantedPrefixLocale, type PrefixedLocale} from "../stores/locale.js";
+import {dashboardPath, isPrefixedPath, localeFromPath, localizedPath, loginPath, persistLocale, prefixLocaleOf, useLocaleStore, wantedPrefixLocale, type PrefixedLocale} from "../stores/locale.js";
 import {useFeaturesStore} from "../stores/features.js";
 import {type FeatureKey, FEATURES} from "../shared/features.js";
 import {PAID_PLAN_IDS, planMeetsMinimum, type PlanId, resolveUserPlan} from "../shared/pricingPlans.js";
@@ -273,9 +273,23 @@ const appRoutes: RouteRecordRaw[] = [
         {path: "/403", component: () => import("../views/ForbiddenPage.vue")},
 ];
 
+/**
+ * `/he` and `/he/...` are explicit Hebrew links. Hebrew's canonical URLs stay unprefixed, so
+ * these remember the choice and redirect there. Remembering matters: without it the stored
+ * en/ru choice would send the unprefixed path back to /en or /ru.
+ */
+const hebrewAliasRoutes: RouteRecordRaw[] = ["/he", "/he/:rest(.*)"].map((path) => ({
+    path,
+    redirect: (to) => {
+        persistLocale("he");
+        const rest = [to.params.rest ?? ""].flat().join("/");
+        return {path: rest ? `/${rest}` : "/", query: to.query, hash: to.hash};
+    },
+}));
+
 export const router = createRouter({
     history: createWebHistory(),
-    routes: [...publicRoutes, ...appRoutes, ...appRoutes.map((route) => prefixRoute(route, "en")), ...appRoutes.map((route) => prefixRoute(route, "ru"))],
+    routes: [...publicRoutes, ...appRoutes, ...appRoutes.map((route) => prefixRoute(route, "en")), ...appRoutes.map((route) => prefixRoute(route, "ru")), ...hebrewAliasRoutes],
 });
 
 router.afterEach((to) => {
