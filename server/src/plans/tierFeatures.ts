@@ -181,7 +181,23 @@ export function effectivePlanId(
     return normalizePlanId(user?.plan ?? user?.role);
 }
 
+/**
+ * CALENDAR_SYNC_ALL_PLANS=true opens Google Calendar sync (connect, push, pull) to every plan
+ * that is not a lapsed trial. Off by default: calendar sync is a Business entitlement.
+ */
+function withCalendarOverride(flags: TierFeatureFlags): TierFeatureFlags {
+  if (process.env.CALENDAR_SYNC_ALL_PLANS !== "true" || flags.googleCalendarSync) return flags;
+  if (flags === TIER_FEATURE_FLAGS.expired) return flags;
+  return {...flags, googleCalendarSync: true};
+}
+
 export function featureFlagsForUser(
+  user: { plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
+): TierFeatureFlags {
+  return withCalendarOverride(baseFeatureFlagsForUser(user));
+}
+
+function baseFeatureFlagsForUser(
   user: { plan?: string | null; role?: string | null; trial_ends_at?: Date | string | null } | null | undefined,
 ): TierFeatureFlags {
   if (String(user?.role ?? "").trim().toLowerCase() === "admin") {

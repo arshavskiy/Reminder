@@ -32,7 +32,7 @@ function matches(row: any, filter: any): boolean {
     if (want && typeof want === "object" && "$nin" in want) return !want.$nin.includes(value);
     if (want && typeof want === "object" && "$ne" in want) return String(value) !== String(want.$ne);
     if (want && typeof want === "object" && ("$gte" in want || "$lte" in want)) {
-      return typeof value === "number" && (!("$gte" in want) || value >= want.$gte) && (!("$lte" in want) || value <= want.$lte);
+      return (typeof value === "number" || typeof value === "string") && (!("$gte" in want) || value >= want.$gte) && (!("$lte" in want) || value <= want.$lte);
     }
     if (want && typeof want === "object" && "$exists" in want) return (value !== undefined) === want.$exists;
     return value === want;

@@ -123,6 +123,19 @@ describe("ICS feed (public)", () => {
     expect(text).not.toContain("050-1112222");
   });
 
+  it("lists a multi-stage personal reminder once, on its deadline", async () => {
+    const path = await feedPath();
+    const stage = (trigger: string, days: number, sync: boolean) => ({
+      _id: new ObjectId(), user_id: USER_ID, status: "pending", source_type: "personal", origin: "discovery",
+      trigger_date: trigger, expiry_date: "2030-06-30", advance_days: days, calendar_sync: sync, title: "Renew licence",
+    });
+    memory.set("reminders", [stage("2030-06-23", 7, false), stage("2030-06-29", 1, false), stage("2030-06-30", 0, true)]);
+    const text = await (await call("GET", path)).text();
+    expect(text.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(text).toContain("20300630");
+    expect(text).not.toContain("20300623");
+  });
+
   it("stops serving when the plan loses calendar access", async () => {
     const path = await feedPath();
     seedUser("basic");

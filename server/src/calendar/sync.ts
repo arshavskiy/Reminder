@@ -77,6 +77,15 @@ function isPersonalReminder(reminder: any): boolean {
   return String(reminder?.source_type ?? "") === "personal";
 }
 
+/**
+ * Google Calendar sync is a Business entitlement, except for reminders a user created from a
+ * discovered deadline: those reach a connected calendar on every plan, for now.
+ */
+export function calendarSyncAllowed(user: any, reminder: any): boolean {
+  if (featureFlagsForUser(user).googleCalendarSync) return true;
+  return isPersonalReminder(reminder) && reminder?.origin === "discovery";
+}
+
 export function wantsCalendarSync(reminder: any): boolean {
   return reminder?.calendar_sync !== false;
 }
@@ -195,11 +204,11 @@ async function linkFor(userId: string, reminderId: string) {
  */
 export async function pushReminderToCalendar(userId: string, reminderId: string): Promise<void> {
   const user = await col<any>("users").findOne({ _id: toObjectId(userId) });
-  if (!featureFlagsForUser(user).googleCalendarSync) return;
+  const reminder = await col<any>("reminders").findOne({ _id: toObjectId(reminderId) });
+  if (!calendarSyncAllowed(user, reminder)) return;
   const accessToken = await resolveCalendarToken(userId);
   if (!accessToken) return;
 
-  const reminder = await col<any>("reminders").findOne({ _id: toObjectId(reminderId) });
   const link = await linkFor(userId, reminderId);
 
   if (!wantsCalendarSync(reminder)) return;

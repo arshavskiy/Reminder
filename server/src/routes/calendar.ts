@@ -368,6 +368,8 @@ export function registerCalendarRoutes(app: express.Express) {
         .toArray();
       const items = reminders.flatMap((reminder): IcsFeedItem[] => {
         const personal = String(reminder.source_type ?? "") === "personal";
+        // Warning rows of a multi-stage personal reminder share the deadline's date; list it once.
+        if (personal && reminder.calendar_sync === false && Number(reminder.advance_days ?? 0) > 0) return [];
         const date = String((personal ? reminder.expiry_date : null) ?? reminder.trigger_date ?? "").slice(0, 10);
         if (!date) return [];
         return [{

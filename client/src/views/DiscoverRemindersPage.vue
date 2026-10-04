@@ -91,6 +91,9 @@
       <n-form class="review-form" @submit.prevent="save">
         <n-form-item :label="c.name"><n-input v-model:value="draftTitle" :disabled="saving" /></n-form-item>
         <n-form-item :label="c.date"><input v-model="draftDate" type="date" required :disabled="saving" class="date-input" /></n-form-item>
+        <n-checkbox v-model:checked="draftEmail" :disabled="saving">{{ c.emailMe }}</n-checkbox>
+        <n-checkbox v-model:checked="draftCalendar" :disabled="saving">{{ c.addToCalendar }}</n-checkbox>
+        <p class="review-note">{{ c.warnAhead }}</p>
         <n-alert v-if="saveError" type="error">{{ saveError }}</n-alert>
         <n-button type="primary" attr-type="submit" :loading="saving" :disabled="!draftTitle.trim() || !draftDate">{{ c.create }}</n-button>
       </n-form>
@@ -106,7 +109,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag } from "naive-ui";
+import { NAlert, NButton, NCheckbox, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag } from "naive-ui";
 import {
   AddOutline, AlarmOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
   FlashOutline, MailOutline, RefreshOutline, SearchOutline, ShieldCheckmarkOutline, TimeOutline, WalletOutline, WarningOutline,
@@ -176,6 +179,8 @@ const showReview = ref(false);
 const selected = ref<ObligationSuggestion | null>(null);
 const draftTitle = ref("");
 const draftDate = ref("");
+const draftEmail = ref(true);
+const draftCalendar = ref(true);
 const saving = ref(false);
 const saveError = ref("");
 const showSource = ref(false);
@@ -253,7 +258,7 @@ async function save() {
   saving.value = true;
   saveError.value = "";
   try {
-    const result = await api.reminders.createPersonal({ title: draftTitle.value.trim(), target_date: draftDate.value, remind_before_days: [0], sync_calendar: false });
+    const result = await api.reminders.createPersonal({ title: draftTitle.value.trim(), target_date: draftDate.value, advance_days: [7, 1], email_self: draftEmail.value, sync_calendar: draftCalendar.value, origin: "discovery" });
     if (!result.created) throw new Error(c.value.notCreated);
     saved.value.add(selected.value.id);
     await api.gmail.updateDiscovery(selected.value.id, "created");
@@ -320,7 +325,9 @@ h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
 .due-chip__rel { font-weight: 500; opacity: 0.85; }
 blockquote { margin: 16px 0; padding: 12px 16px; border-inline-start: 3px solid var(--brand-color); background: var(--bg-elevated); white-space: pre-wrap; overflow-wrap: anywhere; }
 .sender { overflow-wrap: anywhere; }.card-actions { margin-top: 20px; }a { color: var(--brand-color); }
-.empty-state { padding: 40px 0; }.review-form { margin-top: 20px; }.date-input { width: 100%; padding: 10px; font: inherit; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; }
+.empty-state { padding: 40px 0; }.review-form { margin-top: 20px; }
+.review-form :deep(.n-checkbox) { display: flex; margin-bottom: 8px; }
+.review-note { margin: 4px 0 12px; font-size: 13px; color: var(--text-secondary); }.date-input { width: 100%; padding: 10px; font: inherit; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; }
 @media (max-width: 900px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .scan-panel, .suggestion { padding: 14px; }

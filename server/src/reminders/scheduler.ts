@@ -855,6 +855,15 @@ export async function createPersonalReminder(
     syncCalendar?: boolean;
     calendarKind?: "task" | "event";
     calendarTime?: string | null;
+    /**
+     * Days before targetDate to warn on (for example [7, 1]). One row per stage plus the due day;
+     * stages already in the past are skipped. Omitted keeps the single-row behaviour.
+     */
+    advanceDays?: number[] | null;
+    /** Email the owner's account address when each stage fires (on top of push and the bell). */
+    emailSelf?: boolean;
+    /** Where the reminder came from; "discovery" lets it reach Google Calendar on any plan. */
+    origin?: "discovery" | null;
   },
 ): Promise<{ created: number }> {
   if (!/^\d{4}-\d{2}-\d{2}/.test(targetDate)) {
@@ -862,7 +871,11 @@ export async function createPersonalReminder(
   }
   const label = title.trim().slice(0, 120) || "תזכורת אישית";
   const reminderCategory = options?.reminderCategory?.trim() || "Personal";
-  const emailTo = options?.emailTo?.trim() || null;
+  let emailTo = options?.emailTo?.trim() || null;
+  if (!emailTo && options?.emailSelf) {
+    const owner = await col<any>("users").findOne({ _id: toObjectId(userId) } as any);
+    emailTo = typeof owner?.email === "string" && owner.email.trim() ? owner.email.trim() : null;
+  }
   let created = 0;
 
   // One row on the chosen target date. Extra "remind me before" days used to
@@ -870,28 +883,39 @@ export async function createPersonalReminder(
   const extraDays = parseAdvanceDays(options?.remindBeforeDays) ?? [];
   const storedAdvanceDays = extraDays[0] ?? 0;
 
-  const insertedId = await insertReminderIfAllowed(userId, {
-    user_id: userId,
-    source_type: "personal",
-    client_id: null,
-    document_id: null,
-    email_to: emailTo ? JSON.stringify([emailTo]) : null,
-    reminder_category: reminderCategory,
-    trigger_date: targetDate,
-    expiry_date: targetDate,
-    advance_days: storedAdvanceDays,
-    title: label,
-    calendar_sync: options?.syncCalendar !== false,
-    calendar_kind: options?.calendarKind === "event" ? "event" : "task",
-    calendar_time: options?.calendarKind === "event" ? parseCalendarTime(options.calendarTime) : null,
-    status: "pending",
-    created_at: new Date(),
-    updated_at: new Date(),
-  });
+  const staged = personalStageDays(options?.advanceDays);
+  const today = new Date().toISOString().slice(0, 10);
   let calendarReminderId: string | null = null;
-  if (insertedId) {
-    created += 1;
-    calendarReminderId = insertedId;
+  // Without advanceDays this is the old single row on targetDate. With them, one row per stage;
+  // only the due-day row goes to the calendar, so a deadline is one calendar entry, not three.
+  for (const stage of staged ?? [null]) {
+    const days = stage ?? storedAdvanceDays;
+    const triggerDate = stage == null ? targetDate : shiftDate(targetDate, -stage);
+    if (stage != null && stage > 0 && triggerDate < today) continue;
+    const dueRow = stage == null || stage === 0;
+    const insertedId = await insertReminderIfAllowed(userId, {
+      user_id: userId,
+      source_type: "personal",
+      ...(options?.origin ? { origin: options.origin } : {}),
+      client_id: null,
+      document_id: null,
+      email_to: emailTo ? JSON.stringify([emailTo]) : null,
+      reminder_category: reminderCategory,
+      trigger_date: triggerDate,
+      expiry_date: targetDate,
+      advance_days: days,
+      title: label,
+      calendar_sync: dueRow && options?.syncCalendar !== false,
+      calendar_kind: options?.calendarKind === "event" ? "event" : "task",
+      calendar_time: options?.calendarKind === "event" ? parseCalendarTime(options.calendarTime) : null,
+      status: "pending",
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    if (insertedId) {
+      created += 1;
+      if (dueRow) calendarReminderId = insertedId;
+    }
   }
 
   if (calendarReminderId && options?.syncCalendar !== false) {
@@ -911,6 +935,21 @@ export async function createPersonalReminder(
   }
 
   return { created };
+}
+
+/** Calendar days between two YYYY-MM-DD strings, applied to the first; UTC so DST never shifts it. */
+export function shiftDate(date: string, days: number): string {
+  const base = new Date(`${date.slice(0, 10)}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+/** Stage list for a multi-stage personal reminder: positive whole days, largest first, plus 0 for the due day. */
+export function personalStageDays(advanceDays: number[] | null | undefined): number[] | null {
+  if (!Array.isArray(advanceDays) || !advanceDays.length) return null;
+  const days = [...new Set(advanceDays.map(Number).filter((n) => Number.isInteger(n) && n > 0 && n <= 365))];
+  days.sort((a, b) => b - a);
+  return [...days, 0];
 }
 
 /**
@@ -968,6 +1007,16 @@ export async function backfillTriggeredFromNotifications(userId: string): Promis
  * "triggered" (in-app / push) or "sent" (opt-in email succeeded).
  * Triggered rows stay on the calendar; sent/dismissed do not.
  */
+function personalReminderBody(reminder: ReminderWithContext): string {
+  const expiry = (reminder as any).expiry_date ? String((reminder as any).expiry_date).slice(0, 10) : "";
+  if (!expiry) return "";
+  const days = Number((reminder as any).advance_days ?? 0);
+  const trigger = String((reminder as any).trigger_date ?? "").slice(0, 10);
+  // Multi-stage rows are the only personal rows whose trigger precedes the deadline.
+  if (days > 0 && trigger && trigger < expiry) return `בעוד ${days} ימים · יעד: ${expiry}`;
+  return `יעד: ${expiry}`;
+}
+
 async function handlePersonalReminderDue(reminder: ReminderWithContext) {
   const remId = reminder.id;
   const userId = (reminder as any).user_id ?? null;
@@ -994,7 +1043,7 @@ async function handlePersonalReminderDue(reminder: ReminderWithContext) {
       kind: "personal_reminder_due",
       reminder_id: remId,
       title: reminder.title,
-      body: (reminder as any).expiry_date ? `יעד: ${(reminder as any).expiry_date}` : "",
+      body: personalReminderBody(reminder),
       created_at: new Date(),
       read_at: null,
     } as any);

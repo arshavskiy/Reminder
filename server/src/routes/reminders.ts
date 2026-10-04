@@ -532,9 +532,15 @@ export function registerReminderRoutes(app: express.Application) {
     const syncCalendar = body.sync_calendar !== false && body.sync_calendar !== "false";
     const calendarKind = body.calendar_kind === "event" ? "event" : "task";
     const calendarTime = typeof body.calendar_time === "string" ? body.calendar_time : null;
+    const advanceDays = Array.isArray(body.advance_days) ? body.advance_days.map(Number) : null;
+    const emailSelf = body.email_self === true || body.email_self === "true";
+    const origin = body.origin === "discovery" ? "discovery" : null;
 
     try {
       const result = await createPersonalReminder(userId, title, targetDate, {
+        advanceDays,
+        emailSelf,
+        origin,
         reminderCategory,
         emailTo,
         remindBeforeDays: remindBeforeDays as number | number[] | string | null,

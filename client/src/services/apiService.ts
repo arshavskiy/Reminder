@@ -1086,6 +1086,12 @@ export const api = {
       reminder_category?: string | null;
       email_to?: string | null;
       remind_before_days?: number | number[] | string | null;
+      /** Extra warning days before target_date, one reminder each (for example [7, 1]). */
+      advance_days?: number[];
+      /** Email the account address as each reminder fires. */
+      email_self?: boolean;
+      /** "discovery" marks a reminder made from a discovered deadline. */
+      origin?: "discovery";
       sync_calendar?: boolean;
       calendar_kind?: "task" | "event";
       calendar_time?: string | null;
