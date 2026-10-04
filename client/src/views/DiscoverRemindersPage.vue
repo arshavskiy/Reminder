@@ -54,60 +54,28 @@
       <template #prefix><n-icon :component="SearchOutline" /></template>
     </n-input>
     <n-empty v-if="!scanning && !visible.length" :description="scanned === null ? c.start : search ? c.noMatch : c.empty" class="empty-state" />
-    <section v-for="group in groups" v-show="group.items.length" :key="group.key" class="result-group" :class="`result-group--${group.key}`">
-      <h2 class="result-group__title">
-        <n-icon :component="group.icon" :size="20" />{{ group.label }} <span class="count-pill">{{ group.items.length }}</span>
-      </h2>
-      <p v-if="group.key === 'missed'" class="muted">{{ c.missedHint }}</p>
-      <article v-for="item in group.items" :key="item.id" class="suggestion" :class="`suggestion--${stateOf(item)}`">
-        <div class="suggestion-heading">
-          <n-tag :type="item.warning ? 'warning' : 'info'" size="small" round>
-            <template #icon><n-icon :component="kindIcon[item.kind]" /></template>{{ c.kinds[item.kind] }}
-          </n-tag>
-          <span class="due-chip" :class="`due-chip--${stateOf(item)}`">
-            <n-icon :component="stateOf(item) === 'missed' ? WarningOutline : TimeOutline" :size="14" />
-            <time :datetime="item.due_date">{{ formatDate(item.due_date) }}</time>
-            <span class="due-chip__rel">· {{ relativeLabel(item.due_date) }}</span>
-          </span>
+    <p v-if="missed.length" class="muted">{{ c.missedHint }}</p>
+    <section v-if="agenda.length" class="agenda" :aria-label="c.upcoming">
+      <article v-for="item in agenda" :key="item.id" class="agenda-row" :class="`agenda-row--${stateOf(item)}`">
+        <div class="agenda-date" :title="formatDate(item.due_date)">
+          <strong>{{ dayOf(item.due_date) }}</strong><span>{{ monthOf(item.due_date) }}</span>
         </div>
-        <h3>{{ item.entity_name }}</h3><p class="muted sender" dir="auto">{{ item.from }}</p>
-        <blockquote dir="auto">{{ item.evidence_quote }}</blockquote>
-        <p v-if="item.warning" class="muted">{{ c.immediate }}</p>
-        <p class="muted">{{ item.confidence === 'high' ? c.high : c.medium }}<span v-if="item.attachment_name"> · {{ item.attachment_name }}</span></p>
-        <div class="card-actions">
-          <n-tooltip>
-            <template #trigger>
-              <button type="button" class="btn btn--primary btn--xs icon-btn" :disabled="saved.has(item.id)" :aria-label="saved.has(item.id) ? c.saved : c.review" @click="review(item)">
-                <n-icon :component="saved.has(item.id) ? CheckmarkCircleOutline : AddOutline" :size="18" />
-              </button>
-            </template>
-            {{ saved.has(item.id) ? c.saved : c.review }}
+        <div class="agenda-main">
+          <n-tooltip placement="top-start">
+            <template #trigger><h3 class="agenda-title" dir="auto">{{ item.entity_name }}</h3></template>
+            <span dir="auto" class="agenda-quote">{{ item.evidence_quote }}</span>
           </n-tooltip>
-          <n-tooltip>
-            <template #trigger>
-              <button type="button" class="btn btn--ghost btn--xs icon-btn" :aria-label="c.source" @click="preview(item)"><n-icon :component="DocumentTextOutline" :size="18" /></button>
-            </template>
-            {{ c.source }}
-          </n-tooltip>
-          <n-tooltip v-for="pdf in item.pdfs" :key="pdf.id">
-            <template #trigger>
-              <a class="btn btn--ghost btn--xs icon-btn" :href="api.gmail.discoveryPdfUrl(item.id, pdf.id)" target="_blank" rel="noopener noreferrer" :aria-label="pdf.filename"><n-icon :component="AttachOutline" :size="18" /></a>
-            </template>
-            {{ pdf.filename }}
-          </n-tooltip>
-          <n-tooltip>
-            <template #trigger>
-              <a class="btn btn--ghost btn--xs icon-btn" :href="emailLink(item.messageId)" target="_blank" rel="noopener noreferrer" :aria-label="c.openEmail"><n-icon :component="MailOutline" :size="18" /></a>
-            </template>
-            {{ c.openEmail }}
-          </n-tooltip>
-          <n-tooltip>
-            <template #trigger>
-              <button type="button" class="btn btn--ghost btn--xs icon-btn" :aria-label="c.dismiss" @click="dismiss(item)"><n-icon :component="CloseOutline" :size="18" /></button>
-            </template>
-            {{ c.dismiss }}
-          </n-tooltip>
+          <p class="agenda-meta">
+            <n-icon :component="kindIcon[item.kind]" :size="14" />
+            <span>{{ c.kinds[item.kind] }}</span>
+            <span>· {{ relativeLabel(item.due_date) }}</span>
+            <span v-if="item.confidence !== 'high'">· {{ c.medium }}</span>
+            <span class="agenda-from" dir="auto">· {{ item.from }}</span>
+          </p>
         </div>
+        <n-dropdown trigger="click" placement="bottom-end" :options="actionOptions(item)" @select="key => onAction(item, String(key))">
+          <button type="button" class="btn btn--ghost btn--xs icon-btn" :aria-label="c.actions"><n-icon :component="EllipsisVerticalOutline" :size="18" /></button>
+        </n-dropdown>
       </article>
     </section>
 
@@ -134,11 +102,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, h, onMounted, ref, type Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { NAlert, NButton, NCheckbox, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag, NTooltip } from "naive-ui";
+import { NAlert, NButton, NCheckbox, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag, NTooltip } from "naive-ui";
+import type { DropdownOption } from "naive-ui";
 import {
-  AddOutline, AlarmOutline, AttachOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
+  AddOutline, AlarmOutline, AttachOutline, EllipsisVerticalOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
   FlashOutline, MailOutline, RefreshOutline, SearchOutline, ShieldCheckmarkOutline, TimeOutline, WalletOutline, WarningOutline,
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
@@ -190,11 +159,28 @@ function stateOf(item: ObligationSuggestion): ItemState {
 const missed = computed(() => visible.value.filter(item => stateOf(item) === "missed"));
 const urgent = computed(() => visible.value.filter(item => stateOf(item) === "urgent"));
 const upcoming = computed(() => visible.value.filter(item => stateOf(item) === "upcoming"));
-const groups = computed(() => [
-  { key: "missed", icon: WarningOutline, label: c.value.missed, items: [...missed.value].sort((a, b) => b.due_date.localeCompare(a.due_date)) },
-  { key: "urgent", icon: FlashOutline, label: c.value.urgent, items: urgent.value },
-  { key: "upcoming", icon: AlarmOutline, label: c.value.upcoming, items: upcoming.value },
-]);
+const agenda = computed(() => [...visible.value].sort((a, b) => a.due_date.localeCompare(b.due_date)));
+const dayOf = (value: string) => String(new Date(`${value}T12:00:00`).getDate());
+const monthOf = (value: string) => new Intl.DateTimeFormat(intl.value, { month: "short" }).format(new Date(`${value}T12:00:00`));
+function actionOptions(item: ObligationSuggestion): DropdownOption[] {
+  const icon = (component: Component) => () => h(NIcon, { component });
+  const isSaved = saved.value.has(item.id);
+  return [
+    { key: "review", label: isSaved ? c.value.saved : c.value.review, icon: icon(isSaved ? CheckmarkCircleOutline : AddOutline), disabled: isSaved },
+    { key: "source", label: c.value.source, icon: icon(DocumentTextOutline) },
+    { key: "email", label: c.value.openEmail, icon: icon(MailOutline) },
+    ...item.pdfs.map(pdf => ({ key: `pdf:${pdf.id}`, label: pdf.filename, icon: icon(AttachOutline) })),
+    { type: "divider", key: "divider" },
+    { key: "dismiss", label: c.value.dismiss, icon: icon(CloseOutline) },
+  ];
+}
+function onAction(item: ObligationSuggestion, key: string) {
+  if (key === "review") review(item);
+  else if (key === "source") void preview(item);
+  else if (key === "email") window.open(emailLink(item.messageId), "_blank", "noopener,noreferrer");
+  else if (key === "dismiss") void dismiss(item);
+  else if (key.startsWith("pdf:")) window.open(api.gmail.discoveryPdfUrl(item.id, key.slice(4)), "_blank", "noopener,noreferrer");
+}
 function relativeLabel(value: string): string {
   const days = Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${todayIso()}T00:00:00Z`)) / 86400000);
   if (days === 0) return c.value.dueToday;
@@ -312,8 +298,8 @@ onMounted(async () => {
 <style scoped>
 .discover-page { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; }
 .source-preview { width: 100%; height: 65vh; border: 0; background: white; }
-.scan-panel, .suggestion { padding: 24px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-card); }
-.connection, .scan-controls, .card-actions, .suggestion-heading { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.scan-panel { padding: 24px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-card); }
+.connection, .scan-controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .connection > div { flex: 1; min-width: 180px; }
 h2, h3, p { margin: 0 0 8px; }
 h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
@@ -336,33 +322,34 @@ h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
 .stat-card--urgent .stat-card__icon { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 16%, transparent); }
 .stat-card--missed .stat-card__icon { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 14%, transparent); }
 .stat-card--missed strong { color: var(--color-error); }
-.result-group { display: grid; gap: 14px; }
-.result-group__title { display: flex; align-items: center; gap: 8px; }
-.result-group--missed .result-group__title { color: var(--color-error); }
-.result-group--urgent .result-group__title { color: var(--color-warning); }
-.count-pill { padding: 1px 10px; border-radius: 999px; background: var(--bg-hover); color: var(--text-secondary); font-size: 12px; font-weight: 700; }
-.suggestion { border-inline-start: 4px solid var(--brand-color); transition: box-shadow var(--transition-fast); }
-.suggestion:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--text-primary) 8%, transparent); }
-.suggestion--urgent { border-inline-start-color: var(--color-warning); }
-.suggestion--missed { border-inline-start-color: var(--color-error); }
-.suggestion-heading { justify-content: space-between; }
-.due-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; background: color-mix(in srgb, var(--brand-color) 13%, transparent); color: var(--brand-color); }
-.due-chip--urgent { background: color-mix(in srgb, var(--color-warning) 16%, transparent); color: var(--color-warning); }
-.due-chip--missed { background: color-mix(in srgb, var(--color-error) 13%, transparent); color: var(--color-error); }
-.due-chip__rel { font-weight: 500; opacity: 0.85; }
-blockquote { margin: 16px 0; padding: 12px 16px; border-inline-start: 3px solid var(--brand-color); background: var(--bg-elevated); white-space: pre-wrap; overflow-wrap: anywhere; }
-.sender { overflow-wrap: anywhere; }.card-actions { margin-top: 20px; gap: 8px; }a { color: var(--brand-color); }
+a { color: var(--brand-color); }
 .empty-state { padding: 40px 0; }.review-form { margin-top: 20px; }
 .review-form :deep(.n-checkbox) { display: flex; margin-bottom: 8px; }
 .review-note { margin: 4px 0 12px; font-size: 13px; color: var(--text-secondary); }.date-input { width: 100%; padding: 10px; font: inherit; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; }
+.agenda { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); overflow: hidden; }
+.agenda-row { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--border-color); border-inline-start: 3px solid var(--brand-color); }
+.agenda-row:last-child { border-bottom: 0; }
+.agenda-row:hover { background: var(--bg-hover); }
+.agenda-row--urgent { border-inline-start-color: var(--color-warning); }
+.agenda-row--missed { border-inline-start-color: var(--color-error); }
+.agenda-date { width: 44px; flex: none; text-align: center; line-height: 1.15; color: var(--brand-color); }
+.agenda-date strong { display: block; font-size: 20px; }
+.agenda-date span { font-size: 11px; text-transform: uppercase; }
+.agenda-row--urgent .agenda-date { color: var(--color-warning); }
+.agenda-row--missed .agenda-date { color: var(--color-error); }
+.agenda-main { flex: 1; min-width: 0; text-align: start; }
+.agenda-title, .agenda-from { text-align: start; unicode-bidi: plaintext; }
+.agenda-title { margin: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-meta { display: flex; align-items: center; gap: 4px; margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); min-width: 0; }
+.agenda-from { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.agenda-quote { display: block; max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
-  .scan-panel, .suggestion { padding: 14px; }
+  .scan-panel { padding: 14px; }
   .stat-card { padding: 10px 12px; gap: 10px; }
   .stat-card strong { font-size: 20px; }
   .stat-card span { font-size: 11px; }
   .stat-card__icon { padding: 6px; }
   .scan-controls > .n-button { width: 100%; }
-  .due-chip__rel { display: none; }
 }
 </style>

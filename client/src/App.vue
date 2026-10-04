@@ -40,9 +40,11 @@
                     v-if="!actAsExpanded"
                     class="actas-toggle"
                     type="button"
+                    :aria-label="authStore.actingAs ? l.chrome.switchUser : l.chrome.actAs"
                     @click="openActAsPicker"
                   >
-                    {{ authStore.actingAs ? l.chrome.switchUser : l.chrome.actAs }}
+                    <n-icon :component="PeopleOutline" :size="18" class="actas-toggle__icon" />
+                    <span class="actas-toggle__text">{{ authStore.actingAs ? l.chrome.switchUser : l.chrome.actAs }}</span>
                   </button>
                   <div v-else class="actas-picker">
                     <n-select
@@ -183,6 +185,7 @@ import {
 import {
   DownloadOutline,
   MoonOutline,
+  PeopleOutline,
   SunnyOutline,
 } from "@vicons/ionicons5";
 import {usePwa} from "./composables/usePwa.js";
@@ -538,6 +541,10 @@ watch(isDark, (dark) => {
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
+.actas-toggle__icon {
+  display: none;
+}
+
 .actas-toggle:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -732,8 +739,40 @@ html[data-theme="dark"] .install-banner {
     height: 34px;
   }
 
-  .actas-control:not(.actas-control--open) {
+  /* The act-as control stays reachable on phones: the toggle collapses to an icon, and the
+     open picker takes the free width of the bar instead of a fixed 190px. */
+  .actas-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    min-width: 0;
+    height: 34px;
+    padding: 0;
+  }
+
+  .actas-toggle__icon {
+    display: inline-flex;
+  }
+
+  .actas-toggle__text {
     display: none;
+  }
+
+  .actas-control--open {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .actas-picker {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .actas-select {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
   }
 
   .content {
