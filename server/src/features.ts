@@ -1,4 +1,6 @@
+import {ObjectId} from "mongodb";
 import {col} from "./db/db";
+import {applyPlanFeatureOverlay} from "./plans/planFeatures";
 
 export type FeatureScope = "pages" | "dashboard";
 
@@ -97,7 +99,14 @@ export async function seedFeatureDefinitions(): Promise<void> {
 
 export async function isFeatureEnabledForUser(userId: string, featureKey: string): Promise<boolean> {
   const row = await col("user_settings").findOne({user_id: userId}) as any;
-  const features = normalizeFeatures(row?.features) ?? normalizeFeatures(row?.features_json) ?? DEFAULT_FEATURES;
+  const stored = normalizeFeatures(row?.features) ?? normalizeFeatures(row?.features_json) ?? DEFAULT_FEATURES;
+  let features: Record<string, boolean> = stored;
+  // Plan overlay: the family tier only ever sees its own pages, whatever is stored.
+  if (featureKey.startsWith("pages.") || featureKey.startsWith("dashboard.")) {
+    let user: any = null;
+    try { user = await col("users").findOne({_id: new ObjectId(userId)} as any); } catch { user = null; }
+    features = applyPlanFeatureOverlay(user, stored, FEATURE_DEFINITIONS.map((feature) => feature.key)) ?? stored;
+  }
   return features[featureKey] ?? DEFAULT_FEATURES[featureKey] ?? true;
 }
 

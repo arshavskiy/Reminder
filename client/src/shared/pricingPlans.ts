@@ -118,17 +118,17 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     // object storage. Quotas are unlimited because nothing costs per document.
     digital: {
         gmailInspectionHistoryMonths: 0,
-        gmailInvoiceHistoryMonths: 0,
+        gmailInvoiceHistoryMonths: 12,
         googleDriveSync: false,
         googleCalendarSync: true,
         emailIn: false,
         automaticEmailReminders: true,
-        automaticMonthlyReports: true,
+        automaticMonthlyReports: false,
         excelExport: true,
-        fileStorage: false,
-        documentImport: false,
+        fileStorage: true,
+        documentImport: true,
         maxUsers: 2,
-        maxEmailAccounts: 0,
+        maxEmailAccounts: 1,
     },
     basic: {
         gmailInspectionHistoryMonths: 16,

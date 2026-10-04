@@ -160,17 +160,17 @@ const appRoutes: RouteRecordRaw[] = [
         {
             path: "/invoices",
             component: () => import("../views/InvoicesPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
         },
         {
             path: "/invoices/expenses",
             component: () => import("../views/ExpenseAnalyticsPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
         },
         {
             path: "/invoices/:id",
             component: () => import("../views/InvoiceDetailPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: "business"}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
         },
     {path: "/clients", component: ClientsPage, meta: {feature: FEATURES.pages.clients, requirePlan: "expired"}},
         {

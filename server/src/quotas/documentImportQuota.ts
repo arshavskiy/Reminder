@@ -67,10 +67,10 @@ export function documentImportLimit(
 ): { limit: number | null; scope: DocumentImportQuota["scope"] } {
   const plan = normalizePlan(role);
   if (plan === "business") return { limit: null, scope: "unlimited" };
-  // Digital is manual entry only — no upload, no Gmail, no OCR/AI — so a
-  // document costs neither storage nor extraction and there is nothing worth
-  // metering. The plan is bounded by the import gate, not by a counter.
-  if (plan === "digital") return { limit: null, scope: "unlimited" };
+  // Digital is the family tier: one small shared monthly pool for invoice and receipt imports.
+  if (plan === "digital") {
+    return { limit: readPositiveIntEnv("DIGITAL_MONTHLY_DOCUMENT_LIMIT", 30), scope: "monthly" };
+  }
   // Invoices get their own smaller lifetime allowance on trial. They arrive in
   // bulk from a Gmail sync, so without a separate cap a single import would
   // consume the whole document budget and leave no room for the inspections the
@@ -135,7 +135,7 @@ export async function getDocumentImportQuota(
         used = usage.documents;
       }
     } else {
-      const countFilter = plan === "basic"
+      const countFilter = plan === "basic" || plan === "digital"
         ? sharedDocumentQuotaCountFilter(userId, periodStart, periodEnd)
         : documentQuotaCountFilter(userId, category, scope, periodStart, periodEnd);
       used = await col("documents").countDocuments(countFilter as any);

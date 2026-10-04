@@ -163,11 +163,11 @@ describe("userAllowsGmailInvoiceImport", () => {
     expect(userAllowsGmailInvoiceImport({ role: "admin", plan: "basic" })).toBe(true);
   });
 
-  it("is allowed on business and an active trial, not on basic, digital or a lapsed trial", () => {
+  it("is allowed on business, digital and an active trial, not on basic or a lapsed trial", () => {
     expect(userAllowsGmailInvoiceImport({ plan: "business" })).toBe(true);
     expect(userAllowsGmailInvoiceImport({ plan: "trial", trial_ends_at: new Date(Date.now() + 86_400_000) })).toBe(true);
     expect(userAllowsGmailInvoiceImport({ plan: "basic" })).toBe(false);
-    expect(userAllowsGmailInvoiceImport({ plan: "digital" })).toBe(false);
+    expect(userAllowsGmailInvoiceImport({ plan: "digital" })).toBe(true);
     expect(userAllowsGmailInvoiceImport({ plan: "trial", trial_ends_at: "2020-01-01T00:00:00Z" })).toBe(false);
   });
 });

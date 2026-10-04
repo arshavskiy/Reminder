@@ -18,33 +18,34 @@ describe("digital plan", () => {
     expect(normalizePlanId("DIGITAL")).toBe("digital");
   });
 
-  it("has no file storage and no document import", () => {
+  it("is the family tier: Gmail for invoices and discovery, files kept", () => {
     const flags = tierFeatureFlags("digital");
-    expect(flags.fileStorage).toBe(false);
-    expect(flags.documentImport).toBe(false);
-    expect(planAllowsFileStorage("digital")).toBe(false);
-    expect(planAllowsDocumentImport("digital")).toBe(false);
+    expect(flags.documentImport).toBe(true);
+    expect(flags.fileStorage).toBe(true);
+    expect(flags.gmailInvoiceHistoryMonths).toBe(12);
+    expect(flags.gmailInspectionHistoryMonths).toBe(0);
+    expect(flags.maxEmailAccounts).toBe(1);
+    expect(planAllowsDocumentImport("digital")).toBe(true);
+    expect(planAllowsFileStorage("digital")).toBe(true);
   });
 
-  it("keeps the automation the plan is sold on", () => {
+  it("keeps reminders and Excel export but drops the monthly report sender", () => {
     const flags = tierFeatureFlags("digital");
     expect(flags.automaticEmailReminders).toBe(true);
-    expect(flags.automaticMonthlyReports).toBe(true);
     expect(flags.excelExport).toBe(true);
+    expect(flags.automaticMonthlyReports).toBe(false);
+    expect(flags.emailIn).toBe(false);
   });
 
   it("syncs Google Calendar but not Google Drive", () => {
-    // Drive is file storage by another name, so it stays off with S3.
     const flags = tierFeatureFlags("digital");
     expect(flags.googleDriveSync).toBe(false);
-    // Calendar sync is open to every plan; only a lapsed trial loses it.
     expect(flags.googleCalendarSync).toBe(true);
-    expect(flags.maxEmailAccounts).toBe(0);
   });
 
-  it("meters nothing — no storage or extraction cost per document", () => {
+  it("meters imports in one small monthly pool and reminders not at all", () => {
     for (const category of ["documents", "contracts", "invoices", "manualDocuments", "emailDocuments"] as const) {
-      expect(documentImportLimit("digital", category)).toEqual({limit: null, scope: "unlimited"});
+      expect(documentImportLimit("digital", category)).toEqual({limit: 30, scope: "monthly"});
     }
     expect(reminderLimit("digital")).toEqual({limit: null, scope: "unlimited"});
   });
@@ -54,19 +55,19 @@ describe("digital plan", () => {
     expect(parsePlanId("digital")).toBe("digital");
   });
 
-  it("keeps file storage on for every other plan", () => {
-    for (const plan of ["expired", "trial", "basic", "business"] as const) {
+  it("keeps file storage on for every plan", () => {
+    for (const plan of ["expired", "trial", "digital", "basic", "business"] as const) {
       expect(tierFeatureFlags(plan).fileStorage).toBe(true);
     }
       expect(tierFeatureFlags("expired").documentImport).toBe(false);
-      for (const plan of ["trial", "basic", "business"] as const) {
+      for (const plan of ["trial", "digital", "basic", "business"] as const) {
       expect(tierFeatureFlags(plan).documentImport).toBe(true);
     }
   });
 
   it("resolves flags for a digital user without trial handling", () => {
     const flags = featureFlagsForUser({plan: "digital", role: "user"});
-    expect(flags.documentImport).toBe(false);
+    expect(flags.documentImport).toBe(true);
     expect(flags.automaticEmailReminders).toBe(true);
   });
 });

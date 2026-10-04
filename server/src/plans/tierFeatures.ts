@@ -71,26 +71,24 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxUsers: 2,
     maxEmailAccounts: 2,
   },
-  // Manual-only tier: no upload, no Gmail import, no OCR/AI — so nothing is ever
-  // written to object storage and nothing costs per-document AI spend. What the
-  // user gets is the record keeping: clients, equipment, generated inspection
-  // documents and the reminder schedule, all typed in by hand. With no storage
-  // or extraction cost per document there is nothing to meter, so the quotas are
-  // unlimited (see documentImportQuota / reminderQuota).
+  // Family tier: reminders, invoices and reminder discovery, nothing else. Gmail connects (one
+  // mailbox) for the discovery scan and 12 months of invoice and receipt history; imports share a
+  // small monthly pool (see documentImportQuota); files are kept so an invoice keeps its PDF.
+  // Everything outside those three areas is hidden by the page overlay in plans/planFeatures.ts.
   digital: {
     gmailInspectionHistoryMonths: 0,
-    gmailInvoiceHistoryMonths: 0,
+    gmailInvoiceHistoryMonths: 12,
     googleDriveSync: false,
     googleCalendarSync: true,
 
     emailIn: false,
     automaticEmailReminders: true,
-    automaticMonthlyReports: true,
+    automaticMonthlyReports: false,
     excelExport: true,
-    fileStorage: false,
-    documentImport: false,
+    fileStorage: true,
+    documentImport: true,
     maxUsers: 2,
-    maxEmailAccounts: 0,
+    maxEmailAccounts: 1,
   },
   // Invoice backfill stays a business feature, so basic gets none.
   basic: {

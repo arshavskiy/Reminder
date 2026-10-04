@@ -118,7 +118,7 @@ describe("PUT /api/user-settings — scheduled scan options", () => {
   });
 
   it("refuses the daily invoice scan on plans without Gmail invoice import, but still allows switching it off", async () => {
-    for (const plan of ["basic", "digital"]) {
+    for (const plan of ["basic"]) {
       seedPlan(plan);
       const res = await put({ invoices_auto_scan: true });
       expect(res.status).toBe(403);

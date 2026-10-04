@@ -210,7 +210,7 @@ registerBillingRoutes(app);
 app.use("/api/gmail", (req, res, next) => requireAnyFeature(gmailRequiredFeatures(req.path))(req, res, next));
 // Invoices are a plan feature, not an admin one. This was requireMinRole("admin"),
 // which refused every non-admin account regardless of what it had paid for.
-app.use("/api/invoices", requirePlans(["trial", "business"]));
+app.use("/api/invoices", requirePlans(["trial", "digital", "business"]));
 registerGmailRoutes(app);
 registerGmailObligationRoutes(app);
 registerCalendarRoutes(app);

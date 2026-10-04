@@ -2,7 +2,8 @@ import express from "express";
 import {ObjectId} from "mongodb";
 import {col} from "../db/db";
 import {requireAuth} from "../auth/middleware";
-import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, featuresToNested, normalizeFeatures} from "../features";
+import {DEFAULT_FEATURES, DEFAULT_FEATURES_NESTED, FEATURE_DEFINITIONS, featuresToNested, normalizeFeatures} from "../features";
+import {applyPlanFeatureOverlay, isFamilyPlan} from "../plans/planFeatures";
 import {buildPlanEntitlements, newUserSettingsBase, persistPlanEntitlements} from "../plans/planEntitlements";
 import {effectivePlanId, planAllowsDocumentImport, PLAN_GATE_MESSAGES, userAllowsGmailInvoiceImport} from "../plans/tierFeatures";
 import {obligationLangErrorBody, parseObligationSearchLangs} from "../gmail/obligationSearch";
@@ -80,6 +81,10 @@ export function registerUserSettingsRoutes(app: express.Application) {
         { $setOnInsert: defaults },
         { upsert: true }
       );
+      if (isFamilyPlan(user)) {
+        const overlaid = applyPlanFeatureOverlay(user, normalizeFeatures((defaults as any).features), FEATURE_DEFINITIONS.map((feature) => feature.key));
+        if (overlaid) (defaults as any).features = featuresToNested(overlaid);
+      }
       res.json(defaults);
       return;
     }
@@ -111,6 +116,9 @@ export function registerUserSettingsRoutes(app: express.Application) {
     }
     await persistPlanEntitlements(auth.userId);
     const { _id, ...rest } = row as any;
+    // Family tier: report only its own pages. The client builds nav, routes and the dashboard from this.
+    const overlaid = applyPlanFeatureOverlay(user, normalizeFeatures((row as any).features), FEATURE_DEFINITIONS.map((feature) => feature.key));
+    if (overlaid && isFamilyPlan(user)) rest.features = featuresToNested(overlaid);
     res.json({ id: _id?.toString(), ...rest, plan_entitlements });
   });
 

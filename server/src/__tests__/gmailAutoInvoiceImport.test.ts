@@ -67,7 +67,7 @@ describe("enqueueAutoInvoiceImport", () => {
   });
 
   it("refuses plans without Gmail invoice import", async () => {
-    for (const plan of ["basic", "digital"]) {
+    for (const plan of ["basic"]) {
       const row = seed({ plan });
       expect(await enqueueAutoInvoiceImport(row, userId, noWorker)).toEqual({ ok: false, reason: "plan" });
     }
