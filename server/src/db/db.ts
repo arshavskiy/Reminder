@@ -358,6 +358,10 @@ async function applyIndexes(db: Db): Promise<void> {
   await db.collection("magic_link_tokens").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
   await db.collection("magic_link_tokens").createIndex({ user_id: 1 });
 
+  // server_metrics_hourly — request totals per hour and replica, kept ~5 weeks
+  await db.collection("server_metrics_hourly").createIndex({ hour: 1, replica: 1 }, { unique: true });
+  await db.collection("server_metrics_hourly").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
+
   // user_settings
   await db.collection("user_settings").createIndex({ user_id: 1 }, { unique: true, sparse: true });
 

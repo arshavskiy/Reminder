@@ -13,9 +13,14 @@ import {sendPushToAdmins} from "../push/pushService";
  */
 
 const SAMPLE_EVERY_MS = 15_000;
-/** Minute buckets kept in memory. Longer graph ranges use hourly rollups. */
+/** Minute buckets kept in memory. Longer graph ranges read hourly totals from Mongo. */
 const MINUTE_HISTORY = 8 * 60;
 const HOUR_HISTORY = 31 * 24;
+const HOUR_MS = 3_600_000;
+/** Hourly request totals live in Mongo so the 7-day / 1-month graphs survive deploys. */
+const HOURLY_COLLECTION = "server_metrics_hourly";
+const HOURLY_RETENTION_MS = 35 * 24 * HOUR_MS;
+const REPLICA = process.env.RAILWAY_REPLICA_ID ?? os.hostname();
 const DETAIL_MINUTES = 15;
 const MAX_DURATIONS_PER_MINUTE = 2_000;
 /** A request still open after this long counts as a timeout even if it later finishes. */
@@ -36,16 +41,6 @@ interface MinuteBucket {
   slow: Map<string, {count: number; totalMs: number; maxMs: number}>;
   p95Ms?: number;
   closed?: boolean;
-}
-
-interface HourRollup {
-  hour: number;
-  count: number;
-  s4xx: number;
-  s404: number;
-  s5xx: number;
-  timeouts: number;
-  p95Ms: number;
 }
 
 interface SystemHour {
@@ -69,7 +64,6 @@ interface SystemSample {
 
 const buckets: MinuteBucket[] = [];
 const samples: SystemSample[] = [];
-const hourRollups: HourRollup[] = [];
 const systemHours: SystemHour[] = [];
 let lastCpu = process.cpuUsage();
 let lastCpuAt = Date.now();
@@ -96,19 +90,23 @@ function closeMinute(bucket: MinuteBucket) {
   if (bucket.closed) return;
   bucket.closed = true;
   bucket.p95Ms = percentile(bucket.durations, 95);
-  const hour = Math.floor(bucket.minute / 3_600_000) * 3_600_000;
-  let roll = hourRollups[hourRollups.length - 1];
-  if (!roll || roll.hour !== hour) {
-    roll = {hour, count: 0, s4xx: 0, s404: 0, s5xx: 0, timeouts: 0, p95Ms: 0};
-    hourRollups.push(roll);
-    while (hourRollups.length > HOUR_HISTORY) hourRollups.shift();
-  }
-  roll.count += bucket.count;
-  roll.s4xx += bucket.s4xx;
-  roll.s404 += bucket.s404;
-  roll.s5xx += bucket.s5xx;
-  roll.timeouts += bucket.timeouts;
-  roll.p95Ms = Math.max(roll.p95Ms, bucket.p95Ms);
+  persistMinute(bucket);
+}
+
+function persistMinute(bucket: MinuteBucket) {
+  if (!bucket.count && !bucket.timeouts) return;
+  const hour = Math.floor(bucket.minute / HOUR_MS) * HOUR_MS;
+  try {
+    void col<any>(HOURLY_COLLECTION).updateOne(
+      {hour, replica: REPLICA},
+      {
+        $inc: {count: bucket.count, s4xx: bucket.s4xx, s404: bucket.s404, s5xx: bucket.s5xx, timeouts: bucket.timeouts},
+        $max: {p95Ms: bucket.p95Ms ?? 0},
+        $setOnInsert: {expires_at: new Date(hour + HOURLY_RETENTION_MS)},
+      },
+      {upsert: true},
+    ).catch((err) => logger.warn("server_metrics_persist_failed", {error: String(err)}));
+  } catch { /* no database yet (startup, tests) */ }
 }
 
 function compactOldBuckets(now: number) {
@@ -270,7 +268,7 @@ export type GraphRange = (typeof GRAPH_RANGES)[number];
 const GRAPH_RANGE: Record<GraphRange, {ms: number; sampleRateSeconds: number; bucketMs: number; label: string}> = {
   "1h": {ms: 60 * 60_000, sampleRateSeconds: 60, bucketMs: 60_000, label: "1 hour"},
   "8h": {ms: 8 * 60 * 60_000, sampleRateSeconds: 300, bucketMs: 5 * 60_000, label: "8 hours"},
-  "1d": {ms: 24 * 60 * 60_000, sampleRateSeconds: 900, bucketMs: 15 * 60_000, label: "1 day"},
+  "1d": {ms: 24 * 60 * 60_000, sampleRateSeconds: 900, bucketMs: 60 * 60_000, label: "1 day"},
   "7d": {ms: 7 * 24 * 60 * 60_000, sampleRateSeconds: 3600, bucketMs: 60 * 60_000, label: "7 days"},
   "1m": {ms: 30 * 24 * 60 * 60_000, sampleRateSeconds: 3 * 60 * 60, bucketMs: 6 * 60 * 60_000, label: "1 month"},
 };
@@ -462,14 +460,15 @@ export function startServerMetrics() {
 
 // ── Snapshot for the admin page ─────────────────────────────────────────────
 
-interface HttpPoint {
+export interface HttpPoint {
   ts: number;
   count: number;
   s4xx: number;
   s404: number;
   s5xx: number;
   timeouts: number;
-  p95Ms: number;
+  /** null when the bucket had no requests, so the latency line shows a gap instead of 0 ms. */
+  p95Ms: number | null;
 }
 
 function minutePoint(bucket: MinuteBucket): HttpPoint {
@@ -480,35 +479,68 @@ function minutePoint(bucket: MinuteBucket): HttpPoint {
     s404: bucket.s404,
     s5xx: bucket.s5xx,
     timeouts: bucket.timeouts,
-    p95Ms: bucket.durations.length ? percentile(bucket.durations, 95) : (bucket.p95Ms ?? 0),
+    p95Ms: bucket.durations.length ? percentile(bucket.durations, 95) : (bucket.p95Ms ?? null),
   };
 }
 
-function aggregatePoints(points: HttpPoint[], bucketMs: number): HttpPoint[] {
-  const grouped = new Map<number, HttpPoint>();
+/**
+ * Groups points into fixed buckets covering the whole range, ending with the
+ * bucket that holds `now`. Empty buckets are kept so the graph spans the range.
+ */
+export function bucketSeries(points: HttpPoint[], now: number, rangeMs: number, bucketMs: number): HttpPoint[] {
+  const last = Math.floor(now / bucketMs) * bucketMs;
+  const n = Math.max(1, Math.round(rangeMs / bucketMs));
+  const first = last - (n - 1) * bucketMs;
+  const out: HttpPoint[] = Array.from({length: n}, (_, i) => ({ts: first + i * bucketMs, count: 0, s4xx: 0, s404: 0, s5xx: 0, timeouts: 0, p95Ms: null}));
   for (const point of points) {
-    const ts = Math.floor(point.ts / bucketMs) * bucketMs;
-    const acc = grouped.get(ts) ?? {ts, count: 0, s4xx: 0, s404: 0, s5xx: 0, timeouts: 0, p95Ms: 0};
+    const i = Math.floor((point.ts - first) / bucketMs);
+    if (i < 0 || i >= n) continue;
+    const acc = out[i];
     acc.count += point.count;
     acc.s4xx += point.s4xx;
     acc.s404 += point.s404;
     acc.s5xx += point.s5xx;
     acc.timeouts += point.timeouts;
-    acc.p95Ms = Math.max(acc.p95Ms, point.p95Ms);
-    grouped.set(ts, acc);
+    if (point.count && point.p95Ms != null) acc.p95Ms = Math.max(acc.p95Ms ?? 0, point.p95Ms);
   }
-  return [...grouped.values()].sort((a, b) => a.ts - b.ts);
+  return out;
 }
 
-function httpSeries(range: GraphRange): HttpPoint[] {
+async function storedHours(since: number): Promise<HttpPoint[]> {
+  const sinceHour = Math.floor(since / HOUR_MS) * HOUR_MS;
+  const rows = await col<any>(HOURLY_COLLECTION).find({hour: {$gte: sinceHour}}).toArray();
+  return rows.map((r) => ({
+    ts: r.hour,
+    count: r.count ?? 0,
+    s4xx: r.s4xx ?? 0,
+    s404: r.s404 ?? 0,
+    s5xx: r.s5xx ?? 0,
+    timeouts: r.timeouts ?? 0,
+    p95Ms: r.p95Ms ?? null,
+  }));
+}
+
+/**
+ * 1h/8h come from this replica's minute buckets. Hourly ranges read the totals
+ * stored in Mongo (every replica, survives deploys) plus minutes not yet stored.
+ */
+async function httpSeries(range: GraphRange): Promise<HttpPoint[]> {
   const spec = GRAPH_RANGE[range];
-  const since = Date.now() - spec.ms;
-  const oldestMinute = buckets[0]?.minute ?? Date.now();
-  const fromMinutes = buckets.filter((b) => b.minute >= since).map(minutePoint);
-  const fromHours: HttpPoint[] = hourRollups
-    .filter((h) => h.hour >= since && h.hour < oldestMinute)
-    .map((h) => ({ts: h.hour, count: h.count, s4xx: h.s4xx, s404: h.s404, s5xx: h.s5xx, timeouts: h.timeouts, p95Ms: h.p95Ms}));
-  return aggregatePoints([...fromHours, ...fromMinutes], spec.bucketMs);
+  const now = Date.now();
+  const since = now - spec.ms;
+  let points: HttpPoint[];
+  if (spec.bucketMs >= HOUR_MS) {
+    const open = buckets.filter((b) => !b.closed && b.minute >= since).map(minutePoint);
+    try {
+      points = [...await storedHours(since), ...open];
+    } catch (err) {
+      logger.warn("server_metrics_read_failed", {error: String(err)});
+      points = buckets.filter((b) => b.minute >= since).map(minutePoint);
+    }
+  } else {
+    points = buckets.filter((b) => b.minute >= since).map(minutePoint);
+  }
+  return bucketSeries(points, now, spec.ms, spec.bucketMs);
 }
 
 function systemSeries(range: GraphRange): {ts: number; cpuPct: number; rssMb: number}[] {
@@ -564,7 +596,7 @@ export async function liveSnapshot(range: GraphRange = "1h") {
     http: {last5: httpSummary(5), last60: httpSummary(60)},
     system: {last5: systemSummary(5)},
     series: {
-      http: httpSeries(range),
+      http: await httpSeries(range),
       system: systemSeries(range),
     },
     top404: topEntries(paths404, (v) => v, 8).map(([path, count]) => ({path, count})),

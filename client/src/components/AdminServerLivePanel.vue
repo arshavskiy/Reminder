@@ -309,7 +309,7 @@ function renderCharts() {
       {name: "OK", type: "bar", stack: "req", data: http.map((b) => b.count - b.s4xx - b.s5xx), itemStyle: {color: "#18a058"}},
       {name: "4xx", type: "bar", stack: "req", data: http.map((b) => b.s4xx), itemStyle: {color: "#f0a020"}},
       {name: "5xx", type: "bar", stack: "req", data: http.map((b) => b.s5xx), itemStyle: {color: "#d03050"}},
-      {name: "p95 ms", type: "line", yAxisIndex: 1, smooth: true, showSymbol: false, data: http.map((b) => b.p95Ms), itemStyle: {color: "#2080f0"}},
+      {name: "p95 ms", type: "line", yAxisIndex: 1, smooth: true, showSymbol: false, connectNulls: true, data: http.map((b) => b.p95Ms), itemStyle: {color: "#2080f0"}},
     ],
   }, true);
 
