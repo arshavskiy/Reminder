@@ -235,13 +235,13 @@ const emit = defineEmits<{ (e: "update:modelValue", v: boolean): void }>();
 
 const message = useMessage();
 const authStore = useAuthStore();
-const {l, t, dir, locale} = useI18n();
+const {l, t, dir, locale, uiLocale} = useI18n();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 const pricingPlan = computed(() => {
   const resolved = authStore.user ? resolveUserPlan(authStore.user) : "trial";
   const id = resolved === "expired" ? "trial" : resolved;
-  return getPricingPlanForLocale(id, locale.value);
+  return getPricingPlanForLocale(id, uiLocale.value);
 });
 
 const trialDaysLeft = computed(() => {

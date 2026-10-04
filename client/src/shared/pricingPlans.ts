@@ -20,6 +20,14 @@ export const PLAN_LABELS_EN: Record<PlanId, string> = {
   ...Object.fromEntries(pricingCatalog.plans.map((plan) => [plan.id, plan.copy.en.label])),
 } as Record<PlanId, string>;
 
+export const PLAN_LABELS_RU: Record<PlanId, string> = {
+  expired: "Закончился",
+  ...Object.fromEntries(pricingCatalog.plans.map((plan) => [plan.id, plan.copy.ru.label])),
+} as Record<PlanId, string>;
+
+/** Locales the plan catalog has copy for. Matches the app's UI locales. */
+export type PricingLocale = "he" | "en" | "ru";
+
 export type QuotaScope = "monthly" | "lifetime" | "unlimited";
 
 export interface PricingPlan {
@@ -166,7 +174,7 @@ export const PLAN_GATE_MESSAGES = {
 export const PRICING_PAGE_URL = "https://remindocr.com/pricing";
 
 /** List prices and localized feature lists come only from pricingCatalog.json. */
-export function plansForLocale(locale: "he" | "en"): PricingPlan[] {
+export function plansForLocale(locale: PricingLocale): PricingPlan[] {
   return pricingCatalog.plans.map((plan) => ({
     id: plan.id as PlanId,
     ...plan.copy[locale],
@@ -179,11 +187,11 @@ export function plansForLocale(locale: "he" | "en"): PricingPlan[] {
 
 export const PRICING_PLANS: PricingPlan[] = plansForLocale("he");
 
-export function moneySymbol(locale: "he" | "en"): string {
+export function moneySymbol(locale: PricingLocale): string {
   return PRICING_COPY[locale].symbol;
 }
 
-export function getPricingPlanForLocale(planId: PlanId, locale: "he" | "en"): PricingPlan {
+export function getPricingPlanForLocale(planId: PlanId, locale: PricingLocale): PricingPlan {
   const plan = plansForLocale(locale).find((item) => item.id === planId);
   if (plan) return plan;
   return {
@@ -196,15 +204,17 @@ export function yearlyMonthly(plan: PricingPlan): number {
   return plan.yearlyPrice ? plan.yearlyPrice / 12 : plan.price;
 }
 
-export function planBillingTerms(plan: PricingPlan, locale: "he" | "en"): string {
+export function planBillingTerms(plan: PricingPlan, locale: PricingLocale): string {
   return formatPlanPrice(plan, locale);
 }
 
-export function planPurchaseUrl(plan: PricingPlan, locale: "he" | "en"): string {
+export function planPurchaseUrl(plan: PricingPlan, locale: PricingLocale): string {
   const terms = planBillingTerms(plan, locale);
   const message = locale === "he"
     ? `שלום, אני מעוניין לרכוש את המסלול ${plan.name} של RemindOCR. ${terms}`
-    : `Hi, I would like to purchase the RemindOCR ${plan.name} plan. ${terms}`;
+    : locale === "ru"
+      ? `Здравствуйте, я хочу приобрести тариф ${plan.name} в RemindOCR. ${terms}`
+      : `Hi, I would like to purchase the RemindOCR ${plan.name} plan. ${terms}`;
   return `https://wa.me/${pricingCatalog.contactPhone}?text=${encodeURIComponent(message)}`;
 }
 
@@ -380,20 +390,20 @@ export function getPricingPlan(planId: PlanId): PricingPlan {
     return getPricingPlanForLocale(planId, "he");
 }
 
-export function formatPlanPrice(plan: PricingPlan, locale: "he" | "en" = "he"): string {
+export function formatPlanPrice(plan: PricingPlan, locale: PricingLocale = "he"): string {
     if (plan.id === "expired") return PRICING_COPY[locale].expiredName;
     const symbol = moneySymbol(locale);
-    if (plan.price === 0) return locale === "en" ? "Free" : "חינם";
+    if (plan.price === 0) return locale === "en" ? "Free" : locale === "ru" ? "Бесплатно" : "חינם";
     return `${symbol}${plan.price}${plan.period ? ` ${plan.period}` : ""}`;
 }
 
-export function formatPlanYearlyPrice(plan: PricingPlan, locale: "he" | "en" = "he"): string | null {
+export function formatPlanYearlyPrice(plan: PricingPlan, locale: PricingLocale = "he"): string | null {
     if (!plan.yearlyPrice) return null;
     const symbol = moneySymbol(locale);
-    const year = plan.yearlyPrice.toLocaleString(locale === "en" ? "en-US" : "he-IL");
-    return locale === "en"
-        ? `${symbol}${year} / year · billed yearly`
-        : `${symbol}${year} לשנה · חיוב שנתי`;
+    const year = plan.yearlyPrice.toLocaleString(locale === "en" ? "en-US" : locale === "ru" ? "ru-RU" : "he-IL");
+    if (locale === "en") return `${symbol}${year} / year · billed yearly`;
+    if (locale === "ru") return `${symbol}${year} в год · оплата за год`;
+    return `${symbol}${year} לשנה · חיוב שנתי`;
 }
 
 export function formatQuotaScope(scope: QuotaScope): string {
