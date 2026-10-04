@@ -210,7 +210,11 @@ async function handleSelect(key: string) {
   if (key.startsWith("lang:")) {
     // Same page, other language: the URL prefix carries the language.
     const code = key.slice("lang:".length) as "he" | "en" | "ru";
-    if (code !== localeStore.locale) router.push({path: localizedPath(stripLocalePrefix(route.path), code), query: route.query, hash: route.hash});
+    if (code === localeStore.locale) return;
+    // Persist first: Hebrew has no URL prefix, so without this the route guard still
+    // sees the stored en/ru choice and bounces /dashboard back to /ru/dashboard.
+    localeStore.setLocale(code);
+    router.push({path: localizedPath(stripLocalePrefix(route.path), code), query: route.query, hash: route.hash});
   } else if (key === "profile") {
     router.push({path: localizedPath("/profile"), query: {section: "personal"}});
   } else if (key === "engineer") {
