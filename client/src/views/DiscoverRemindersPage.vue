@@ -75,18 +75,44 @@
         <p v-if="item.warning" class="muted">{{ c.immediate }}</p>
         <p class="muted">{{ item.confidence === 'high' ? c.high : c.medium }}<span v-if="item.attachment_name"> · {{ item.attachment_name }}</span></p>
         <div class="card-actions">
-          <n-button type="primary" :disabled="saved.has(item.id)" @click="review(item)">
-            <template #icon><n-icon :component="saved.has(item.id) ? CheckmarkCircleOutline : AddOutline" /></template>{{ saved.has(item.id) ? c.saved : c.review }}
-          </n-button>
-          <n-button @click="preview(item)"><template #icon><n-icon :component="DocumentTextOutline" /></template>{{ c.source }}</n-button>
-          <a v-for="pdf in item.pdfs" :key="pdf.id" :href="api.gmail.discoveryPdfUrl(item.id, pdf.id)" target="_blank" rel="noopener noreferrer">{{ pdf.filename }}</a>
-          <a :href="emailLink(item.messageId)" target="_blank" rel="noopener noreferrer">{{ c.openEmail }}</a>
-          <n-button quaternary @click="dismiss(item)"><template #icon><n-icon :component="CloseOutline" /></template>{{ c.dismiss }}</n-button>
+          <n-tooltip>
+            <template #trigger>
+              <button type="button" class="btn btn--primary btn--xs icon-btn" :disabled="saved.has(item.id)" :aria-label="saved.has(item.id) ? c.saved : c.review" @click="review(item)">
+                <n-icon :component="saved.has(item.id) ? CheckmarkCircleOutline : AddOutline" :size="18" />
+              </button>
+            </template>
+            {{ saved.has(item.id) ? c.saved : c.review }}
+          </n-tooltip>
+          <n-tooltip>
+            <template #trigger>
+              <button type="button" class="btn btn--ghost btn--xs icon-btn" :aria-label="c.source" @click="preview(item)"><n-icon :component="DocumentTextOutline" :size="18" /></button>
+            </template>
+            {{ c.source }}
+          </n-tooltip>
+          <n-tooltip v-for="pdf in item.pdfs" :key="pdf.id">
+            <template #trigger>
+              <a class="btn btn--ghost btn--xs icon-btn" :href="api.gmail.discoveryPdfUrl(item.id, pdf.id)" target="_blank" rel="noopener noreferrer" :aria-label="pdf.filename"><n-icon :component="AttachOutline" :size="18" /></a>
+            </template>
+            {{ pdf.filename }}
+          </n-tooltip>
+          <n-tooltip>
+            <template #trigger>
+              <a class="btn btn--ghost btn--xs icon-btn" :href="emailLink(item.messageId)" target="_blank" rel="noopener noreferrer" :aria-label="c.openEmail"><n-icon :component="MailOutline" :size="18" /></a>
+            </template>
+            {{ c.openEmail }}
+          </n-tooltip>
+          <n-tooltip>
+            <template #trigger>
+              <button type="button" class="btn btn--ghost btn--xs icon-btn" :aria-label="c.dismiss" @click="dismiss(item)"><n-icon :component="CloseOutline" :size="18" /></button>
+            </template>
+            {{ c.dismiss }}
+          </n-tooltip>
         </div>
       </article>
     </section>
 
-    <n-modal v-model:show="showReview" preset="card" :title="c.review" class="review-modal" :style="{ width: 'min(520px, 94vw)' }" :mask-closable="!saving" :closable="!saving">
+    <n-modal v-model:show="showReview" preset="card" :aria-label="c.review" class="review-modal" :style="{ width: 'min(520px, 94vw)' }" :mask-closable="!saving" :closable="!saving">
+      <template #header><n-icon :component="AlarmOutline" :size="22" role="img" :aria-label="c.review" /></template>
       <n-alert type="info">{{ c.reviewHint }}</n-alert>
       <n-form class="review-form" @submit.prevent="save">
         <n-form-item :label="c.name"><n-input v-model:value="draftTitle" :disabled="saving" /></n-form-item>
@@ -98,7 +124,8 @@
         <n-button type="primary" attr-type="submit" :loading="saving" :disabled="!draftTitle.trim() || !draftDate">{{ c.create }}</n-button>
       </n-form>
     </n-modal>
-    <n-modal v-model:show="showSource" preset="card" :title="c.source" :style="{ width: 'min(1000px, 96vw)' }">
+    <n-modal v-model:show="showSource" preset="card" :aria-label="c.source" :style="{ width: 'min(1000px, 96vw)' }">
+      <template #header><n-icon :component="DocumentTextOutline" :size="22" role="img" :aria-label="c.source" /></template>
       <p v-if="sourceLoading" role="status">{{ c.loadingSource }}</p>
       <n-alert v-if="sourceError" type="error">{{ sourceError }}</n-alert>
       <iframe v-if="sourceHtml" :srcdoc="safePreview" sandbox="" referrerpolicy="no-referrer" :title="c.source" class="source-preview" />
@@ -109,9 +136,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { NAlert, NButton, NCheckbox, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag } from "naive-ui";
+import { NAlert, NButton, NCheckbox, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag, NTooltip } from "naive-ui";
 import {
-  AddOutline, AlarmOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
+  AddOutline, AlarmOutline, AttachOutline, CalendarOutline, CheckmarkCircleOutline, CloseOutline, ConstructOutline, DocumentTextOutline,
   FlashOutline, MailOutline, RefreshOutline, SearchOutline, ShieldCheckmarkOutline, TimeOutline, WalletOutline, WarningOutline,
 } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
@@ -324,7 +351,7 @@ h2 { font-size: 18px; } h3 { font-size: 17px; margin-top: 16px; }
 .due-chip--missed { background: color-mix(in srgb, var(--color-error) 13%, transparent); color: var(--color-error); }
 .due-chip__rel { font-weight: 500; opacity: 0.85; }
 blockquote { margin: 16px 0; padding: 12px 16px; border-inline-start: 3px solid var(--brand-color); background: var(--bg-elevated); white-space: pre-wrap; overflow-wrap: anywhere; }
-.sender { overflow-wrap: anywhere; }.card-actions { margin-top: 20px; }a { color: var(--brand-color); }
+.sender { overflow-wrap: anywhere; }.card-actions { margin-top: 20px; gap: 8px; }a { color: var(--brand-color); }
 .empty-state { padding: 40px 0; }.review-form { margin-top: 20px; }
 .review-form :deep(.n-checkbox) { display: flex; margin-bottom: 8px; }
 .review-note { margin: 4px 0 12px; font-size: 13px; color: var(--text-secondary); }.date-input { width: 100%; padding: 10px; font: inherit; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; }
