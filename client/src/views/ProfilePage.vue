@@ -1342,7 +1342,7 @@
               }"
             >
               <span v-if="plan.id === currentPlanId" class="plan__badge">{{ l.profileBilling.yourPlan }}</span>
-              <span v-else-if="plan.highlighted" class="plan__badge">{{ PRICING_COPY[locale].recommended }}</span>
+              <span v-else-if="plan.highlighted" class="plan__badge">{{ PRICING_COPY[uiLocale].recommended }}</span>
               <h3 class="plan__name">{{ plan.name }}</h3>
               <p class="plan__blurb">{{ plan.blurb }}</p>
               <div class="plan__price">
@@ -1353,15 +1353,15 @@
                 <li v-for="feature in plan.features" :key="feature">{{ feature }}</li>
               </ul>
               <template v-if="plan.id !== 'trial' && plan.id !== currentPlanId && PLAN_RANK[plan.id] > PLAN_RANK[currentPlanId]">
-                <a class="plan__cta plan__cta--primary" :href="planPurchaseUrl(plan, locale)" rel="noopener" target="_blank">
-                  {{ PRICING_COPY[locale].purchase }}
+                <a class="plan__cta plan__cta--primary" :href="planPurchaseUrl(plan, uiLocale)" rel="noopener" target="_blank">
+                  {{ PRICING_COPY[uiLocale].purchase }}
                 </a>
-                <p class="plan__soon-note">{{ PRICING_COPY[locale].purchaseNote }}</p>
+                <p class="plan__soon-note">{{ PRICING_COPY[uiLocale].purchaseNote }}</p>
               </template>
               <p v-else-if="plan.id === currentPlanId" class="plan__cta plan__cta--current">{{ l.profileBilling.yourPlan }}</p>
             </article>
           </div>
-          <p class="plans-note">{{ PRICING_COPY[locale].existingCustomerNote }}</p>
+          <p class="plans-note">{{ PRICING_COPY[uiLocale].existingCustomerNote }}</p>
 
           <div class="subscription-panels">
             <section class="sub-panel">
@@ -1564,6 +1564,7 @@ import {useConfirm} from "../composables/useConfirm.js";
 import {
   PLAN_LABELS,
   PLAN_LABELS_EN,
+  PLAN_LABELS_RU,
   formatPlanPrice,
   getPricingPlanForLocale,
   moneySymbol,
@@ -1585,7 +1586,7 @@ import {localizedPath, marketingUrl} from "../stores/locale.js";
 
 const route = useRoute();
 const router = useRouter();
-const {l, t, locale, intl} = useI18n();
+const {l, t, locale, uiLocale, intl} = useI18n();
 const securityUrl = computed(() => marketingUrl("/security", locale.value));
 const settingsReturnPath = computed(() => `${localizedPath("/profile", locale.value)}?section=settings`);
 
@@ -1757,10 +1758,10 @@ const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
 };
 const currentPlanId = computed(() => resolveUserPlan(user.value));
 const exportAllowed = computed(() => featureFlagsForUser(user.value).excelExport);
-const currency = computed(() => moneySymbol(locale.value));
+const currency = computed(() => moneySymbol(uiLocale.value));
 const billingMode = ref<string | null>(null);
 const currentPricingPlan = computed(() => {
-  const plan = getPricingPlanForLocale(currentPlanId.value, locale.value);
+  const plan = getPricingPlanForLocale(currentPlanId.value, uiLocale.value);
   if (billingMode.value !== "one_time" || !plan) return plan;
   return {...plan, yearlyPrice: undefined};
 });
@@ -1773,13 +1774,13 @@ const PLAN_RANK: Record<PlanId, number> = {
   business: 4,
 };
 
-const tierPlans = computed(() => plansForLocale(locale.value));
+const tierPlans = computed(() => plansForLocale(uiLocale.value));
 
 const planTag = computed(() => ({
-  label: (locale.value === "en" ? PLAN_LABELS_EN : PLAN_LABELS)[currentPlanId.value],
+  label: ({he: PLAN_LABELS, en: PLAN_LABELS_EN, ru: PLAN_LABELS_RU}[uiLocale.value])[currentPlanId.value],
   type: PLAN_TAG_TYPES[currentPlanId.value],
 }));
-const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value, locale.value));
+const planPriceLabel = computed(() => formatPlanPrice(currentPricingPlan.value, uiLocale.value));
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";

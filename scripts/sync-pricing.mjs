@@ -12,12 +12,12 @@ if (check) {
 } else {
   await writeFile(publishedCatalog, source, "utf8");
 }
-for (const locale of ["he", "en"]) {
+for (const locale of ["he", "en", "ru"]) {
   for (const page of ["pricing.html", "index.html"]) {
-    const path = new URL(`../landing/${locale === "en" ? "en/" : ""}${page}`, import.meta.url);
+    const path = new URL(`../landing/${locale === "he" ? "" : `${locale}/`}${page}`, import.meta.url);
     const html = await readFile(path, "utf8");
     // The English landing page links to the full catalog rather than embedding plan cards.
-    if (locale === "en" && page === "index.html" && html.includes("data-pricing-summary")) continue;
+    if (locale !== "he" && page === "index.html" && html.includes("data-pricing-summary")) continue;
     const marker = /<!-- pricing:start -->[\s\S]*?<!-- pricing:end -->/;
     if (!marker.test(html)) throw new Error(`Missing pricing markers: ${path}`);
     const updated = html.replace(marker, () => `<!-- pricing:start -->\n${renderPricing(catalog, locale, page === "index.html" ? "h3" : "h2")}\n<!-- pricing:end -->`);
