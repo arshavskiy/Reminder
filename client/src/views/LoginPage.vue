@@ -26,27 +26,12 @@
 
     <section id="top" class="hero-section">
       <div class="hero">
-        <div class="hero-content">
-          <!--          <div class="hero-badge">-->
-          <!--            <span>מותאם לעסקים ישראלים</span>-->
-          <!--          </div>-->
-          <h1>{{ t.copy.heroTitle }}</h1>
-          <h2 style="font-size: 24px; line-height: 52px">EXTRACT • TRACK • AUTOMATE</h2>
-          <p class="hero-desc">{{ t.copy.heroDesc }}</p>
-          <!--          <p class="hero-purpose">-->
-          <!--            חיבור Gmail הוא אופציונלי ומשמש רק להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר להכניס למערכת.-->
-          <!--          </p>-->
-          <!--          <div class="hero-actions">-->
-          <!--            <a class="btn-primary" href="#login-card">כניסה למערכת</a>-->
-          <!--            <a class="btn-secondary" href="#features">למד עוד</a>-->
-          <!--          </div>-->
-        </div>
+        <h1 class="visually-hidden">{{ t.copy.heroTitle }}</h1>
 
         <div id="login-card" class="login-card">
           <div class="login-brand">
             <img :src="logoSrc" alt="" class="login-brand__logo"/>
             <h2 class="login-brand__title">RemindOCR</h2>
-            <p class="login-brand__sub">{{ t.copy.brandSub }}</p>
           </div>
 
           <n-alert v-if="route.query.billing === 'one_time'" style="margin-bottom:16px" type="info">
@@ -169,116 +154,9 @@
             </n-tab-pane>
           </n-tabs>
 
-          <p class="login-footer">{{ t.copy.footerAccess }}</p>
         </div>
       </div>
     </section>
-
-    <!--    <section class="stats">-->
-    <!--      <div class="stats-inner">-->
-    <!--        <div>-->
-    <!--          <div class="stat-num">100%</div>-->
-    <!--          <div class="stat-label">עברית מלאה — ממשק ו-OCR</div>-->
-    <!--        </div>-->
-    <!--        <div>-->
-    <!--          <div class="stat-num">AI</div>-->
-    <!--          <div class="stat-label">חילוץ נתונים אוטומטי</div>-->
-    <!--        </div>-->
-    <!--        <div>-->
-    <!--          <div class="stat-num">0₪</div>-->
-    <!--          <div class="stat-label">עלות הרצה עצמית</div>-->
-    <!--        </div>-->
-    <!--        <div>-->
-    <!--          <div class="stat-num">∞</div>-->
-    <!--          <div class="stat-label">לקוחות ומסמכים</div>-->
-    <!--        </div>-->
-    <!--      </div>-->
-    <!--    </section>-->
-
-    <!--    <section id="features" class="content-section">-->
-    <!--      <div class="section-header">-->
-    <!--        <h2>כל מה שצריך במקום אחד</h2>-->
-    <!--        <p>מתוכנן עבור עסקים שצריכים לעקוב אחר מסמכים, חוזים ותסקירים בזמן אמת</p>-->
-    <!--      </div>-->
-    <!--      <div class="features-grid">-->
-    <!--        <article class="feature-card">-->
-    <!--          &lt;!&ndash;          <div class="feature-icon">📄</div>&ndash;&gt;-->
-    <!--          <h3>ייבוא מסמכים חכם</h3>-->
-    <!--          <p>העלה קבצי PDF, Word, Excel ותמונות, או ייבא קובצי PDF מצורפים מ-Gmail לאחר אישור מפורש שלך. ייבוא קבלות עד-->
-    <!--            יבוא קבלות היסטורי מ-Gmail שמור למסלול עסקי.</p>-->
-    <!--        </article>-->
-    <!--        <article class="feature-card feature-card&#45;&#45;accent">-->
-    <!--          <h3>ניסיון של 30 יום</h3>-->
-    <!--          <p>כל היכולות של המסלול הבסיסי, עד 50 מסמכים — ידני ומאימייל יחד. ללא כרטיס אשראי. בסיסי כולל 50 קבלות ו-50-->
-    <!--            תסקירים בחודש, ועסקי ללא הגבלה.</p>-->
-    <!--        </article>-->
-    <!--        &lt;!&ndash;        <article class="feature-card">&ndash;&gt;-->
-    <!--        &lt;!&ndash;          <div class="feature-icon">✉️</div>&ndash;&gt;&ndash;&gt;-->
-    <!--        &lt;!&ndash;          <h3>ייבוא PDF מ-Gmail</h3>&ndash;&gt;-->
-    <!--        &lt;!&ndash;          <p>חיבור Gmail הוא אופציונלי, לקריאה בלבד, ומשמש להצגת הודעות עם קבצים מצורפים ולייבוא קובצי PDF שהמשתמש בוחר.</p>&ndash;&gt;-->
-    <!--        &lt;!&ndash;        </article>&ndash;&gt;-->
-    <!--        <article class="feature-card">-->
-    <!--          &lt;!&ndash;          <div class="feature-icon">⏰</div>&ndash;&gt;-->
-    <!--          <h3>תזכורות אוטומטיות</h3>-->
-    <!--          <p>קבל אימייל 90, 60 ו-30 יום לפני שחוזה או תסקיר פג תוקף. לא עוד הפתעות.</p>-->
-    <!--        </article>-->
-    <!--        <article class="feature-card feature-card&#45;&#45;accent">-->
-    <!--          <h3>סנכרון Google Calendar</h3>-->
-    <!--          <p>חבר יומן Google וקבל תסקירים עתידיים ביומן ייעודי בשם ״תסקירים״, עם פרטי לקוח, איש קשר וציוד בתוך האירוע.-->
-    <!--            במסלול עסקי.</p>-->
-    <!--        </article>-->
-    <!--        <article class="feature-card">-->
-    <!--          &lt;!&ndash;          <div class="feature-icon">👥</div>&ndash;&gt;-->
-    <!--          <h3>ניהול לקוחות</h3>-->
-    <!--          <p>כרטיס לקוח מלא עם היסטוריית חוזים, תזכורות ומשימות. כולל חיפוש מהיר.</p>-->
-    <!--        </article>-->
-    <!--        <article class="feature-card">-->
-    <!--          &lt;!&ndash;          <div class="feature-icon">🔍</div>&ndash;&gt;-->
-    <!--          <h3>חיפוש מלא בתוך המסמכים</h3>-->
-    <!--          <p>חפש לפי שם לקוח, מספר חוזה, תאריך ועוד — גם בתוכן המסמך עצמו.</p>-->
-    <!--        </article>-->
-<!--        <article class="feature-card">-->
-    <!--          &lt;!&ndash;          <div class="feature-icon">🏭</div>&ndash;&gt;-->
-    <!--          <h3>קטלוג ציוד</h3>-->
-    <!--          <p>נהל מלאי ציוד — מנופים, פיגומים, מעליות ועוד — מקושר לתסקירי הבדיקה.</p>-->
-<!--        </article>-->
-    <!--        <article class="feature-card">-->
-    <!--          &lt;!&ndash;          <div class="feature-icon">📊</div>&ndash;&gt;-->
-    <!--          <h3>דוחות חודשיים</h3>-->
-    <!--          <p>הפק דוחות לפי לקוח, שדות וסדר עמודות שנשמרים לכל משתמש.</p>-->
-    <!--        </article>-->
-    <!--        <article class="feature-card">-->
-    <!--          <h3>סנכרון Google Drive</h3>-->
-    <!--          <p>שמירת מסמכים בתיקיית RemindOCR ב-Google Drive, כולל סנכרון אוטומטי וייצוא. זמין כבר בניסיון.</p>-->
-    <!--        </article>-->
-    <!--      </div>-->
-    <!--    </section>-->
-
-    <!--    <section id="how" class="how-section">-->
-    <!--      <div class="content-section">-->
-    <!--        <div class="section-header">-->
-    <!--          <h2>איך זה עובד?</h2>-->
-    <!--          <p>תהליך פשוט בשלושה שלבים</p>-->
-    <!--        </div>-->
-    <!--        <div class="steps">-->
-    <!--          <div class="step">-->
-    <!--            <div class="step__num">1</div>-->
-    <!--            <h3>ייבא מסמך</h3>-->
-    <!--            <p>גרור קבצים. המערכת מטפלת ב- Word, Excel ותמונות.</p>-->
-    <!--          </div>-->
-    <!--          <div class="step">-->
-    <!--            <div class="step__num">2</div>-->
-    <!--            <h3>AI מחלץ נתונים</h3>-->
-    <!--            <p>המערכת קוראת את המסמך ומחלצת שם לקוח, תאריך פקיעה, סכום ועוד.</p>-->
-    <!--          </div>-->
-    <!--          <div class="step">-->
-    <!--            <div class="step__num">3</div>-->
-    <!--            <h3>סנכרן ושלח תזכורות</h3>-->
-    <!--            <p>המערכת מתזמנת התרעות אימייל ומסנכרנת את התסקירים ל-Google Calendar עם כל פרטי הלקוח והציוד.</p>-->
-    <!--          </div>-->
-    <!--        </div>-->
-    <!--      </div>-->
-    <!--    </section>-->
 
     <!-- Forgot password modal -->
     <n-modal v-model:show="showForgot" preset="card" :title="t.copy.forgotTitle" :style="{maxWidth: '380px', direction: t.dir}">
@@ -298,17 +176,6 @@
         </div>
       </template>
     </n-modal>
-
-    <footer v-if="false" class="landing-footer">
-      <strong>RemindOCR</strong> — מערכת ניהול תסקירים ותזכורות לעסקים ישראלים
-      <div class="landing-footer__legal">
-        © 2026 HandCoded. כל הזכויות שמורות. |
-        <a href="https://remindocr.com/terms">תנאי שימוש</a> |
-        <a href="https://remindocr.com/privacy">מדיניות פרטיות</a> |
-        <a href="https://remindocr.com/accessibility">נגישות</a> |
-        <a href="https://remindocr.com/security">אבטחת מידע</a>
-      </div>
-    </footer>
   </div>
 </template>
 
@@ -684,9 +551,21 @@ onMounted(async () => {
   margin: 0 auto;
   padding: 84px 48px 76px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 64px;
+  grid-template-columns: minmax(0, 420px);
+  justify-content: center;
   align-items: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .hero-badge {
