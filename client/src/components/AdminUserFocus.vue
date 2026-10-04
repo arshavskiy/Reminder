@@ -583,10 +583,6 @@
                   </div>
                 </section>
 
-                <div class="uf-settings__bar">
-                  <n-button type="primary" size="small" :loading="savingSettings" @click="saveSettings">Save settings</n-button>
-                </div>
-
                 <section class="uf-card">
                   <h3 class="uf-card__title">General</h3>
                   <div class="uf-settings__grid">
@@ -652,6 +648,10 @@
                     </div>
                   </template>
                 </section>
+
+                <div class="uf-settings__bar uf-settings__save">
+                  <n-button type="primary" size="small" :loading="savingSettings" @click="saveSettings">Save settings</n-button>
+                </div>
               </div>
               <div v-else class="uf-muted uf-pad">Loading settings…</div>
             </n-tab-pane>
@@ -1668,6 +1668,13 @@ watch([storageSearch, storageStatusFilter], () => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+.uf-settings__save {
+  position: sticky;
+  bottom: 0;
+  justify-content: flex-start;
+  padding: 10px 0;
+  background: var(--bg-card);
 }
 .uf-settings__role {
   display: inline-flex;
