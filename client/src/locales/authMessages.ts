@@ -12,7 +12,7 @@ export const authMessages = {
     themeDark: "מצב כהה",
     langSwitch: "English",
     langSwitchAria: "Switch to English",
-    heroTitle: "ניהול תסקירים, מסמכים ותזכורות",
+    heroTitle: "לא מפספסים מועד או תשלום",
     heroDesc:
       "RemindOCR היא מערכת לניהול תסקירי בדיקה, מסמכים, לקוחות וחוזים. המערכת מאפשרת להעלות או לייבא מסמכים, לחלץ מהם תאריכים ופרטי לקוח בעזרת OCR ו-AI, ולעקוב אחרי תוקף מסמכים באמצעות תזכורות אוטומטיות וסנכרון ל-Google Calendar.",
     brandSub: "מערכת ניהול תסקירים ותזכורות",
@@ -76,7 +76,7 @@ export const authMessages = {
     themeDark: "Dark mode",
     langSwitch: "עברית",
     langSwitchAria: "Switch to Hebrew",
-    heroTitle: "Inspections, documents, and reminders",
+    heroTitle: "Never miss a deadline or a payment",
     heroDesc:
       "RemindOCR manages inspection reports, documents, clients, and contracts. Upload or import files, extract dates and client details with OCR and AI, and track expiry with automatic reminders and Google Calendar sync.",
     brandSub: "Inspection and reminder management",
@@ -140,7 +140,7 @@ export const authMessages = {
     themeDark: "Тёмная тема",
     langSwitch: "Русский",
     langSwitchAria: "Переключить на русский",
-    heroTitle: "Инспекции, документы и напоминания",
+    heroTitle: "Не пропускайте сроки и платежи",
     heroDesc:
       "RemindOCR помогает вести отчёты об инспекциях, документы, клиентов и договоры. Загружайте или импортируйте файлы, извлекайте даты и данные клиентов с помощью OCR и ИИ и отслеживайте сроки с автоматическими напоминаниями и синхронизацией с Google Календарём. Счета и чеки на русском языке импортируются из Gmail.",
     brandSub: "Управление инспекциями и напоминаниями",
