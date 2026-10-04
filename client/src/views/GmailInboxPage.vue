@@ -1250,7 +1250,7 @@ async function connectGmail() {
     window.location.href = url;
   } catch (err: any) {
     if (err?.status === 403 || err?.message === "forbidden") {
-      message.error("חיבור Gmail זמין במסלול עסקי בלבד");
+      message.error("חיבור Gmail זמין במסלול פרו בלבד");
     } else {
       message.error("שגיאה בהתחברות ל-Gmail");
     }

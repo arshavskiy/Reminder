@@ -18,7 +18,7 @@ Do not copy the whole CRM. Their pitch is office automation (calendar, billing, 
 | 3 | **Invoice from the inspection** | Each report gets a matching invoice; collection is automatic | We import supplier invoices. They bill the client for the job. |
 | 4 | **Send to all stakeholders** | One click to client, service company, and work supervisor | We email the client. Offices need CC lists per report. |
 | 5 | **Field app: renew in seconds** | Native mobile, 12 templates, renew even with many defects | `שטח` is a light checklist. The job is on-site, on the phone. |
-| 6 | **Sub-inspectors / office team** | Extra certified inspectors, calendar colors, numbering, commissions | Business plan allows users, but not a real office roster. |
+| 6 | **Sub-inspectors / office team** | Extra certified inspectors, calendar colors, numbering, commissions | Pro plan allows users, but not a real office roster. |
 | 7 | **Statutory template pack** | 12 Ministry-of-Labor types: elevators, pressure vessels, tower cranes, lifting machines | We have a print editor. They ship the legal forms. |
 | 8 | **Defects table + Excel export** | Categorized defects; combined defects report to Excel | Clients and safety officers want one defects workbook, not 40 PDFs. |
 

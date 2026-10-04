@@ -19,7 +19,7 @@ export const whatsNewMessages: Record<"he" | "en" | "ru", Messages> = {
     heading: "מה חדש במערכת",
     subheading: "כמה דרכים חדשות להכניס מסמכים ולא לפספס מועדים.",
     dismiss: "הבנתי",
-    businessTag: "מסלול עסקי",
+    businessTag: "מסלול פרו",
     tour: "הדרכה קצרה",
     items: {
       emailIn: { title: "העברת מסמכים בדואר", text: "כתובת אישית: מעבירים אליה חשבונית או תסקיר מכל תיבת דואר, והמערכת מייבאת ומחלצת את התאריכים.", action: "קבלת הכתובת" },
@@ -36,7 +36,7 @@ export const whatsNewMessages: Record<"he" | "en" | "ru", Messages> = {
     heading: "Что нового",
     subheading: "Новые способы загружать документы и не пропускать сроки.",
     dismiss: "Понятно",
-    businessTag: "Тариф «Бизнес»",
+    businessTag: "Тариф «Pro»",
     tour: "Краткий тур",
     items: {
       emailIn: { title: "Документы по почте", text: "Личный адрес: пересылайте счёт или отчёт с любой почты, и он будет импортирован с извлечением дат.", action: "Получить адрес" },
@@ -53,7 +53,7 @@ export const whatsNewMessages: Record<"he" | "en" | "ru", Messages> = {
     heading: "What's new",
     subheading: "New ways to get documents in and never miss a deadline.",
     dismiss: "Got it",
-    businessTag: "Business plan",
+    businessTag: "Pro plan",
     tour: "Quick tour",
     items: {
       emailIn: { title: "Forward documents by email", text: "Get a personal address: forward an invoice or report from any mailbox and it is imported with its dates extracted.", action: "Get my address" },

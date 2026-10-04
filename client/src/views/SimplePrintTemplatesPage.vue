@@ -389,7 +389,7 @@ async function saveDraft() {
 async function printPdf() {
   if (!composing.value) return;
   if (!exportAllowed.value) {
-    message.warning("ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning("ייצוא PDF זמין במסלולי סטארטר ופרו בלבד");
     return;
   }
   printing.value = true;
@@ -408,7 +408,7 @@ async function printPdf() {
 async function savePdf() {
   if (!composing.value) return;
   if (!exportAllowed.value) {
-    message.warning("ייצוא PDF זמין במסלולים בסיסי ועסקי בלבד");
+    message.warning("ייצוא PDF זמין במסלולי סטארטר ופרו בלבד");
     return;
   }
   savingPdf.value = true;

@@ -172,7 +172,7 @@ export function effectiveQuotaCategory(
   if (plan === "expired" || plan === "trial") {
     return source === "email" ? "emailDocuments" : "manualDocuments";
   }
-  // Basic pools every category into one monthly budget, so report and enforce
+  // Starter (basic) pools every category into one monthly budget, so report and enforce
   // against a single category rather than the caller's guess.
   if (plan === "basic") return "documents";
   return category;

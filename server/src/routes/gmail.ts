@@ -324,7 +324,7 @@ export function registerGmailRoutes(app: express.Application) {
       if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
         res.status(403).json({
           error: "gmail_invoice_plan_required",
-            message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול עסקי בלבד",
+            message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול פרו בלבד",
         });
         return;
       }
@@ -639,7 +639,7 @@ export function registerGmailRoutes(app: express.Application) {
     if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
       res.status(403).json({
         error: "gmail_invoice_plan_required",
-          message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול עסקי בלבד",
+          message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול פרו בלבד",
       });
       return;
     }
@@ -744,7 +744,7 @@ export function registerGmailRoutes(app: express.Application) {
     if (isInvoiceTemplate(template) && invoiceHistoryMonths === 0) {
       res.status(403).json({
         error: "gmail_invoice_plan_required",
-          message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול עסקי בלבד",
+          message: "ייבוא חשבוניות וקבלות מ-Gmail זמין במסלול פרו בלבד",
       });
       return;
     }

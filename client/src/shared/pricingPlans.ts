@@ -48,7 +48,7 @@ export interface TierFeatureFlags {
     gmailInvoiceHistoryMonths: number | null;
     googleDriveSync: boolean;
     googleCalendarSync: boolean;
-    /** Personal forwarding address for documents. Business only. */
+    /** Personal forwarding address for documents. Pro only. */
     emailIn: boolean;
     automaticEmailReminders: boolean;
     automaticMonthlyReports: boolean;
@@ -162,12 +162,12 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
 
 export const PLAN_GATE_MESSAGES = {
     calendar: "סנכרון Google Calendar אינו זמין לאחר סיום תקופת הניסיון. בחרו מסלול כדי להפעיל אותו.",
-    automaticEmailReminders: "תזכורות אימייל אוטומטיות זמינות במסלולים בסיסי ועסקי בלבד.",
-    automaticMonthlyReports: "דוחות חודשיים אוטומטיים זמינים במסלולים בסיסי ועסקי בלבד.",
-    excelExport: "ייצוא לאקסל זמין במסלולים בסיסי ועסקי בלבד.",
-    extraUsers: "הוספת משתמשים זמינה במסלולים בסיסי ועסקי בלבד.",
-    extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולים בסיסי ועסקי בלבד.",
-    fileStorage: "שמירת קבצים אינה זמינה במסלול הדיגיטלי. שדרגו למסלול בסיסי או עסקי כדי להעלות ולשמור מסמכים.",
+    automaticEmailReminders: "תזכורות אימייל אוטומטיות זמינות במסלולי סטארטר ופרו בלבד.",
+    automaticMonthlyReports: "דוחות חודשיים אוטומטיים זמינים במסלולי סטארטר ופרו בלבד.",
+    excelExport: "ייצוא לאקסל זמין במסלולי סטארטר ופרו בלבד.",
+    extraUsers: "הוספת משתמשים זמינה במסלולי סטארטר ופרו בלבד.",
+    extraEmailAccounts: "חיבור חשבונות דוא״ל נוספים זמין במסלולי סטארטר ופרו בלבד.",
+    fileStorage: "שמירת קבצים אינה זמינה במסלול הדיגיטלי. שדרגו למסלול סטארטר או פרו כדי להעלות ולשמור מסמכים.",
     documentImport: "יבוא מסמכים מקובץ או מ-Gmail אינו זמין במסלול זה. שדרגו כדי להעלות ולייבא מסמכים.",
 } as const;
 

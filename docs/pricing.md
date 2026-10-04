@@ -29,13 +29,16 @@ Do not hand-edit published JSON or pricing snapshots. `pricing:check` detects dr
 
 | Plan | ILS monthly billing | ILS/month billed annually | ILS annual total | USD monthly billing | USD annual total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Digital | 149 | 119 | 1,428 | 45 | 432 |
-| Basic | 249 | 215 | 2,580 | 75 | 780 |
-| Business | 399 | 347 | 4,164 | 119 | 1,248 |
+| Digital | 49 | 39 | 468 | 15 | 144 |
+| Starter (id `basic`) | 97 | 78 | 936 | 29 | 276 |
+| Pro (id `business`) | 249 | 199 | 2,388 | 75 | 720 |
 
-The annual Basic and Business rates reflect the requested 215 and 347.
+Updated 2026-10-05. The annual rate is 80% of the monthly price, rounded to a whole amount per month.
 USD prices are separate list prices, not live currency conversions.
 No percentage discount or crossed-out former price is advertised.
+
+Display names: `basic` is shown as Starter (סטארטר) and `business` as Pro (פרו) in Hebrew, English and Russian.
+Internal plan ids, database values and API fields keep the old names.
 
 New-plan buttons prepare a WhatsApp inquiry containing the selected plan, currency,
 annual total and monthly alternative. They do not send a message automatically.
@@ -66,7 +69,7 @@ Feature copy was checked against `server/src/plans/tierFeatures.ts`,
 and print/payment routes. The trial allows 20 imported documents total, Basic
 50/month, and Business has no import cap by default. Runtime environment quota
 overrides still exist; keep them consistent with advertised limits. Digital has
-no file imports/storage. Business adds 24 months of Gmail inspection history,
+no file imports/storage. Pro adds 24 months of Gmail inspection history,
 36 months of invoice history, Calendar, field checklists/photos, and uncapped
 users/mailboxes. Do not promise full offline inspection authoring, certified
 electronic signatures, automated WhatsApp distribution or tax-invoice issuance

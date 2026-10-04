@@ -184,8 +184,8 @@ export const ruCore: Record<string, string> = {
   "plans.expired": "Истёк",
   "plans.trial": "Пробный",
   "plans.digital": "Цифровой",
-  "plans.basic": "Базовый",
-  "plans.business": "Бизнес",
+  "plans.basic": "Starter",
+  "plans.business": "Pro",
 
   "review.navLabel": "Импорты на проверку",
   "review.title": "Импорты на проверку",

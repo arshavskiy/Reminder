@@ -204,7 +204,7 @@ const excelAllowed = computed(() =>
 const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const autoReportsLockedMessage = PLAN_GATE_MESSAGES.automaticMonthlyReports;
 const excelLockedMessage = PLAN_GATE_MESSAGES.excelExport;
-const exportLockedMessage = "ייצוא דוחות זמין במסלולים בסיסי ועסקי בלבד.";
+const exportLockedMessage = "ייצוא דוחות זמין במסלולי סטארטר ופרו בלבד.";
 const loading = ref(true);
 const saving = ref(false);
 const sending = ref(false);

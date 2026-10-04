@@ -48,6 +48,8 @@ Admin role **does not** change the product plan field by itself if `users.plan` 
 
 ## Plans
 
+> Display names changed on 2026-10-05: `basic` is shown as **Starter** and `business` as **Pro**. Ids, stored values and API fields are unchanged, and the prices in the table below are out of date; see [pricing.md](./pricing.md).
+
 | Plan | Price (marketing) | Seats | Email accounts | Documents | Reminders |
 |------|-------------------|-------|----------------|-----------|-----------|
 | `free` | ₪0 | 1 | 0 | **10 lifetime, shared** across manual + email | **0** |
@@ -66,7 +68,7 @@ Enforced in server code (+ matching disabled UI). Source: `TIER_FEATURE_FLAGS`.
 |------------|------|-------|----------|-------|
 | OCR / preview / extraction | ✓ | ✓ | ✓ | All plans |
 | Google Drive sync / export | — | ✓ | ✓ | `googleDriveSync` |
-| Google Calendar sync | ✓ | ✓ | ✓ | Every plan except a lapsed trial (`googleCalendarSync`; changed 2026-10-05, was Business only) |
+| Google Calendar sync | ✓ | ✓ | ✓ | Every plan except a lapsed trial (`googleCalendarSync`; changed 2026-10-05, was Pro only) |
 | ICS calendar feed (Apple / Outlook) | ✓ | ✓ | ✓ | Same entitlement as Google Calendar sync |
 | Email-in (personal forwarding address) | — | — | ✓ | `emailIn` flag: **business only** (and admin); also needs document import |
 | Cloud storage (S3) of files | — | ✓ | ✓ | `s3_store_invoices` / `s3_store_inspection_reports` default **off** on free; toggles disabled in UI |
@@ -106,8 +108,8 @@ Primary nav + router. Feature flags in `user_settings.features` can still hide a
 | חיפוש | ✓ | ✓ | ✓ | `pages.search` | |
 | תבניות מסמכים / אימייל / הדפסה | ✓* | ✓* | ✓* | `pages.doc_templates`, `pages.email_templates`, `pages.print_templates` | Often via contracts / settings |
 | הגדרות מערכת | — | — | ✓ | `pages.settings` | Admin |
-| **חשבוניות** | — | — | ✓ | `pages.invoices` (default **on**) | **Business plan** (nav + router); no server-side guard yet |
-| **Gmail** | — | — | ✓* | `pages.gmail` (default **on**) | **Business plan** (nav + `/gmail`); admin role maps to business |
+| **חשבוניות** | — | — | ✓ | `pages.invoices` (default **on**) | **Pro plan** (nav + router); no server-side guard yet |
+| **Gmail** | — | — | ✓* | `pages.gmail` (default **on**) | **Pro plan** (nav + `/gmail`); admin role maps to business |
 | Admin console | — | — | ✓ | (admin routes) | `/admin` |
 
 \* Defaults enabled in feature catalog; can be disabled per user in admin feature toggles.

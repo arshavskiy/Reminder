@@ -183,8 +183,8 @@ const message = useMessage();
 const planOptions = [
   { label: "Trial", value: "trial" },
   { label: "Digital", value: "digital" },
-  { label: "Basic", value: "basic" },
-  { label: "Business", value: "business" },
+  { label: "Starter", value: "basic" },
+  { label: "Pro", value: "business" },
 ];
 
 const roleOptions = [

@@ -24,7 +24,7 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     sort_order: 10
   },
   {key: "pages.documents", scope: "pages", label_he: "מסמכים", label_en: "Documents", description_he: "העלאה, צפייה וניהול מסמכים.", default_enabled: true, sort_order: 20},
-  {key: "pages.invoices", scope: "pages", label_he: "חשבוניות", label_en: "Invoices", description_he: "ניהול חשבוניות וקבלות שיובאו מ-Gmail וממסמכים. זמין ממסלול עסקי ומעלה.", default_enabled: true, sort_order: 25},
+  {key: "pages.invoices", scope: "pages", label_he: "חשבוניות", label_en: "Invoices", description_he: "ניהול חשבוניות וקבלות שיובאו מ-Gmail וממסמכים. זמין ממסלול פרו ומעלה.", default_enabled: true, sort_order: 25},
   {key: "pages.contracts", scope: "pages", label_he: "תסקירים", label_en: "Inspections", description_he: "ניהול תסקירים, חוזים ותוקפים.", default_enabled: true, sort_order: 30},
   {key: "pages.reminders", scope: "pages", label_he: "תזכורות", label_en: "Reminders", description_he: "ניהול ושליחת תזכורות.", default_enabled: true, sort_order: 40},
   {key: "pages.reports", scope: "pages", label_he: "דוחות", label_en: "Reports", description_he: "הפקה ושליחה של דוחות חודשיים.", default_enabled: true, sort_order: 50},

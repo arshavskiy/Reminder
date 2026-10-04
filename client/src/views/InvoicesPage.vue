@@ -1221,7 +1221,7 @@ function toggleDuplicates() {
 }
 
 // "To pay": unpaid invoices that have a payment date, soonest first.
-// Daily unattended Gmail import of new invoices (Business). The scheduler does the work;
+// Daily unattended Gmail import of new invoices (Pro). The scheduler does the work;
 // this only stores the user's choice.
 const gmailInvoiceScanAllowed = computed(() => userAllowsGmailInvoiceImport(authStore.user));
 const invoicesAutoScan = ref(false);

@@ -78,7 +78,7 @@ function isPersonalReminder(reminder: any): boolean {
 }
 
 /**
- * Google Calendar sync is a Business entitlement, except for reminders a user created from a
+ * Google Calendar sync is a Pro entitlement, except for reminders a user created from a
  * discovered deadline: those reach a connected calendar on every plan, for now.
  */
 export function calendarSyncAllowed(user: any, reminder: any): boolean {

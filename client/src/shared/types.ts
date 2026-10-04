@@ -139,7 +139,7 @@ export interface UserSettings extends PipelineFlags {
   discovery_last_scan_at?: string | null;
   /** How often the automatic discovery scan runs. */
   discovery_scan_frequency?: "daily" | "weekly";
-  /** Daily automatic import of new invoices from Gmail (Business). */
+  /** Daily automatic import of new invoices from Gmail (Pro). */
   invoices_auto_scan?: boolean;
   invoices_last_scan_at?: string | null;
   /** Release id of the last What's new card the user dismissed. */
