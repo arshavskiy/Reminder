@@ -601,6 +601,28 @@
                 </section>
 
                 <section class="uf-card">
+                  <h3 class="uf-card__title">Scheduled Gmail scans</h3>
+                  <div class="uf-switches">
+                    <label><n-switch v-model:value="settingsForm.invoices_auto_scan" size="small" /> Daily invoice scan (Pro)</label>
+                    <label><n-switch v-model:value="settingsForm.discovery_auto_scan" size="small" /> Reminder discovery scan</label>
+                  </div>
+                  <div class="uf-settings__grid">
+                    <label class="uf-control">
+                      <span>Discovery frequency</span>
+                      <n-select v-model:value="settingsForm.discovery_scan_frequency" :options="scanFrequencyOptions" size="small" :disabled="!settingsForm.discovery_auto_scan" />
+                    </label>
+                    <div class="uf-control">
+                      <span>Last invoice scan</span>
+                      <small class="uf-muted">{{ formatScanTime(settingsForm.invoices_last_scan_at) }}</small>
+                    </div>
+                    <div class="uf-control">
+                      <span>Last discovery scan</span>
+                      <small class="uf-muted">{{ formatScanTime(settingsForm.discovery_last_scan_at) }}</small>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="uf-card">
                   <h3 class="uf-card__title">Monthly reports</h3>
                   <div class="uf-switches">
                     <label><n-switch v-model:value="settingsForm.monthly_report_enabled" size="small" /> Enabled</label>
@@ -748,8 +770,8 @@ const roleOptions = [
 const planOptions = [
   { label: "Trial", value: "trial" },
   { label: "Digital", value: "digital" },
-  { label: "Basic", value: "basic" },
-  { label: "Business", value: "business" },
+  { label: "Starter", value: "basic" },
+  { label: "Pro", value: "business" },
 ];
 const roleTagType: Record<string, "default" | "warning" | "error"> = {
   user: "default", pro: "default", admin: "warning",
@@ -759,8 +781,17 @@ const planTagType: Record<string, "default" | "success" | "info"> = {
   expired: "default", trial: "default", digital: "info", basic: "info", business: "success",
 };
 const planLabel: Record<string, string> = {
-  expired: "Expired", trial: "Trial", digital: "Digital", basic: "Basic", business: "Business",
+  expired: "Expired", trial: "Trial", digital: "Digital", basic: "Starter", business: "Pro",
 };
+const scanFrequencyOptions = [
+  { label: "Weekly", value: "weekly" },
+  { label: "Daily", value: "daily" },
+];
+function formatScanTime(value: unknown): string {
+  if (!value) return "Never";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "Never" : date.toLocaleString();
+}
 const themeOptions = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
@@ -980,6 +1011,11 @@ function makeSettingsForm(settings: any) {
     pipeline_s3: settings?.pipeline_s3 ?? true,
     pipeline_entities: settings?.pipeline_entities ?? true,
     calendar_next_tests_only: settings?.calendar_next_tests_only ?? false,
+    invoices_auto_scan: settings?.invoices_auto_scan ?? false,
+    discovery_auto_scan: settings?.discovery_auto_scan ?? false,
+    discovery_scan_frequency: settings?.discovery_scan_frequency === "daily" ? "daily" : "weekly",
+    invoices_last_scan_at: settings?.invoices_last_scan_at ?? null,
+    discovery_last_scan_at: settings?.discovery_last_scan_at ?? null,
     monthly_report_enabled: settings?.monthly_report_enabled ?? false,
     monthly_report_recipients: settings?.monthly_report_recipients ?? "",
     monthly_report_day: settings?.monthly_report_day ?? 1,
@@ -1196,6 +1232,9 @@ async function saveSettings() {
       pipeline_s3: Boolean(form.pipeline_s3),
       pipeline_entities: Boolean(form.pipeline_entities),
       calendar_next_tests_only: Boolean(form.calendar_next_tests_only),
+      invoices_auto_scan: Boolean(form.invoices_auto_scan),
+      discovery_auto_scan: Boolean(form.discovery_auto_scan),
+      discovery_scan_frequency: form.discovery_scan_frequency === "daily" ? "daily" : "weekly",
       monthly_report_enabled: Boolean(form.monthly_report_enabled),
       monthly_report_recipients: form.monthly_report_recipients ?? "",
       monthly_report_day: form.monthly_report_day,

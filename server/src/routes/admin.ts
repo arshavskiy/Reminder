@@ -1815,6 +1815,9 @@ export function registerAdminRoutes(app: express.Application) {
       monthly_report_formats?: string;
       report_config?: unknown;
       calendar_next_tests_only?: boolean;
+      invoices_auto_scan?: boolean;
+      discovery_auto_scan?: boolean;
+      discovery_scan_frequency?: string;
       default_email_template_id?: number | string | null;
       features?: Record<string, boolean> | string | null;
       features_json?: string | null;
@@ -1835,6 +1838,17 @@ export function registerAdminRoutes(app: express.Application) {
     if (body.monthly_report_formats !== undefined) patch.monthly_report_formats = body.monthly_report_formats;
     if (body.report_config !== undefined) patch.report_config = normalizeReportConfig(body.report_config);
     if (body.calendar_next_tests_only !== undefined) patch.calendar_next_tests_only = Boolean(body.calendar_next_tests_only);
+    // Scheduled Gmail scans. No plan check here, unlike the user's own settings: an admin may set
+    // the switch for any account, and the scheduler still skips accounts whose plan lacks the scan.
+    if (body.invoices_auto_scan !== undefined) patch.invoices_auto_scan = Boolean(body.invoices_auto_scan);
+    if (body.discovery_auto_scan !== undefined) patch.discovery_auto_scan = Boolean(body.discovery_auto_scan);
+    if (body.discovery_scan_frequency !== undefined) {
+      if (body.discovery_scan_frequency !== "daily" && body.discovery_scan_frequency !== "weekly") {
+        res.status(400).json({ error: "invalid_scan_frequency" });
+        return;
+      }
+      patch.discovery_scan_frequency = body.discovery_scan_frequency;
+    }
     if (body.default_email_template_id !== undefined) patch.default_email_template_id = body.default_email_template_id ?? null;
     const rawFeatures = body.features !== undefined ? body.features : body.features_json;
     if (rawFeatures !== undefined) {
