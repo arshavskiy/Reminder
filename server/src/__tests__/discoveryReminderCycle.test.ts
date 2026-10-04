@@ -158,20 +158,21 @@ describe("delivery over the reminder timeline", () => {
 
 describe("Google Calendar entitlement for these reminders", () => {
   const basicUser = { plan: "basic" };
+  const lapsedTrial = { plan: "trial", trial_ends_at: "2020-01-01" };
   const discovered = { source_type: "personal", origin: "discovery" };
 
   it("lets a discovered reminder reach a connected calendar on any paid plan", () => {
     expect(calendarSyncAllowed(basicUser, discovered)).toBe(true);
     expect(calendarSyncAllowed({ plan: "trial", trial_ends_at: "2031-01-01" }, discovered)).toBe(true);
   });
-  it("keeps other reminders on the Business entitlement", () => {
-    expect(calendarSyncAllowed(basicUser, { source_type: "personal" })).toBe(false);
-    expect(calendarSyncAllowed(basicUser, { source_type: "task", origin: "discovery" })).toBe(false);
-    expect(calendarSyncAllowed({ plan: "business" }, { source_type: "task" })).toBe(true);
+  it("allows every active plan, for every kind of reminder", () => {
+    for (const plan of ["trial", "digital", "basic", "business"]) {
+      expect(calendarSyncAllowed({ plan, trial_ends_at: "2031-01-01" }, { source_type: "task" })).toBe(true);
+      expect(calendarSyncAllowed({ plan, trial_ends_at: "2031-01-01" }, { source_type: "personal" })).toBe(true);
+    }
   });
-  it("opens up for every plan only behind CALENDAR_SYNC_ALL_PLANS", () => {
-    process.env.CALENDAR_SYNC_ALL_PLANS = "true";
-    expect(calendarSyncAllowed(basicUser, { source_type: "task" })).toBe(true);
-    expect(calendarSyncAllowed({ plan: "digital" }, { source_type: "task" })).toBe(true);
+  it("is closed for a lapsed trial, except for reminders made from a discovered deadline", () => {
+    expect(calendarSyncAllowed(lapsedTrial, { source_type: "personal" })).toBe(false);
+    expect(calendarSyncAllowed(lapsedTrial, { source_type: "task", origin: "discovery" })).toBe(false);
   });
 });

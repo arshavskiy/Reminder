@@ -25,7 +25,7 @@ export const ruProfile: Record<string, string> = {
   "profileSettings.driveConsentNeeded": "Требуется разрешение Google Drive.",
   "profileSettings.connectDrive": "Подключить Drive",
   "profileSettings.driveSyncAria": "Синхронизация с Google Drive",
-  "profileSettings.calendarBusinessOnly": "Доступно только на тарифе «Бизнес».",
+  "profileSettings.calendarBusinessOnly": "Недоступно после окончания пробного периода.",
   "profileSettings.calendarSynced": "Напоминаний синхронизировано с отдельным календарём: {n}",
   "profileSettings.calendarIdle": "Двусторонняя синхронизация напоминаний с Google Календарём",
   "profileSettings.connectCalendar": "Подключить календарь",

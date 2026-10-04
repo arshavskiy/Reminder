@@ -33,11 +33,12 @@ describe("digital plan", () => {
     expect(flags.excelExport).toBe(true);
   });
 
-  it("does not sync Google Drive or Calendar", () => {
+  it("syncs Google Calendar but not Google Drive", () => {
     // Drive is file storage by another name, so it stays off with S3.
     const flags = tierFeatureFlags("digital");
     expect(flags.googleDriveSync).toBe(false);
-    expect(flags.googleCalendarSync).toBe(false);
+    // Calendar sync is open to every plan; only a lapsed trial loses it.
+    expect(flags.googleCalendarSync).toBe(true);
     expect(flags.maxEmailAccounts).toBe(0);
   });
 

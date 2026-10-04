@@ -22,7 +22,7 @@ describe("trial plan", () => {
     expect(flags.automaticEmailReminders).toBe(true);
     expect(flags.excelExport).toBe(true);
         expect(flags.gmailInvoiceHistoryMonths).toBe(1);
-    expect(flags.googleCalendarSync).toBe(false);
+    expect(flags.googleCalendarSync).toBe(true);
   });
 
   it("drops an expired trial to the expired entitlements without rewriting the plan", () => {

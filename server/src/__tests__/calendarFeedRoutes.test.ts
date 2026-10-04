@@ -54,8 +54,8 @@ describe("ICS feed management routes", () => {
     expect(body).toEqual({ allowed: true, enabled: false, path: null });
   });
 
-  it("is gated by the Google Calendar entitlement", async () => {
-    seedUser("basic");
+  it("is gated by the Google Calendar entitlement, which only a lapsed trial lacks", async () => {
+    seedUser("trial");
     const status = await (await call("GET", "/api/calendar/feed/status")).json();
     expect(status.allowed).toBe(false);
     const res = await call("POST", "/api/calendar/feed/token");
@@ -138,7 +138,7 @@ describe("ICS feed (public)", () => {
 
   it("stops serving when the plan loses calendar access", async () => {
     const path = await feedPath();
-    seedUser("basic");
+    seedUser("trial");
     expect((await call("GET", path)).status).toBe(404);
   });
 });

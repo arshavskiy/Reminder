@@ -63,7 +63,7 @@ describe("plan entitlements", () => {
       expect(entitlements.gmailInvoiceHistoryMonths).toBe(0);
     expect(entitlements.gmailInspectionHistoryMonths).toBe(16);
     expect(entitlements.googleDriveSync).toBe(true);
-    expect(entitlements.googleCalendarSync).toBe(false);
+    expect(entitlements.googleCalendarSync).toBe(true);
     expect(entitlements.automaticEmailReminders).toBe(true);
     expect(entitlements.automaticMonthlyReports).toBe(true);
     expect(entitlements.excelExport).toBe(true);
@@ -123,7 +123,7 @@ describe("entitlements of new accounts", () => {
       expect(defaults.plan_entitlements, key).toHaveProperty(key);
     }
     expect(defaults.plan_entitlements.emailIn).toBe(false);
-    expect(defaults.plan_entitlements.googleCalendarSync).toBe(false);
+    expect(defaults.plan_entitlements.googleCalendarSync).toBe(true);
   });
 
   it("give each plan its own flags when the account is created on that plan", () => {
@@ -141,12 +141,14 @@ describe("entitlements of new accounts", () => {
     expect(entitlements.plan).toBe("expired");
   });
 
-  it("enable email-in and the calendar feed only on business", () => {
-    const on = (plan: string) => buildPlanEntitlements({ plan, role: "user" });
+  it("enable email-in only on business, and the calendar on every plan", () => {
+    const on = (plan: string) => buildPlanEntitlements({ plan, role: "user", trial_ends_at: new Date(Date.now() + 86_400_000) });
     expect(on("business")).toMatchObject({ emailIn: true, googleCalendarSync: true });
     for (const plan of ["trial", "digital", "basic"]) {
-      expect(on(plan)).toMatchObject({ emailIn: false, googleCalendarSync: false });
+      expect(on(plan)).toMatchObject({ emailIn: false, googleCalendarSync: true });
     }
+    // A lapsed trial keeps neither.
+    expect(buildPlanEntitlements({ plan: "trial", role: "user" })).toMatchObject({ emailIn: false, googleCalendarSync: false });
   });
 
   it("keep the Discover reminders page off for new accounts until an admin enables it", () => {

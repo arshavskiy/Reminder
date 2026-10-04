@@ -104,7 +104,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInspectionHistoryMonths: 16,
         gmailInvoiceHistoryMonths: 1,
         googleDriveSync: true,
-        googleCalendarSync: false,
+        googleCalendarSync: true,
         emailIn: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
@@ -120,7 +120,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInspectionHistoryMonths: 0,
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: false,
-        googleCalendarSync: false,
+        googleCalendarSync: true,
         emailIn: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
@@ -134,7 +134,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
         gmailInspectionHistoryMonths: 16,
         gmailInvoiceHistoryMonths: 0,
         googleDriveSync: true,
-        googleCalendarSync: false,
+        googleCalendarSync: true,
         emailIn: false,
         automaticEmailReminders: true,
         automaticMonthlyReports: true,
@@ -161,7 +161,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
 };
 
 export const PLAN_GATE_MESSAGES = {
-    calendar: "סנכרון Google Calendar זמין במסלול עסקי בלבד.",
+    calendar: "סנכרון Google Calendar אינו זמין לאחר סיום תקופת הניסיון. בחרו מסלול כדי להפעיל אותו.",
     automaticEmailReminders: "תזכורות אימייל אוטומטיות זמינות במסלולים בסיסי ועסקי בלבד.",
     automaticMonthlyReports: "דוחות חודשיים אוטומטיים זמינים במסלולים בסיסי ועסקי בלבד.",
     excelExport: "ייצוא לאקסל זמין במסלולים בסיסי ועסקי בלבד.",

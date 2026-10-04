@@ -38,8 +38,8 @@ let base: string;
 const post = (path: string, body: unknown) =>
   fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-function seedUser(plan: string) {
-  memory.set("users", [{ _id: new ObjectId(USER_ID), plan, email: "owner@example.com", trial_ends_at: "2031-01-01" }]);
+function seedUser(plan: string, trialEndsAt = "2031-01-01") {
+  memory.set("users", [{ _id: new ObjectId(USER_ID), plan, email: "owner@example.com", trial_ends_at: trialEndsAt }]);
 }
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 
@@ -122,16 +122,15 @@ describe("Google Calendar push for these reminders", () => {
     expect(mocks.insertTask).not.toHaveBeenCalled();
   });
 
-  it("keeps a plain personal reminder off the calendar for a plan without calendar sync", async () => {
-    seedUser("basic");
-    await post("/api/reminders/personal", { title: "Plain", target_date: day(20) });
-    expect(mocks.insertTask).not.toHaveBeenCalled();
-  });
-
-  it("syncs a plain personal reminder for every plan behind CALENDAR_SYNC_ALL_PLANS", async () => {
-    process.env.CALENDAR_SYNC_ALL_PLANS = "true";
-    seedUser("digital");
+  it.each(["trial", "digital", "basic", "business"])("syncs a plain personal reminder on the %s plan", async (plan) => {
+    seedUser(plan);
     await post("/api/reminders/personal", { title: "Plain", target_date: day(20) });
     expect(mocks.insertTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a plain personal reminder off the calendar once the trial has lapsed", async () => {
+    seedUser("trial", "2020-01-01");
+    await post("/api/reminders/personal", { title: "Plain", target_date: day(20) });
+    expect(mocks.insertTask).not.toHaveBeenCalled();
   });
 });
