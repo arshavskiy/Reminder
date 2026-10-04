@@ -207,9 +207,14 @@ app.use("/api/equipment", (req, res, next) => {
 registerAuthRoutes(app);
 registerBillingRoutes(app);
 app.use("/api/gmail", (req, res, next) => {
-  const required = req.path.startsWith("/obligation")
-    ? ["pages.gmail", "pages.discovery"]
-    : ["pages.gmail"];
+  // Discovery is its own feature: its routes must not depend on pages.gmail. Connection
+  // status and the OAuth link are shared with the Gmail page, so either feature opens them.
+  const under = (base: string) => req.path === base || req.path.startsWith(`${base}/`);
+  const required = under("/obligation")
+    ? ["pages.discovery"]
+    : under("/status") || under("/auth-url")
+      ? ["pages.gmail", "pages.discovery"]
+      : ["pages.gmail"];
   return requireAnyFeature(required)(req, res, next);
 });
 // Invoices are a plan feature, not an admin one. This was requireMinRole("admin"),
