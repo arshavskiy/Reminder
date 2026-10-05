@@ -153,6 +153,8 @@
             "התראות בדפדפן על תזכורות שנשלחו ועל ממצאים חדשים",
             "סנכרון Google Calendar ופיד יומן (ICS) ל-Apple ול-Outlook",
             "יצוא חשבוניות לאקסל",
+            "דוח הוצאות חודשי באימייל",
+            "חיבור עד 2 חשבונות Gmail (שני בני הבית)",
             "ממשק בעברית, באנגלית וברוסית"
           ]
         },
@@ -170,6 +172,8 @@
             "Browser notifications for sent reminders and new findings",
             "Google Calendar sync and a calendar feed (ICS) for Apple and Outlook",
             "Excel export of invoices",
+            "Monthly expense summary by email",
+            "Connect up to 2 Gmail accounts (both household members)",
             "Hebrew, English and Russian interface"
           ]
         },
@@ -187,6 +191,8 @@
             "Уведомления в браузере об отправленных напоминаниях и новых находках",
             "Синхронизация с Google Календарём и календарь (ICS) для Apple и Outlook",
             "Экспорт счетов в Excel",
+            "Ежемесячный отчёт о расходах по email",
+            "Подключение до 2 аккаунтов Gmail (оба члена семьи)",
             "Интерфейс на иврите, английском и русском"
           ]
         }

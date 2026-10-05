@@ -24,16 +24,16 @@ describe("digital plan", () => {
     expect(flags.fileStorage).toBe(true);
     expect(flags.gmailInvoiceHistoryMonths).toBe(12);
     expect(flags.gmailInspectionHistoryMonths).toBe(0);
-    expect(flags.maxEmailAccounts).toBe(1);
+    expect(flags.maxEmailAccounts).toBe(2);
     expect(planAllowsDocumentImport("digital")).toBe(true);
     expect(planAllowsFileStorage("digital")).toBe(true);
   });
 
-  it("keeps reminders and Excel export but drops the monthly report sender", () => {
+  it("keeps reminders, Excel export and monthly reports", () => {
     const flags = tierFeatureFlags("digital");
     expect(flags.automaticEmailReminders).toBe(true);
     expect(flags.excelExport).toBe(true);
-    expect(flags.automaticMonthlyReports).toBe(false);
+    expect(flags.automaticMonthlyReports).toBe(true);
     expect(flags.emailIn).toBe(true);
   });
 

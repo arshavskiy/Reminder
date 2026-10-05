@@ -1183,6 +1183,69 @@ paths:
                     items:
                       type: string
 
+  /api/invoices/upload:
+    post:
+      summary: Upload invoice files (plan-gated, no pages.documents feature required)
+      tags: [ Invoices ]
+      parameters:
+        - name: skipAi
+          in: query
+          schema:
+            type: boolean
+        - name: skipEntities
+          in: query
+          schema:
+            type: boolean
+        - name: skipReminders
+          in: query
+          schema:
+            type: boolean
+        - name: reprocessDuplicates
+          in: query
+          schema:
+            type: boolean
+        - name: skipCloudStorage
+          in: query
+          schema:
+            type: boolean
+        - name: liteImport
+          in: query
+          schema:
+            type: boolean
+        - name: templateId
+          in: query
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [ files ]
+      responses:
+        200:
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ids:
+                    type: array
+                    items:
+                      type: string
+                  duplicates:
+                    type: array
+                    items:
+                      type: string
+
   /api/user-settings:
     get:
       summary: Get user settings

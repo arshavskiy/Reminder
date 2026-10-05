@@ -71,10 +71,11 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     maxUsers: 2,
     maxEmailAccounts: 2,
   },
-  // Family tier: reminders, invoices and reminder discovery, nothing else. Gmail connects (one
-  // mailbox) for the discovery scan and 12 months of invoice and receipt history; imports share a
-  // small monthly pool (see documentImportQuota); files are kept so an invoice keeps its PDF.
-  // Everything outside those three areas is hidden by the page overlay in plans/planFeatures.ts.
+  // Family tier: reminders, invoices and reminder discovery, nothing else. Gmail connects (up to
+  // two mailboxes) for the discovery scan and 12 months of invoice and receipt history; imports
+  // share a small monthly pool (see documentImportQuota); files are kept so an invoice keeps its
+  // PDF; monthly expense report email is on. Everything outside those areas is hidden by the page
+  // overlay in plans/planFeatures.ts.
   digital: {
     gmailInspectionHistoryMonths: 0,
     gmailInvoiceHistoryMonths: 12,
@@ -83,12 +84,12 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
 
     emailIn: true,
     automaticEmailReminders: true,
-    automaticMonthlyReports: false,
+    automaticMonthlyReports: true,
     excelExport: true,
     fileStorage: true,
     documentImport: true,
     maxUsers: 2,
-    maxEmailAccounts: 1,
+    maxEmailAccounts: 2,
   },
   // Invoice backfill stays a business feature, so basic gets none.
   basic: {
