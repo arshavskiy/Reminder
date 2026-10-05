@@ -1553,22 +1553,46 @@ async function completeGmailImportJob(
       },
     } as any
   );
-  if (job.source === "auto" && current.imported > 0) await notifyAutoInvoiceImport(job.user_id, current.imported);
+  if (job.source === "auto" && current.imported > 0) {
+    const importedDocIds = current.results
+      .filter((r) => r.documentId && ObjectId.isValid(r.documentId))
+      .map((r) => r.documentId as string);
+    await notifyAutoInvoiceImport(job.user_id, current.imported, importedDocIds);
+  }
 }
 
 /** Tells the user what the daily scan imported. Quiet when it found nothing new. */
-async function notifyAutoInvoiceImport(userId: string, imported: number) {
+async function notifyAutoInvoiceImport(userId: string, imported: number, docIds: string[] = []) {
   try {
     const digest = invoiceImportDigest(imported);
+    let body = digest.body;
+    if (docIds.length > 0) {
+      const oids = docIds.map((id) => new ObjectId(id));
+      const invoices = await col("invoices")
+        .find({ document_id: { $in: [...oids, ...docIds] }, user_id: userId } as any, { projection: { supplier_name: 1, amount: 1, currency: 1 } } as any)
+        .toArray() as Array<{ supplier_name?: string; amount?: unknown; currency?: string }>;
+      const lines = invoices
+        .slice(0, 5)
+        .map((inv) => {
+          const name = inv.supplier_name?.trim();
+          const amt = typeof inv.amount === "number" ? inv.amount : null;
+          const cur = inv.currency ?? "";
+          if (name && amt !== null) return `${name} ${amt} ${cur}`.trim();
+          if (name) return name;
+          return null;
+        })
+        .filter(Boolean) as string[];
+      if (lines.length > 0) body = lines.join(" · ");
+    }
     await col("notifications").insertOne({
       user_id: userId,
       kind: "invoices_imported",
       title: digest.title,
-      body: digest.body,
+      body,
       created_at: new Date(),
       read_at: null,
     } as any);
-    await sendToUser(userId, { title: digest.title, body: digest.body, data: { url: "/invoices", kind: "invoices_imported" } });
+    await sendToUser(userId, { title: digest.title, body, data: { url: "/invoices", kind: "invoices_imported" } });
   } catch (err) {
     logger.warn("auto_invoice_import_notify_failed", { user_id: userId, error: err instanceof Error ? err.message : String(err) });
   }

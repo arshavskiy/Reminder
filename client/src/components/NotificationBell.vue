@@ -158,6 +158,7 @@ function onItemClick(item: NotificationItem) {
   if (!item.read_at) void markRead(item.id);
   if (item.kind === "discovery_new") router.push(href("/discover-reminders"));
   else if (item.kind === "billing_renewal_due") router.push({path: href("/profile"), query: {section: "subscription"}});
+  else if (item.kind === "invoices_imported") router.push(href("/invoices"));
   else if (item.reminder_id) router.push(href(`/reminders/${item.reminder_id}`));
   else router.push(href("/reminders"));
 }
