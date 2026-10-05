@@ -327,7 +327,7 @@ const allNav = computed<NavItem[]>(() => {
           key: "activity",
           query: {kind: "document"},
           minPlan: "expired" as const,
-          feature: FEATURES.pages.reminders,
+          feature: FEATURES.pages.documents,
         },
       ],
     },
