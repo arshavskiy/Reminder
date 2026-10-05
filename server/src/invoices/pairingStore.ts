@@ -1,7 +1,8 @@
 import { ObjectId } from "mongodb";
 import { col } from "../db/db";
 import { logger } from "../logger";
-import { chooseCounterpart, hasActivePair, toPairRow, type PairScore, type PairStatus } from "./pairing";
+import { sendToUser } from "../push/pushService";
+import { chooseCounterpart, hasActivePair, toPairRow, type PairRow, type PairScore, type PairStatus } from "./pairing";
 
 // Database side of invoice <-> receipt pairing. The matching rules are in pairing.ts.
 
@@ -29,7 +30,7 @@ export interface PairResult {
  * a clear match. Safe to call after every import: it does nothing for documents
  * that cannot pair, are already paired, or have no unambiguous candidate.
  */
-export async function pairInvoiceById(userId: string, id: string): Promise<PairResult> {
+export async function pairInvoiceById(userId: string, id: string, opts: { notify?: boolean } = {}): Promise<PairResult> {
   const raw = await loadRaw(userId, id);
   if (!raw) return { linked: false, reason: "not_found" };
   const target = toPairRow(raw);
@@ -51,6 +52,7 @@ export async function pairInvoiceById(userId: string, id: string): Promise<PairR
 
   await linkPair(userId, target.id, choice.match.id, "auto", choice.score);
   logger.info("invoice_receipt_paired", { user_id: userId, a: target.id, b: choice.match.id, score: choice.score.score, reasons: choice.score.reasons });
+  if (opts.notify !== false) void notifyReceiptMatched(userId, target, choice.match).catch(() => {});
   return { linked: true, with: choice.match.id, score: choice.score };
 }
 
@@ -103,6 +105,26 @@ export async function unlinkPair(userId: string, id: string): Promise<{ ok: bool
   return { ok: true, partner };
 }
 
+async function notifyReceiptMatched(userId: string, a: PairRow, b: PairRow): Promise<void> {
+  const receipt = a.role === "receipt" ? a : b;
+  const invoice = a.role === "invoice" ? a : b;
+  const supplier = receipt.supplier || invoice.supplier || "";
+  const amt = receipt.amount ?? invoice.amount;
+  const cur = receipt.currency || invoice.currency || "";
+  const amtStr = amt !== null ? ` ${amt} ${cur}`.trimEnd() : "";
+  const title = supplier ? `קבלה מ-${supplier} הותאמה לחשבונית` : "קבלה הותאמה לחשבונית";
+  const body = supplier ? `${supplier}${amtStr} — התשלום סומן כמושלם אוטומטית.` : `סכום${amtStr} — התשלום סומן כמושלם אוטומטית.`;
+  await col("notifications").insertOne({
+    user_id: userId,
+    kind: "receipt_matched",
+    title,
+    body,
+    created_at: new Date(),
+    read_at: null,
+  } as any);
+  await sendToUser(userId, { title, body, data: { url: "/invoices", kind: "receipt_matched" } });
+}
+
 /** Backfill: tries every receipt that has no pair yet. Returns how many were linked. */
 export async function scanPairs(userId: string): Promise<{ scanned: number; linked: number }> {
   const rows = await col<any>("invoices")
@@ -115,7 +137,7 @@ export async function scanPairs(userId: string): Promise<{ scanned: number; link
     const row = toPairRow(raw);
     if (row.role !== "receipt" || hasActivePair(row)) continue;
     scanned += 1;
-    const result = await pairInvoiceById(userId, row.id);
+    const result = await pairInvoiceById(userId, row.id, { notify: false });
     if (result.linked) linked += 1;
   }
   return { scanned, linked };
