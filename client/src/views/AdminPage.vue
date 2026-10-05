@@ -2785,6 +2785,7 @@ const JOB_NAME_HE: Record<string, string> = {
   syncCalendars: "Calendar Sync",
   checkDiscoveryScans: "Discovery Scans (daily/weekly)",
   checkInvoiceScans: "Invoice Scans (daily Gmail import)",
+  checkSpendingAlerts: "Spending Alerts (monthly threshold check)",
 };
 
 // ── Background processes & temp files ───────────────────────────────────────

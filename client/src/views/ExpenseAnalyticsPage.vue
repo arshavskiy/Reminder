@@ -23,6 +23,18 @@
             {{ l.expensesMsg.export }}
           </button>
         </n-dropdown>
+        <n-tooltip>
+          <template #trigger>
+            <button
+              class="rbtn rbtn--ghost rbtn--icon"
+              type="button"
+              @click="showAlertsModal = true"
+            >
+              <n-icon :component="NotificationsOutline" :size="16" class="btn-icon" />
+            </button>
+          </template>
+          {{ l.expensesMsg.spendingAlerts }}
+        </n-tooltip>
         <button
           :disabled="loading"
           class="rbtn rbtn--ghost"
@@ -34,6 +46,11 @@
         </button>
       </template>
     </PageHeader>
+
+    <SpendingAlertsModal
+      v-model:show="showAlertsModal"
+      :categories="availableCategories"
+    />
 
     <InvoiceSectionNav />
 
@@ -246,6 +263,7 @@ import {
   DownloadOutline,
   HomeOutline,
   LayersOutline,
+  NotificationsOutline,
   PeopleOutline,
   PieChartOutline,
   RefreshOutline,
@@ -258,6 +276,7 @@ import { BarChart, LineChart, PieChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import PageHeader from "../components/PageHeader.vue";
+import SpendingAlertsModal from "../components/SpendingAlertsModal.vue";
 import {useI18n} from "../composables/useI18n.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
@@ -297,7 +316,9 @@ const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
 const exporting = ref(false);
+const showAlertsModal = ref(false);
 const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
+const availableCategories = computed(() => categories.value.length ? categories.value : ["general"]);
 const themeTick = ref(0);
 const chartType = ref<ExpenseChartType>("stacked");
 // Date range, proof filter and chart type are remembered too; category and

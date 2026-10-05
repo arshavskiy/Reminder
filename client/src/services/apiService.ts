@@ -302,6 +302,12 @@ export interface InvoiceExpenseMonthlyResponse {
   series: InvoiceExpenseMonthlySeries[];
 }
 
+export interface SpendingAlert {
+  category: string;
+  threshold: number;
+  currency: string;
+}
+
 export interface ProfileSubscriptionQuota {
   category: "invoices" | "contracts" | "documents" | "manualDocuments" | "emailDocuments" | "reminders";
   scope: "monthly" | "lifetime" | "unlimited";
@@ -1188,6 +1194,8 @@ export const api = {
     getSubscription: () => get<ProfileSubscription>("/profile/subscription"),
     deleteAccount: (body: { confirm: "DELETE_ACCOUNT"; email?: string }) =>
       post<{ ok: boolean }>("/profile/account/delete", body),
+    getSpendingAlerts: () => get<{ alerts: SpendingAlert[] }>("/user/spending-alerts"),
+    saveSpendingAlerts: (alerts: SpendingAlert[]) => put<{ alerts: SpendingAlert[] }>("/user/spending-alerts", { alerts }),
   },
 
   userSettings: {

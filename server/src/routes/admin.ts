@@ -3220,7 +3220,7 @@ export function registerAdminRoutes(app: express.Application) {
 const SCHEDULER_HEALTH_NAMES: Partial<Record<ProcessId, string[]>> = {
   scheduler: [
     "tick", "checkReminders", "checkMonthlyReports", "checkBillingReminders", "checkEscalations",
-    "syncCalendars", "checkDiscoveryScans", "checkInvoiceScans",
+    "syncCalendars", "checkDiscoveryScans", "checkInvoiceScans", "checkSpendingAlerts",
   ],
   unsubscribe_scan: ["unsubscribeScan"],
   email_campaigns: ["emailCampaignSend"],

@@ -6919,6 +6919,49 @@ paths:
                 additionalProperties: true
         "401":
           description: Not signed in
+  /api/user/spending-alerts:
+    get:
+      summary: Get user spending alert configs
+      tags:
+        - Profile
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+    put:
+      summary: Replace user spending alert configs
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alerts:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Bad request
+        "401":
+          description: Not signed in
   /api/profile/notifications:
     get:
       summary: Profile notification feed

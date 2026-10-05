@@ -512,6 +512,33 @@ export function registerProfileRoutes(app: express.Application) {
     res.json({ ok: true });
   });
 
+  // ── Spending alerts ───────────────────────────────────────────────────────
+  app.get("/api/user/spending-alerts", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    const user = await col("users").findOne({ _id: new ObjectId(ctx.userId) as any }) as any;
+    res.json({ alerts: Array.isArray(user?.spending_alerts) ? user.spending_alerts : [] });
+  });
+
+  app.put("/api/user/spending-alerts", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    const raw = req.body?.alerts;
+    if (!Array.isArray(raw)) { res.status(400).json({ error: "alerts must be array" }); return; }
+    const alerts = raw
+      .filter((a: any) => typeof a?.category === "string" && a.category.trim() && typeof a?.threshold === "number" && a.threshold > 0)
+      .map((a: any) => ({
+        category: String(a.category).trim(),
+        threshold: Number(a.threshold),
+        currency: typeof a.currency === "string" && a.currency.trim() ? String(a.currency).trim().toUpperCase() : "ILS",
+      }));
+    await col("users").updateOne(
+      { _id: new ObjectId(ctx.userId) as any },
+      { $set: { spending_alerts: alerts, updated_at: new Date().toISOString() } },
+    );
+    res.json({ alerts });
+  });
+
   // ── Notifications ─────────────────────────────────────────────────────────
   app.get("/api/profile/notifications", async (req, res) => {
     const ctx = await auth(req, res);

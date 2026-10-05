@@ -89,6 +89,7 @@ export function startScheduler() {
     await runWithHealth("syncCalendars", syncAllCalendars);
     await runWithHealth("checkDiscoveryScans", checkDiscoveryScans);
     await runWithHealth("checkInvoiceScans", checkInvoiceScans);
+    await runWithHealth("checkSpendingAlerts", checkSpendingAlerts);
     await col("scheduler_health").updateOne(
       { name: "tick" },
       { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
@@ -1247,5 +1248,74 @@ async function syncContractRemindersToCalendar(userId: string | undefined, contr
     }
   } catch (e) {
     logger.warn("calendar_contract_sync_failed", { user_id: userId, contract_id: contractId, error: String(e) });
+  }
+}
+
+async function checkSpendingAlerts() {
+  const now = new Date();
+  // Run on the 1st–3rd of each month only (scheduler ticks hourly so this fires several times — dedup by month key)
+  if (now.getDate() > 3) return;
+
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // Prior month's range
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonthKey = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
+  const fromDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 1);
+  const toDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0, 23, 59, 59);
+
+  const users = await col("users").find({ spending_alerts: { $exists: true, $not: { $size: 0 } } } as any).toArray() as any[];
+  for (const user of users) {
+    const userId = String(user._id);
+    const alerts: Array<{ category: string; threshold: number; currency: string }> = Array.isArray(user.spending_alerts) ? user.spending_alerts : [];
+    if (!alerts.length) continue;
+
+    // Dedup: skip if already notified this month
+    const alreadySent = await col("notifications").findOne({
+      user_id: userId,
+      kind: "spending_alert",
+      spending_alert_month: prevMonthKey,
+    } as any);
+    if (alreadySent) continue;
+
+    // Aggregate last month's expenses by category
+    const invoices = await col("invoices").find({
+      user_id: userId,
+      issue_date: { $gte: fromDate.toISOString().slice(0, 10), $lte: toDate.toISOString().slice(0, 10) },
+    } as any, { projection: { provider_category: 1, amount: 1, cash_flow: 1 } } as any).toArray() as any[];
+
+    const categoryTotals = new Map<string, number>();
+    for (const inv of invoices) {
+      if (inv.cash_flow === "income") continue;
+      if (typeof inv.amount !== "number" || !Number.isFinite(inv.amount)) continue;
+      const cat = inv.provider_category || "general";
+      categoryTotals.set(cat, (categoryTotals.get(cat) ?? 0) + inv.amount);
+    }
+
+    const triggered: Array<{ category: string; actual: number; threshold: number }> = [];
+    for (const alert of alerts) {
+      const actual = categoryTotals.get(alert.category) ?? 0;
+      if (actual >= alert.threshold) {
+        triggered.push({ category: alert.category, actual, threshold: alert.threshold });
+      }
+    }
+    if (!triggered.length) continue;
+
+    for (const t of triggered) {
+      const categoryHe = t.category; // raw key — client localizes
+      const title = `חריגה בהוצאות: ${categoryHe}`;
+      const body = `הוצאות ${prevMonthKey} בקטגוריה "${categoryHe}": ₪${Math.round(t.actual)} (סף: ₪${t.threshold})`;
+      await col("notifications").insertOne({
+        user_id: userId,
+        kind: "spending_alert",
+        title,
+        body,
+        spending_alert_month: prevMonthKey,
+        spending_alert_category: t.category,
+        created_at: new Date(),
+        read_at: null,
+      } as any);
+      await sendToUser(userId, { title, body, data: { url: "/invoices/expenses", kind: "spending_alert" } }).catch(() => {});
+      logger.info("spending_alert_fired", { user_id: userId, month: prevMonthKey, category: t.category, actual: t.actual, threshold: t.threshold });
+    }
   }
 }
