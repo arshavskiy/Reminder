@@ -24,8 +24,8 @@ describe("family tier page overlay", () => {
   it("keeps only reminder and calendar widgets on the dashboard", () => {
     const flags = applyFamilyFeatureOverlay(everythingOn, KEYS);
     const onWidgets = KEYS.filter((key) => key.startsWith("dashboard.") && flags[key]).sort();
-    expect(onWidgets).toEqual(["dashboard.calendar", "dashboard.calendar_filters", "dashboard.modules", "dashboard.stat_pending_reminders", "dashboard.upcoming_reminders"]);
-    for (const hidden of ["dashboard.stat_documents", "dashboard.stat_clients", "dashboard.stat_inspections", "dashboard.stat_expiring_soon", "dashboard.drop_strip", "dashboard.recent_documents"]) {
+    expect(onWidgets).toEqual(["dashboard.calendar", "dashboard.stat_pending_reminders", "dashboard.upcoming_reminders"]);
+    for (const hidden of ["dashboard.stat_documents", "dashboard.stat_clients", "dashboard.stat_inspections", "dashboard.stat_expiring_soon", "dashboard.drop_strip", "dashboard.recent_documents", "dashboard.calendar_filters", "dashboard.modules"]) {
       expect(flags[hidden], hidden).toBe(false);
     }
   });
@@ -41,11 +41,6 @@ describe("family tier page overlay", () => {
     expect(flags["pages.reports"]).toBe(false);
   });
 
-  it("honours a stored off switch for a dashboard widget inside the tier", () => {
-    const flags = applyFamilyFeatureOverlay({ ...everythingOn, "dashboard.calendar_filters": false }, KEYS);
-    expect(flags["dashboard.calendar_filters"]).toBe(false);
-  });
-
   it("leaves every other plan untouched", () => {
     expect(applyPlanFeatureOverlay({ plan: "basic" }, everythingOn, KEYS)).toBe(everythingOn);
     expect(applyPlanFeatureOverlay({ plan: "business" }, null, KEYS)).toBeNull();
@@ -53,7 +48,7 @@ describe("family tier page overlay", () => {
 
   it("allows exactly the documented set", () => {
     expect([...FAMILY_ALLOWED_FEATURES].sort()).toEqual([
-      "dashboard.calendar", "dashboard.calendar_filters", "dashboard.modules", "dashboard.stat_pending_reminders", "dashboard.upcoming_reminders",
+      "dashboard.calendar", "dashboard.stat_pending_reminders", "dashboard.upcoming_reminders",
       "pages.dashboard", "pages.discovery", "pages.invoices", "pages.profile", "pages.reminders",
     ]);
   });

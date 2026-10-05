@@ -9,7 +9,7 @@
       :dir="dir"
     >
       <h2 id="onboarding-title" class="onboarding-sr-title">{{ ob.welcomeTitle }}</h2>
-      <n-steps :current="currentStep" size="small" class="onboarding-steps">
+      <n-steps v-if="!isDigital" :current="currentStep" size="small" class="onboarding-steps">
         <n-step :title="ob.stepWelcome" />
         <n-step :title="ob.stepDetails" />
         <n-step :title="ob.stepEngineer" />
@@ -204,11 +204,11 @@
           {{ l.common.back }}
         </n-button>
         <div class="onboarding-footer__spacer" />
-        <n-button v-if="currentStep < 5" quaternary size="small" class="skip-btn" @click="skipAll">
+        <n-button v-if="currentStep < totalSteps" quaternary size="small" class="skip-btn" @click="skipAll">
           {{ ob.skip }}
         </n-button>
-        <n-button type="primary" :loading="saving" @click="currentStep < 5 ? currentStep++ : finish()">
-          {{ currentStep < 5 ? ob.next : ob.finish }}
+        <n-button type="primary" :loading="saving" @click="currentStep < totalSteps ? currentStep++ : finish()">
+          {{ currentStep < totalSteps ? ob.next : ob.finish }}
         </n-button>
       </div>
     </n-card>
@@ -237,6 +237,11 @@ const message = useMessage();
 const authStore = useAuthStore();
 const {l, t, dir, locale, uiLocale} = useI18n();
 const SERVER = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+
+// Digital is a family/consumer plan — no profile fields to fill; go straight to finish.
+const isDigital = computed(() => resolveUserPlan(authStore.user) === "digital");
+// Total wizard steps depend on plan.
+const totalSteps = computed(() => isDigital.value ? 1 : 5);
 
 const pricingPlan = computed(() => {
   const resolved = authStore.user ? resolveUserPlan(authStore.user) : "trial";

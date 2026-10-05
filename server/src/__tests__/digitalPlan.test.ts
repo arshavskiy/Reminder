@@ -34,7 +34,7 @@ describe("digital plan", () => {
     expect(flags.automaticEmailReminders).toBe(true);
     expect(flags.excelExport).toBe(true);
     expect(flags.automaticMonthlyReports).toBe(false);
-    expect(flags.emailIn).toBe(false);
+    expect(flags.emailIn).toBe(true);
   });
 
   it("syncs Google Calendar but not Google Drive", () => {
@@ -43,9 +43,9 @@ describe("digital plan", () => {
     expect(flags.googleCalendarSync).toBe(true);
   });
 
-  it("meters imports in one small monthly pool and reminders not at all", () => {
+  it("allows unlimited imports; history cap (12 months) is enforced in Gmail layer not quota", () => {
     for (const category of ["documents", "contracts", "invoices", "manualDocuments", "emailDocuments"] as const) {
-      expect(documentImportLimit("digital", category)).toEqual({limit: 30, scope: "monthly"});
+      expect(documentImportLimit("digital", category)).toEqual({limit: null, scope: "unlimited"});
     }
     expect(reminderLimit("digital")).toEqual({limit: null, scope: "unlimited"});
   });

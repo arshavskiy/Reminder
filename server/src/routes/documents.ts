@@ -365,6 +365,109 @@ export function registerDocumentRoutes(app: express.Application) {
     }
   });
 
+  // POST /api/invoices/upload — same pipeline as /api/documents/upload but gated by
+  // plan (via the /api/invoices requirePlans middleware) instead of pages.documents
+  // feature flag, so Digital-tier users can upload invoice files without needing the
+  // documents page feature.
+  app.post("/api/invoices/upload", upload.array("files"), async (req, res) => {
+    let userId: string;
+    let userPlan: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+        userPlan = effectivePlanId(ctx.user);
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+
+    if (!planAllowsDocumentImport(userPlan)) {
+      res.status(403).json({ error: PLAN_GATE_MESSAGES.documentImport, code: "plan_no_document_import" });
+      return;
+    }
+
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        res.status(400).json({ error: "no files" });
+        return;
+      }
+
+      const skipAi       = req.query.skipAi       === "true";
+      const skipEntities = req.query.skipEntities === "true";
+      const skipReminders = req.query.skipReminders === "true";
+      const skipCloudStorage = req.query.skipCloudStorage === "true";
+      const reprocessDuplicates = req.query.reprocessDuplicates === "true";
+      const liteImport   = req.query.liteImport   === "true";
+        const templateId = req.query.templateId as string | undefined;
+        const template = templateId ? await loadTemplate(templateId).catch(() => null) : null;
+        const quotaCategory = quotaCategoryFromTemplate(template);
+        const pipelineOptions = {
+          skipAi:       liteImport || skipAi,
+          skipEntities: liteImport || skipEntities,
+          skipReminders,
+          skipCloudStorage: liteImport || skipCloudStorage,
+          liteImport,
+          templateId: templateId || undefined,
+          reprocessDuplicate: reprocessDuplicates,
+            quotaCategory,
+          ...(quotaCategory === "invoices" ? {storageKeyPrefix: "invoices/uploaded"} : {}),
+        };
+
+      const uploadDir = tempDir("uploads");
+
+      const ids: string[] = [];
+      const duplicates: string[] = [];
+      for (const [index, file] of files.entries()) {
+          try {
+              await assertDocumentImportQuota(userId, userPlan, 1, quotaCategory);
+          } catch (err) {
+              if (err instanceof DocumentImportQuotaError) {
+                  if (ids.length === 0 && duplicates.length === 0) {
+                      res.status(403).json(documentImportQuotaErrorPayload(err));
+                      return;
+                  }
+                  res.json({ids, duplicates, quotaReached: true, quota: documentImportQuotaErrorPayload(err)});
+                  return;
+              }
+              throw err;
+          }
+        const ext = extname(file.originalname) || "";
+        const destPath = join(uploadDir, `${Date.now()}${ext}`);
+        writeFileSync(destPath, file.buffer);
+        let displayName = file.originalname;
+        try {
+          displayName = Buffer.from(file.originalname, "latin1").toString("utf8");
+          if (displayName.includes("�")) displayName = file.originalname;
+        } catch { /* keep original */ }
+        const beforeCount = await col("documents").countDocuments(mainDocumentsFilter(userId));
+        let id: string;
+        try {
+          id = await importFile(destPath, undefined, userId, displayName, {
+            ...pipelineOptions,
+            queueProcessing: true,
+            processingJobContext: { source: "upload" },
+            startDelayMs: index * UPLOAD_START_STAGGER_MS,
+          });
+        } finally {
+          releaseTempFile(destPath);
+        }
+        const afterCount = await col("documents").countDocuments(mainDocumentsFilter(userId));
+        ids.push(String(id));
+        if (afterCount === beforeCount) duplicates.push(String(id));
+      }
+
+      res.json({ ids, duplicates });
+    } catch (err) {
+      if (err instanceof DocumentImportQuotaError) {
+        res.status(403).json(documentImportQuotaErrorPayload(err));
+        return;
+      }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   // POST /api/documents/upload — receives multipart file upload from browser
   app.post("/api/documents/upload", upload.array("files"), async (req, res) => {
     let userId: string;

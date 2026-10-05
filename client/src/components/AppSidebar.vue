@@ -411,8 +411,10 @@ const visibleNav = computed(() =>
   allNav.value
     .map((item) => {
       if (!item.children?.length) return isVisibleLeaf(item) ? item : null;
+      // Parent must itself pass the feature/plan check before we show it.
+      if (!isVisibleLeaf(item)) return null;
       const children = item.children.filter(isVisibleLeaf);
-      if (!children.length) return isVisibleLeaf(item) ? {...item, children: undefined} : null;
+      if (!children.length) return {...item, children: undefined};
       return {...item, children};
     })
     .filter(Boolean) as NavItem[],

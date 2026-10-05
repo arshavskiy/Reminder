@@ -919,6 +919,34 @@ export const api = {
       post<{ ok: true; recipients: string[]; count: number; period: { from: string; to: string } }>("/invoices/reports/six-months/send", {}),
     expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; proofFilter?: "all" | "paid" | "requested" | "income"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
       get<InvoiceExpenseMonthlyResponse>(`/invoices/expenses/monthly${qs(params)}`, force),
+    upload: async (
+      files: File[],
+      options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean; liteImport?: boolean },
+      templateId?: string | number
+    ) => {
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f);
+      const params = new URLSearchParams();
+      if (options?.liteImport) params.set("liteImport", "true");
+      if (options?.doAi === false) params.set("skipAi", "true");
+      if (options?.doEntities === false) params.set("skipEntities", "true");
+      if (options?.doReminders === false) params.set("skipReminders", "true");
+      if (options?.reprocessDuplicates === true) params.set("reprocessDuplicates", "true");
+      if (options?.skipCloudStorage === true) params.set("skipCloudStorage", "true");
+      if (templateId) params.set("templateId", String(templateId));
+      const p = params.toString();
+      const url = `${BASE}/invoices/upload${p ? "?" + p : ""}`;
+      const res = await fetch(url, { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as any;
+        const err = new Error(data.error ?? `Upload failed: ${res.status}`) as any;
+        err.serverMessage = data.message;
+        err.remaining = data.remaining;
+        err.limit = data.limit;
+        throw err;
+      }
+      return res.json() as Promise<{ ids: string[]; duplicates: string[] }>;
+    },
   },
 
   documents: {

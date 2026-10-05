@@ -15,8 +15,6 @@ export const FAMILY_ALLOWED_FEATURES: ReadonlySet<string> = new Set([
   "dashboard.stat_pending_reminders",
   "dashboard.calendar",
   "dashboard.upcoming_reminders",
-  "dashboard.calendar_filters",
-  "dashboard.modules",
 ]);
 
 /** Core to the tier, so on regardless of the seeded per-user default (discovery is off by default elsewhere). */

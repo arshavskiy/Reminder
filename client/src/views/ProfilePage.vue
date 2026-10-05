@@ -109,6 +109,7 @@
               </div>
             </div>
 
+            <template v-if="!isDigital">
             <div class="settings-group">
               <div class="settings-group__head">
                 <span class="settings-group__icon" aria-hidden="true">
@@ -340,6 +341,7 @@
                 </div>
               </div>
             </div>
+            </template>
           </div>
         </section>
 
@@ -1757,6 +1759,7 @@ const PLAN_TAG_TYPES: Record<PlanId, "success" | "info" | "default"> = {
   business: "success",
 };
 const currentPlanId = computed(() => resolveUserPlan(user.value));
+const isDigital = computed(() => currentPlanId.value === "digital");
 const exportAllowed = computed(() => featureFlagsForUser(user.value).excelExport);
 const currency = computed(() => moneySymbol(uiLocale.value));
 const billingMode = ref<string | null>(null);

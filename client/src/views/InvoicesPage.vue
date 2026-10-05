@@ -1,7 +1,7 @@
 <template>
   <div class="page2 invoices-page" :dir="dir">
     <PageHeader
-      :count="total"
+      :count="totalAll"
       :title="l.invoices.tabLabel"
       :subtitle="l.invoices.subtitle"
     >
@@ -140,6 +140,38 @@
     </PageHeader>
 
     <InvoiceSectionNav />
+
+    <div class="import-panel">
+      <div class="import-panel__actions">
+        <button
+          :class="{ 'rbtn--loading': importingFromGmail }"
+          :disabled="loading || importingFromGmail"
+          class="rbtn rbtn--primary"
+          type="button"
+          @click="handleGmailImportButton"
+        >
+          <GmailLogo :size="16" class="btn-icon" />
+          {{ gmailImportButtonLabel }}
+        </button>
+        <button
+          :class="{ 'rbtn--loading': uploadingInvoices }"
+          :disabled="loading || uploadingInvoices"
+          class="rbtn rbtn--ghost"
+          type="button"
+          @click="openInvoiceUploadPicker"
+        >
+          <n-icon :component="CloudUploadOutline" class="btn-icon" />
+          {{ l.common.upload }}
+        </button>
+      </div>
+      <label v-if="gmailInvoiceScanAllowed" class="import-panel__scan" :title="gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : undefined">
+        <n-switch :value="invoicesAutoScan" :loading="invoicesAutoScanSaving" :disabled="gmailConnected === false" @update:value="setInvoicesAutoScan" />
+        <span>
+          <strong>{{ l.invoicesMsg.dailyScan }}</strong>
+          <small>{{ gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : l.invoicesMsg.dailyScanHint }}</small>
+        </span>
+      </label>
+    </div>
 
     <div class="filterbar filterbar--compact">
       <ResponsiveFilterButton
@@ -333,13 +365,6 @@
         {{ importingFromGmail ? l.invoicesMsg.importing : l.invoicesMsg.importAll }}
       </button>
     </div>
-    <label v-if="gmailInvoiceScanAllowed" class="invoice-auto-scan" :title="gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : undefined">
-      <n-switch :value="invoicesAutoScan" :loading="invoicesAutoScanSaving" :disabled="gmailConnected === false" @update:value="setInvoicesAutoScan" />
-      <span>
-        <strong>{{ l.invoicesMsg.dailyScan }}</strong>
-        <small>{{ gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : l.invoicesMsg.dailyScanHint }}</small>
-      </span>
-    </label>
     <DriveExportJobStatus
       v-if="visibleDriveExportJob"
       :job="visibleDriveExportJob"
@@ -780,6 +805,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: "InvoicesPage" });
 import MobileMappedValue from "../components/MobileMappedValue.vue";
 import MobileFilterPanel from "../components/MobileFilterPanel.vue";
 import MobileActionButton from "../components/MobileActionButton.vue";
@@ -1180,7 +1206,7 @@ async function uploadInvoiceFiles(files: File[]) {
   try {
     const template = await findInvoiceTemplate();
     const templateId = template?.id ? String(template.id) : undefined;
-    const result = await api.documents.upload(
+    const result = await api.invoices.upload(
       files,
       { doAi: true, doEntities: true, doReminders: false, reprocessDuplicates: true },
       templateId,
@@ -2488,15 +2514,32 @@ function replaceRow(updated: ImportedInvoice) {
   border-spacing: 0;
 }
 
-.invoice-auto-scan {
+.import-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+.import-panel__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.import-panel__scan {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 0 12px;
   cursor: pointer;
 }
-.invoice-auto-scan span { display: grid; gap: 2px; }
-.invoice-auto-scan small { color: var(--text-secondary); }
+.import-panel__scan span { display: grid; gap: 2px; }
+.import-panel__scan small { color: var(--text-secondary); font-size: 12px; }
 
 .invoice-pair-tag {
   flex: none;

@@ -107,7 +107,11 @@
               <main :class="['content', { 'content--fullpage': isMinimalShell }]">
                 <div :class="isMinimalShell ? '' : 'page'">
                   <BillingReminder v-if="authStore.user && !hideAppChrome && !route.path.endsWith('/profile')"/>
-                <router-view />
+                <router-view v-slot="{ Component }">
+                  <keep-alive :include="['InvoicesPage']">
+                    <component :is="Component" />
+                  </keep-alive>
+                </router-view>
                 </div>
               </main>
             </div>

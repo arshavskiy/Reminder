@@ -67,9 +67,10 @@ export function documentImportLimit(
 ): { limit: number | null; scope: DocumentImportQuota["scope"] } {
   const plan = normalizePlan(role);
   if (plan === "business") return { limit: null, scope: "unlimited" };
-  // Digital is the family tier: one small shared monthly pool for invoice and receipt imports.
+  // Digital is the family tier: unlimited monthly imports; history is capped at
+  // 12 months back in Gmail (enforced in the Gmail import layer, not here).
   if (plan === "digital") {
-    return { limit: readPositiveIntEnv("DIGITAL_MONTHLY_DOCUMENT_LIMIT", 30), scope: "monthly" };
+    return { limit: null, scope: "unlimited" };
   }
   // Invoices get their own smaller lifetime allowance on trial. They arrive in
   // bulk from a Gmail sync, so without a separate cap a single import would

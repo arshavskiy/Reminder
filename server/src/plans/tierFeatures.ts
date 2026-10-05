@@ -81,7 +81,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
     googleDriveSync: false,
     googleCalendarSync: true,
 
-    emailIn: false,
+    emailIn: true,
     automaticEmailReminders: true,
     automaticMonthlyReports: false,
     excelExport: true,

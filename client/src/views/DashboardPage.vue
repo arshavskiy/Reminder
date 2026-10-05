@@ -394,7 +394,9 @@ const route = useRoute();
 const message = useMessage();
 const {openOnboarding} = useOnboarding();
 const needsOnboarding = computed(() => {
-  return Boolean(authStore.user && !(authStore.user as any).onboarding_completed);
+  if (!authStore.user) return false;
+  if (resolveUserPlan(authStore.user) === "digital") return false;
+  return !(authStore.user as any).onboarding_completed;
 });
 
 // Files shared to the installed PWA arrive here through /share-target (see sw.ts).
