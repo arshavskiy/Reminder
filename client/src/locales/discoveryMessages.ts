@@ -1,6 +1,6 @@
 export const discoveryMessages = {
   en: {
-    title: "Discover reminders", subtitle: "Find deadlines in your email and turn them into reminders you can review and manage.",
+    title: "Discover reminders", subtitle: "Find warranties, expiry dates, renewals and payment deadlines in your email and turn them into reminders.",
     myReminders: "My reminders", emailScan: "Find what needs your attention", connected: "Email connected",
     connectHint: "Connect your email to find warranties, renewals, payments, and due tasks.", connect: "Connect email",
     languages: "Email languages", history: "Search history", months: "months", scan: "Scan email",
@@ -22,7 +22,7 @@ export const discoveryMessages = {
     dueToday: "Due today", dueTomorrow: "Due tomorrow", inDays: "In {n} days", daysAgo: "{n} days ago", dayAgo: "1 day ago",
   },
   ru: {
-    title: "Поиск напоминаний", subtitle: "Находите сроки в вашей почте и превращайте их в напоминания, которые можно проверить и вести.",
+    title: "Поиск напоминаний", subtitle: "Находите гарантии, даты истечения, продления и платежи в почте и превращайте их в напоминания.",
     myReminders: "Мои напоминания", emailScan: "Найти то, что требует внимания", connected: "Почта подключена",
     connectHint: "Подключите почту, чтобы находить гарантии, продления, платежи и срочные задачи.", connect: "Подключить почту",
     languages: "Языки писем", history: "Глубина поиска", months: "мес.", scan: "Сканировать почту",
@@ -44,7 +44,7 @@ export const discoveryMessages = {
     dueToday: "Сегодня", dueTomorrow: "Завтра", inDays: "Через {n} дн.", daysAgo: "{n} дн. назад", dayAgo: "1 день назад",
   },
   he: {
-    title: "גילוי תזכורות", subtitle: "מצאו מועדים חשובים בדואר והפכו אותם לתזכורות שאפשר לבדוק ולנהל.",
+    title: "גילוי תזכורות", subtitle: "מצאו אחריות, תוקפים, חידושים ומועדי תשלום בדואר שלכם והפכו אותם לתזכורות.",
     myReminders: "התזכורות שלי", emailScan: "מה דורש את תשומת הלב שלכם?", connected: "הדואר מחובר",
     connectHint: "חברו את הדואר כדי למצוא אחריות, חידושים, תשלומים ומשימות דחופות.", connect: "חיבור דואר",
     languages: "שפות הדואר", history: "טווח חיפוש", months: "חודשים", scan: "סריקת דואר",

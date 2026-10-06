@@ -83,6 +83,21 @@
       </label>
     </div>
 
+    <div
+      v-if="isDigitalPlan && !warrantyNudgeDismissed"
+      class="warranty-nudge"
+      role="alert"
+    >
+      <n-icon :component="ShieldCheckmarkOutline" :size="18" class="warranty-nudge__icon" />
+      <span>{{ l.invoicesMsg.warrantyNudge }}</span>
+      <router-link :to="href('/discover-reminders')" class="rbtn rbtn--ghost rbtn--xs warranty-nudge__cta">
+        {{ l.invoicesMsg.warrantyNudgeCta }}
+      </router-link>
+      <button class="btn btn--ghost btn--xs icon-btn warranty-nudge__close" type="button" @click="dismissWarrantyNudge">
+        <n-icon :component="CloseOutline" :size="14" />
+      </button>
+    </div>
+
     <GmailImportJobStatus
       v-if="visibleGmailImportJob"
       :job="visibleGmailImportJob"
@@ -740,6 +755,7 @@ import {
   CreateOutline,
   DocumentTextOutline,
   DownloadOutline,
+  CloseOutline,
   EllipsisVerticalOutline,
   EyeOutline,
   GridOutline,
@@ -748,6 +764,7 @@ import {
   NotificationsSharp,
   PricetagOutline,
   RefreshOutline,
+  ShieldCheckmarkOutline,
   SwapVerticalOutline,
   TrashOutline,
 } from "@vicons/ionicons5";
@@ -782,6 +799,9 @@ const authStore = useAuthStore();
 const userSettingsStore = useUserSettingsStore();
 const driveAllowed = computed(() => planAllowsGoogleDrive(resolveUserPlan(authStore.user)));
 const excelAllowed = computed(() => planAllowsExcelExport(resolveUserPlan(authStore.user)));
+const isDigitalPlan = computed(() => resolveUserPlan(authStore.user) === "digital");
+const warrantyNudgeDismissed = ref((() => { try { return localStorage.getItem("invoices:warrantyNudgeDismissed") === "1"; } catch { return false; } })());
+function dismissWarrantyNudge() { warrantyNudgeDismissed.value = true; try { localStorage.setItem("invoices:warrantyNudgeDismissed", "1"); } catch {} }
 const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const excelExportLockedMessage = PLAN_GATE_MESSAGES.excelExport;
 
@@ -2535,6 +2555,22 @@ function replaceRow(updated: ImportedInvoice) {
 }
 .import-panel__scan span { display: grid; gap: 2px; }
 .import-panel__scan small { color: var(--text-secondary); font-size: 12px; }
+
+.warranty-nudge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-color) 30%, transparent);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.warranty-nudge__icon { color: var(--brand-color); flex-shrink: 0; }
+.warranty-nudge span { flex: 1; }
+.warranty-nudge__cta { flex-shrink: 0; }
+.warranty-nudge__close { flex-shrink: 0; margin-inline-start: 2px; }
 
 .invoice-pair-tag {
   flex: none;
