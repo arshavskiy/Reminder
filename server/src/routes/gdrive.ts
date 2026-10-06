@@ -309,7 +309,7 @@ export function registerGdriveRoutes(app: express.Express) {
         if (!planAllowsGoogleDrive(user?.plan ?? ctx.user.plan ?? ctx.user.role)) {
             res.status(403).json({
                 error: "drive_plan_required",
-                message: "סנכרון Google Drive זמין במסלולי סטארטר ופרו בלבד",
+                message: "סנכרון Google Drive זמין במסלולי בסיסי ועסקי בלבד",
             });
             return;
         }
@@ -362,7 +362,7 @@ export function registerGdriveRoutes(app: express.Express) {
         if (!planAllowsGoogleDrive(user?.plan ?? ctx.user.plan ?? ctx.user.role)) {
             res.status(403).json({
                 error: "drive_plan_required",
-                message: "ייצוא ל-Google Drive זמין במסלולי סטארטר ופרו בלבד",
+                message: "ייצוא ל-Google Drive זמין במסלולי בסיסי ועסקי בלבד",
             });
             return;
         }
@@ -492,7 +492,7 @@ export function registerGdriveRoutes(app: express.Express) {
         if (!planAllowsGoogleDrive(userForPlan?.plan ?? ctx.user.plan ?? ctx.user.role)) {
             res.status(403).json({
                 error: "drive_plan_required",
-                message: "סנכרון Google Drive זמין במסלולי סטארטר ופרו בלבד"
+                message: "סנכרון Google Drive זמין במסלולי בסיסי ועסקי בלבד"
             });
             return;
         }

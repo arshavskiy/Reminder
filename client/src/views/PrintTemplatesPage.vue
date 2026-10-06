@@ -1170,7 +1170,7 @@ function composeCellStyle(r:number,c:number){
 async function printPdf() {
   if(!composing.value?._id) return;
   if(!exportAllowed.value) {
-    message.warning("ייצוא PDF זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("ייצוא PDF זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   if(!validateComposeBeforeAction("להדפיס PDF")) return;
@@ -1187,7 +1187,7 @@ async function printPdf() {
 async function savePdf() {
   if(!composing.value?._id) return;
   if(!exportAllowed.value) {
-    message.warning("ייצוא PDF זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("ייצוא PDF זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   if(!validateComposeBeforeAction("לשמור PDF")) return;

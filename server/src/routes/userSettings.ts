@@ -221,7 +221,7 @@ export function registerUserSettingsRoutes(app: express.Application) {
         let planUser: any = null;
         try { planUser = await col("users").findOne({ _id: new ObjectId(auth.userId) }); } catch { /* treated as no plan */ }
         if (!planAllowsDocumentImport(effectivePlanId(planUser)) || !userAllowsGmailInvoiceImport(planUser)) {
-          res.status(403).json({ error: "gmail_invoice_plan_required", message: "סריקה יומית של חשבוניות מ-Gmail זמינה במסלול פרו בלבד" });
+          res.status(403).json({ error: "gmail_invoice_plan_required", message: "סריקה יומית של חשבוניות מ-Gmail זמינה במסלול עסקי בלבד" });
           return;
         }
       }

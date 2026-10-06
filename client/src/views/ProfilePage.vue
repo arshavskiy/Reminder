@@ -361,7 +361,7 @@
                   </n-button>
                 </span>
               </template>
-              ייצוא זמין במסלולי סטארטר ופרו בלבד.
+              ייצוא זמין במסלולי בסיסי ועסקי בלבד.
             </n-tooltip>
             <n-button v-else size="small" @click="exportStatsCsv">
               <template #icon>
@@ -2026,7 +2026,7 @@ const pendingPct = computed(() =>
 
 function exportStatsCsv() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולי סטארטר ופרו בלבד.");
+    message.warning("ייצוא זמין במסלולי בסיסי ועסקי בלבד.");
     return;
   }
   const rows = [
@@ -2474,7 +2474,7 @@ async function disconnectGmailFromProfile() {
 
 async function enableDriveSync() {
   if (!driveAllowed.value) {
-    message.warning("סנכרון Google Drive זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("סנכרון Google Drive זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   driveToggling.value = true;
@@ -2484,7 +2484,7 @@ async function enableDriveSync() {
     await loadDriveStatus();
   } catch (err: any) {
     if (err?.message?.includes("drive_plan_required")) {
-      message.warning("סנכרון Google Drive זמין במסלולי סטארטר ופרו בלבד");
+      message.warning("סנכרון Google Drive זמין במסלולי בסיסי ועסקי בלבד");
     } else if (err?.message?.includes("no_google_token")) {
       message.warning("חבר את חשבון Google כדי להפעיל סנכרון Drive");
     } else if (err?.message?.includes("drive_scope_missing")) {
@@ -2778,7 +2778,7 @@ function buildProfileHtml(): string {
 
 function exportPdf() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולי סטארטר ופרו בלבד.");
+    message.warning("ייצוא זמין במסלולי בסיסי ועסקי בלבד.");
     return;
   }
   const win = window.open("", "_blank");
@@ -2793,7 +2793,7 @@ function exportPdf() {
 
 function exportWord() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולי סטארטר ופרו בלבד.");
+    message.warning("ייצוא זמין במסלולי בסיסי ועסקי בלבד.");
     return;
   }
   const html = buildProfileHtml();
@@ -2870,7 +2870,7 @@ function showGoogleConnectionErrorFromRoute() {
   } else if (error === "calendar_identity_check_failed") {
     message.error("לא הצלחנו לאמת את חשבון Google שנבחר ליומן. נסה להתחבר שוב.");
   } else if (error === "calendar_plan_required") {
-    message.error("סנכרון Google Calendar זמין במסלול פרו בלבד.");
+    message.error("סנכרון Google Calendar זמין במסלולי בסיסי ועסקי בלבד.");
   }
 }
 </script>
