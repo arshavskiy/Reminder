@@ -51,86 +51,6 @@
           <GmailLogo :size="16" class="btn-icon" />
           <span class="gmail-import-btn__label">{{ gmailImportButtonLabel }}</span>
         </button>
-        <MobileActionButton
-          :class="{ 'rbtn--loading': uploadingInvoices }"
-          :disabled="loading || uploadingInvoices"
-          class="rbtn rbtn--ghost"
-          type="button"
-          @click="openInvoiceUploadPicker"
-          :label="l.common.upload">
-          <template #icon>
-            <n-icon :component="CloudUploadOutline" class="btn-icon"/>
-          </template>
-
-          {{ l.common.upload }}
-        </MobileActionButton>
-        <MobileActionButton
-          :disabled="loading"
-          class="rbtn rbtn--ghost"
-          type="button"
-          @click="load(true)"
-          :label="l.common.refresh">
-          <template #icon>
-            <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon"/>
-          </template>
-
-          {{ l.common.refresh }}
-        </MobileActionButton>
-        <n-tooltip placement="top">
-          <template #trigger>
-            <span>
-              <button
-                :class="{ 'rbtn--loading': exporting }"
-                :disabled="!exportAllowed || !excelAllowed || loading || total === 0 || exporting"
-                class="rbtn rbtn--ghost hero-action"
-                type="button"
-                @click="exportInvoicesToExcel"
-              >
-                <n-icon :component="DownloadOutline" class="btn-icon" />
-                <span class="hero-action__label">{{ l.common.exportExcel }}</span>
-              </button>
-            </span>
-          </template>
-          {{ excelAllowed ? l.invoices.excelTooltip : excelExportLockedMessage }}
-        </n-tooltip>
-        <n-tooltip placement="top">
-          <template #trigger>
-            <span>
-              <button
-                :class="{ 'rbtn--loading': sendingSixMonthReport }"
-                :disabled="!exportAllowed || !excelAllowed || loading || sendingSixMonthReport"
-                class="rbtn rbtn--ghost hero-action"
-                type="button"
-                @click="sendSixMonthInvoiceReport"
-              >
-                <n-icon :component="MailOutline" class="btn-icon" />
-                <span class="hero-action__label">{{ l.invoices.sixMonth }}</span>
-              </button>
-            </span>
-          </template>
-          {{ excelAllowed ? l.invoices.sixMonthTooltip : excelExportLockedMessage }}
-        </n-tooltip>
-        <MobileActionButton
-            :class="{ 'rbtn--loading': exportingToDrive }"
-            :disabled="!driveAllowed || exportingToDrive"
-            class="rbtn rbtn--ghost"
-            type="button"
-            @click="handleDriveExport"
-            :label="l.documents.driveExport">
-          <template #icon>
-            <GoogleDriveLogo :size="16"/>
-          </template>
-
-          {{ l.documents.driveExport }}
-        </MobileActionButton>
-        <MobileActionButton :disabled="!exportAllowed" :label="l.documents.monthlyReport" class="rbtn rbtn--ghost" type="button"
-                            @click="openMonthlyReport">
-          <template #icon>
-            <n-icon :component="DocumentTextOutline" class="btn-icon"/>
-          </template>
-
-          {{ l.documents.monthlyReport }}
-        </MobileActionButton>
         <n-tooltip placement="top">
           <template #trigger>
             <button class="rbtn rbtn--ghost rbtn--icon" type="button" @click="showAlertsModal = true">
@@ -139,6 +59,11 @@
           </template>
           {{ l.expensesMsg.spendingAlerts }}
         </n-tooltip>
+        <n-dropdown :options="heroMoreOptions" trigger="click" placement="bottom-end" @select="handleHeroMoreSelect">
+          <button class="rbtn rbtn--ghost rbtn--icon" type="button">
+            <n-icon :component="EllipsisVerticalOutline" :size="18" class="btn-icon" />
+          </button>
+        </n-dropdown>
       </template>
     </PageHeader>
 
@@ -534,12 +459,11 @@
                     {{ l.invoicesMsg.noFile }}
                   </span>
                   <span class="invoice-supplier-cell__meta">
-                    <span>{{ formatDate(row.issue_date) }}</span>
-                    <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
+                    <span class="invoice-supplier-cell__client invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
                   </span>
                 </span>
               </td>
-              <td class="invoice-col invoice-col--date">{{ formatDate(row.issue_date) }}</td>
+              <td class="invoice-col invoice-col--date">{{ isMobile ? formatDateShort(row.issue_date) : formatDate(row.issue_date) }}</td>
               <td class="invoice-col invoice-col--client">
                 <span class="invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
               </td>
@@ -587,7 +511,7 @@
                                      class="invoice-type-cell__flow"/>
                 </span>
               </td>
-              <td class="cell-amount invoice-col invoice-col--amount" dir="ltr">
+              <td class="cell-amount invoice-col invoice-col--amount">
                 {{ row.currency !== 'ILS' && row.amount_ils !== null ? (isMobile ? formatIlsAmountPlain(row.amount_ils) : formatIlsAmount(row.amount_ils)) : row.amount_display }}
                 <span v-if="row.currency !== 'ILS' && row.amount_ils !== null" class="cell-amount__ils">
                   ({{ row.amount_display }})
@@ -846,6 +770,23 @@ const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
 const exporting = ref(false);
 const showAlertsModal = ref(false);
+const heroMoreOptions = computed(() => [
+  { key: "upload",        label: l.value.common.upload,              icon: () => h(NIcon, { component: CloudUploadOutline }) },
+  { key: "refresh",       label: l.value.common.refresh,             icon: () => h(NIcon, { component: RefreshOutline }) },
+  { key: "excel",         label: l.value.common.exportExcel,         icon: () => h(NIcon, { component: DownloadOutline }),   disabled: !exportAllowed.value || !excelAllowed.value || total.value === 0 },
+  { key: "sixmonth",      label: l.value.invoices.sixMonth,          icon: () => h(NIcon, { component: MailOutline }),        disabled: !exportAllowed.value || !excelAllowed.value },
+  { key: "drive",         label: l.value.documents.driveExport,      icon: () => h(NIcon, { component: DownloadOutline }),    disabled: !driveAllowed.value },
+  { key: "monthly",       label: l.value.documents.monthlyReport,    icon: () => h(NIcon, { component: DocumentTextOutline }), disabled: !exportAllowed.value },
+]);
+
+function handleHeroMoreSelect(key: string) {
+  if (key === "upload") openInvoiceUploadPicker();
+  else if (key === "refresh") load(true);
+  else if (key === "excel") exportInvoicesToExcel();
+  else if (key === "sixmonth") sendSixMonthInvoiceReport();
+  else if (key === "drive") handleDriveExport();
+  else if (key === "monthly") openMonthlyReport();
+}
 const deletingSelected = ref(false);
 const uploadingInvoices = ref(false);
 const sendingSixMonthReport = ref(false);
@@ -1334,6 +1275,14 @@ function formatDate(value: string | null): string {
   const ts = Date.parse(value);
   return Number.isFinite(ts)
     ? new Date(ts).toLocaleDateString(intlLocale.value, { day: "numeric", month: "short", year: "numeric" })
+    : value;
+}
+
+function formatDateShort(value: string | null): string {
+  if (!value) return "—";
+  const ts = Date.parse(value);
+  return Number.isFinite(ts)
+    ? new Date(ts).toLocaleDateString(intlLocale.value, { day: "numeric", month: "short" })
     : value;
 }
 
@@ -2861,15 +2810,11 @@ function replaceRow(updated: ImportedInvoice) {
   }
 
   .invoice-table__col--category {
-    width: 48px;
-  }
-
-  .invoice-table__col--type {
-    width: 48px;
+    width: 44px;
   }
 
   .invoice-table {
-    min-width: 340px;
+    min-width: 320px;
   }
 
   .invoice-table__col--supplier {
@@ -2900,11 +2845,21 @@ function replaceRow(updated: ImportedInvoice) {
     padding-inline-start: 4px;
   }
 
-  .invoice-table__col--date,
   .invoice-table__col--client,
-  .invoice-col--date,
-  .invoice-col--client {
+  .invoice-table__col--type,
+  .invoice-table__col--category,
+  .invoice-col--client,
+  .invoice-col--type,
+  .invoice-col--category {
     display: none;
+  }
+
+  .invoice-table__col--date {
+    width: 60px;
+  }
+
+  .invoice-col--date {
+    white-space: nowrap;
   }
 
   .invoice-col--amount,
@@ -3019,6 +2974,16 @@ function replaceRow(updated: ImportedInvoice) {
   .invoice-supplier-cell__meta .invoice-cell-truncate {
     min-width: 0;
     flex: 1;
+  }
+
+  .invoice-table-wrap {
+    max-height: calc(100dvh - 500px);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .import-panel__scan small {
+    display: none;
   }
 }
 </style>

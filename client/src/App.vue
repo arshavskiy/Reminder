@@ -818,8 +818,19 @@ html[data-theme="dark"] .install-banner {
   }
 
   .app-footer {
-    padding: 8px 10px;
-    font-size: 12px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-footer {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .app-footer__legal {
+    margin-top: 2px;
   }
 }
 </style>
