@@ -791,7 +791,7 @@ import {resolveDateRangePreset} from "../shared/dateRangePresets";
 import {asString, asStringArray, decodeDateRange, encodeDateRange, pickOne} from "../shared/tableState";
 
 const router = useRouter();
-const {l, dir, t, locale, intl} = useI18n();
+const {l, dir, t, locale, intl, href} = useI18n();
 const intlLocale = computed(() => (intl.value));
 const message = useMessage();
 const {confirm} = useConfirm();
