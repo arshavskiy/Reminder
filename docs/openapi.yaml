@@ -7316,7 +7316,7 @@ paths:
           description: Not signed in
         "403":
           description: Not allowed
-  /api/reports/annual-summary.pdf:
+  /api/invoices/annual-summary.pdf:
     get:
       summary: Download the annual expense summary as a PDF
       tags:

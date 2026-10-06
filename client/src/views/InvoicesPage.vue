@@ -1532,7 +1532,7 @@ async function exportInvoicesToExcel() {
 async function downloadAnnualPdf() {
   const year = new Date().getFullYear();
   const loc = locale.value === "ru" ? "ru" : locale.value === "en" ? "en" : "he";
-  const url = `/api/reports/annual-summary.pdf?year=${year}&locale=${loc}`;
+  const url = `/api/invoices/annual-summary.pdf?year=${year}&locale=${loc}`;
   const a = document.createElement("a");
   a.href = url;
   a.download = `annual-expenses-${year}.pdf`;

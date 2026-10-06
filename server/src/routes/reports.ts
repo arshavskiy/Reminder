@@ -231,7 +231,7 @@ export function registerReportRoutes(app: express.Application) {
   });
 
   // ── Annual summary PDF ────────────────────────────────────────────────────
-  app.get("/api/reports/annual-summary.pdf", async (req, res) => {
+  app.get("/api/invoices/annual-summary.pdf", async (req, res) => {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try {
       auth = await requireAuth(req.headers.cookie);
