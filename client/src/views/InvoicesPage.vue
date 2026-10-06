@@ -819,6 +819,7 @@ const heroMoreOptions = computed(() => [
   { key: "sixmonth",      label: l.value.invoices.sixMonth,          icon: () => h(NIcon, { component: MailOutline }),        disabled: !exportAllowed.value || !excelAllowed.value },
   { key: "drive",         label: l.value.documents.driveExport,      icon: () => h(NIcon, { component: DownloadOutline }),    disabled: !driveAllowed.value },
   { key: "monthly",       label: l.value.documents.monthlyReport,    icon: () => h(NIcon, { component: DocumentTextOutline }), disabled: !exportAllowed.value },
+  { key: "annual",        label: l.value.invoices.annualPdf,         icon: () => h(NIcon, { component: DocumentTextOutline }) },
 ]);
 
 function handleHeroMoreSelect(key: string) {
@@ -828,6 +829,7 @@ function handleHeroMoreSelect(key: string) {
   else if (key === "sixmonth") sendSixMonthInvoiceReport();
   else if (key === "drive") handleDriveExport();
   else if (key === "monthly") openMonthlyReport();
+  else if (key === "annual") downloadAnnualPdf();
 }
 const deletingSelected = ref(false);
 const uploadingInvoices = ref(false);
@@ -1525,6 +1527,18 @@ async function exportInvoicesToExcel() {
   } finally {
     exporting.value = false;
   }
+}
+
+async function downloadAnnualPdf() {
+  const year = new Date().getFullYear();
+  const loc = locale.value === "ru" ? "ru" : locale.value === "en" ? "en" : "he";
+  const url = `/api/reports/annual-summary.pdf?year=${year}&locale=${loc}`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `annual-expenses-${year}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 async function sendSixMonthInvoiceReport() {

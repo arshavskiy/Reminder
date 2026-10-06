@@ -976,24 +976,34 @@
                     <span class="settings-row__desc">{{ seatsUsageLabel }}</span>
                   </div>
                   <div class="settings-row__actions">
-                    <n-tooltip>
-                      <template #trigger>
-                        <span>
-                          <n-button size="small" ghost disabled>
-                            {{ l.profileSettings.addUser }}
-                          </n-button>
-                        </span>
-                      </template>
-                      {{ seatLimit === 1 ? l.profileSettings.extraUsersLocked : l.profileSettings.extraUsersSoon }}
-                    </n-tooltip>
                     <n-button
-                      v-if="seatLimit === 1"
+                      v-if="isDigital"
                       size="small"
                       ghost
-                      @click="openSubscription"
+                      @click="showInviteModal = true"
                     >
-                      {{ l.profileSettings.upgradePlan }}
+                      {{ l.profileSettings.addUser }}
                     </n-button>
+                    <template v-else>
+                      <n-tooltip>
+                        <template #trigger>
+                          <span>
+                            <n-button size="small" ghost disabled>
+                              {{ l.profileSettings.addUser }}
+                            </n-button>
+                          </span>
+                        </template>
+                        {{ seatLimit === 1 ? l.profileSettings.extraUsersLocked : l.profileSettings.extraUsersSoon }}
+                      </n-tooltip>
+                      <n-button
+                        v-if="seatLimit === 1"
+                        size="small"
+                        ghost
+                        @click="openSubscription"
+                      >
+                        {{ l.profileSettings.upgradePlan }}
+                      </n-button>
+                    </template>
                   </div>
                 </div>
 
@@ -1451,6 +1461,40 @@
     </main>
     </div>
   </div>
+
+  <n-modal
+    v-model:show="showInviteModal"
+    preset="card"
+    :title="l.profileSettings.inviteModalTitle"
+    style="width: min(440px, 94vw)"
+    :mask-closable="!inviteLoading"
+    :closable="!inviteLoading"
+  >
+    <p style="margin-bottom: 12px;">{{ l.profileSettings.inviteModalDesc }}</p>
+    <n-form-item :label="l.profileSettings.inviteEmailLabel" :show-feedback="false">
+      <n-input
+        v-model:value="inviteEmail"
+        type="text"
+        :placeholder="l.profileSettings.inviteEmailPlaceholder"
+        :disabled="inviteLoading"
+        autocomplete="off"
+        @keyup.enter="sendInvite"
+      />
+    </n-form-item>
+    <template #footer>
+      <n-space justify="end">
+        <n-button :disabled="inviteLoading" @click="showInviteModal = false">{{ l.common.cancel }}</n-button>
+        <n-button
+          type="primary"
+          :loading="inviteLoading"
+          :disabled="!inviteEmail.trim()"
+          @click="sendInvite"
+        >
+          {{ l.profileSettings.inviteSend }}
+        </n-button>
+      </n-space>
+    </template>
+  </n-modal>
 
   <n-modal
     v-model:show="showDeleteAccountModal"
@@ -2054,6 +2098,34 @@ async function onAvatarChange(e: Event) {
   }
 }
 
+// ── Invite member (Digital plan) ─────────────────────────────────────────────
+const showInviteModal = ref(false);
+const inviteEmail = ref("");
+const inviteLoading = ref(false);
+
+async function sendInvite() {
+  const email = inviteEmail.value.trim();
+  if (!email) return;
+  inviteLoading.value = true;
+  try {
+    const res = await fetch(`${SERVER}/api/account/invite`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      message.error(data?.error ?? "שגיאה בשליחת ההזמנה");
+      return;
+    }
+    message.success(l.value.profileSettings.inviteSent);
+    showInviteModal.value = false;
+    inviteEmail.value = "";
+  } finally {
+    inviteLoading.value = false;
+  }
+}
+
 // ── Settings: password ───────────────────────────────────────────────────────
 const pwForm = ref({ current: "", next: "", confirm: "" });
 const savingPw = ref(false);
@@ -2143,7 +2215,7 @@ const autoRemindersAllowed = computed(() =>
 );
 const seatLimit = computed(() =>
   userSettings.value?.plan_entitlements?.maxUsers
-  ?? (currentPlanId.value === "business" ? null : currentPlanId.value === "basic" ? 2 : 1),
+  ?? (currentPlanId.value === "business" ? null : (currentPlanId.value === "basic" || currentPlanId.value === "digital") ? 2 : 1),
 );
 const emailAccountLimit = computed(() =>
   userSettings.value?.plan_entitlements?.maxEmailAccounts

@@ -9,6 +9,7 @@ import {deleteFromSpaces} from "../storage/spaces";
 const USER_SCOPED_COLLECTIONS = [
   "sessions",
   "magic_link_tokens",
+  "account_invites",
   "oauth_states",
   "user_settings",
   "clients",

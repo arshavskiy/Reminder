@@ -95,6 +95,8 @@ export const ruInvoices: Record<string, string> = {
   "invoices.excelTooltip": "Скачать счета в виде файла Excel",
   "invoices.sixMonth": "Отправить отчёт за 6 месяцев",
   "invoices.sixMonthTooltip": "Отправить на вашу почту файл Excel со счетами за последние шесть месяцев",
+  "invoices.annualPdf": "Годовой отчёт PDF",
+  "invoices.annualPdfTooltip": "Скачать годовой отчёт о расходах в формате PDF",
   "invoices.searchPlaceholder": "Поиск по поставщику, номеру, адресу или файлу…",
   "invoices.cashFlowPlaceholder": "Доход / расход",
   "invoices.supplierName": "Название поставщика",

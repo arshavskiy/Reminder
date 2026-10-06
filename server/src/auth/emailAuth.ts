@@ -39,7 +39,7 @@ function renderHtml(template: string, vars: Record<string, string>): string {
   );
 }
 
-async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
+export async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
   const s = getSettings();
   const appName = s.emailFromName ?? "RemindOCR";
   if (!s.emailFrom) {
