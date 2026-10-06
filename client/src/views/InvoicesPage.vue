@@ -1,10 +1,12 @@
 <template>
   <div class="page2 invoices-page" :dir="dir">
     <PageHeader
-      :count="totalAll"
       :title="l.invoices.tabLabel"
       :subtitle="l.invoices.subtitle"
     >
+      <template #title-extra>
+        <n-spin v-if="loading" :size="18" class="title-loader" />
+      </template>
       <template #hero>
         <input
           ref="invoiceUploadInput"
@@ -187,7 +189,27 @@
       </div>
     </div>
 
-    <DateRangePresets v-model="dateRange" class="date-presets-row" @change="load(true)" />
+    <div class="presets-and-dates-row">
+      <DateRangePresets v-model="dateRange" @change="load(true)" />
+      <n-select
+        v-model:value="filters.suppliers"
+        :options="supplierOptions"
+        clearable
+        filterable
+        multiple
+        max-tag-count="responsive"
+        :placeholder="l.invoices.supplierName"
+        class="toolbar__supplier"
+        @update:value="load(true)"
+      />
+      <n-date-picker
+        v-model:value="dateRange"
+        type="daterange"
+        clearable
+        class="toolbar__dates"
+        @update:value="load(true)"
+      />
+    </div>
 
     <MobileFilterPanel :active-count="[filters.type, filters.category, filters.currency, filters.suppliers?.length, dateRange].filter(Boolean).length"
                        class="toolbar">
@@ -227,17 +249,6 @@
         class="toolbar__currency"
         @update:value="load(true)"
       />
-      <n-select
-        v-model:value="filters.suppliers"
-        :options="supplierOptions"
-        clearable
-        filterable
-        multiple
-        max-tag-count="responsive"
-        :placeholder="l.invoices.supplierName"
-        class="toolbar__supplier"
-        @update:value="load(true)"
-      />
       <button
         v-if="suppliers.length >= 2"
         class="rbtn rbtn--ghost"
@@ -247,11 +258,23 @@
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
         {{ l.invoices.mergeSuppliers }}
       </button>
+      <!-- mobile-only: suppliers + dates inside panel -->
+      <n-select
+        v-model:value="filters.suppliers"
+        :options="supplierOptions"
+        clearable
+        filterable
+        multiple
+        max-tag-count="responsive"
+        :placeholder="l.invoices.supplierName"
+        class="toolbar__supplier toolbar__supplier--mobile"
+        @update:value="load(true)"
+      />
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
         clearable
-        class="toolbar__dates"
+        class="toolbar__dates toolbar__dates--mobile"
         @update:value="load(true)"
       />
     </MobileFilterPanel>
@@ -2153,8 +2176,17 @@ function replaceRow(updated: ImportedInvoice) {
   width: 260px;
 }
 
-.date-presets-row {
+.presets-and-dates-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar__supplier--mobile,
+.toolbar__dates--mobile {
+  display: none;
 }
 
 .filterbar__controls {
@@ -2163,6 +2195,11 @@ function replaceRow(updated: ImportedInvoice) {
   flex-wrap: wrap;
   gap: 10px;
   margin-inline-start: auto;
+}
+
+.title-loader {
+  display: inline-flex;
+  align-items: center;
 }
 
 @media (max-width: 640px) {
@@ -2774,6 +2811,15 @@ function replaceRow(updated: ImportedInvoice) {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+  }
+
+  .presets-and-dates-row {
+    display: none;
+  }
+
+  .toolbar__supplier--mobile,
+  .toolbar__dates--mobile {
+    display: block;
   }
 
   .toolbar__search,

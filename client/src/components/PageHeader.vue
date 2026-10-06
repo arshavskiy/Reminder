@@ -7,6 +7,7 @@
       <div class="page-header__title-row">
         <h1 class="page-header__title">{{ title }}</h1>
         <span v-if="count !== undefined" class="page-header__count">{{ count }}</span>
+        <slot name="title-extra" />
         <div v-if="$slots.hero" class="page-header__hero">
           <slot name="hero" />
         </div>

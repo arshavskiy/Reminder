@@ -1,7 +1,6 @@
 <template>
   <div class="page2 expense-page" :dir="dir">
     <PageHeader
-      :count="totalInvoices"
       :title="l.expenses.title"
       :subtitle="l.expenses.subtitle"
     >
@@ -32,6 +31,9 @@
           <n-icon :class="{ 'refresh-icon--spin': loading }" :component="RefreshOutline" class="btn-icon" />
           {{ l.expensesMsg.refresh }}
         </button>
+      </template>
+      <template #title-extra>
+        <n-spin v-if="loading" :size="18" class="title-loader" />
       </template>
     </PageHeader>
 
@@ -89,8 +91,7 @@
       />
     </div>
 
-    <n-spin :show="loading">
-      <section class="expense-summary" :aria-label="isIncomeView ? l.expensesMsg.incomeSummary : l.expensesMsg.expenseSummary">
+    <section class="expense-summary" :aria-label="isIncomeView ? l.expensesMsg.incomeSummary : l.expensesMsg.expenseSummary">
         <div class="expense-metric">
           <n-icon :component="WalletOutline" :size="18" class="expense-metric__icon" />
           <div>
@@ -230,7 +231,6 @@
         </div>
         <p v-else class="expense-supplier-table__empty">{{ l.expensesMsg.noData }}</p>
       </section>
-    </n-spin>
   </div>
 </template>
 
@@ -264,7 +264,7 @@ import SpendingAlertsModal from "../components/SpendingAlertsModal.vue";
 import {useI18n} from "../composables/useI18n.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
-import { resolveDateRangePreset } from "../shared/dateRangePresets.js";
+import { matchDateRangePreset, resolveDateRangePreset } from "../shared/dateRangePresets.js";
 import { usePersistedTableState } from "../composables/useTableState.js";
 import { decodeDateRange, encodeDateRange, pickOne } from "../shared/tableState";
 import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
@@ -428,11 +428,19 @@ const chartOption = computed<echarts.EChartsCoreOption>(() => {
       },
       series: [{
         type: "pie",
-        radius: ["46%", "72%"],
-        center: ["50%", "54%"],
+        radius: ["38%", "60%"],
+        center: ["50%", "52%"],
         avoidLabelOverlap: true,
-        label: { show: false },
-        labelLine: { show: false },
+        label: {
+          show: true,
+          position: "outside",
+          color: text,
+          fontSize: 11,
+          minShowLabelAngle: 10,
+          formatter: (p: { name: string; value: number; percent: number }) =>
+            `${p.name}\n${formatMoney(p.value)} (${p.percent.toFixed(1)}%)`,
+        },
+        labelLine: { show: true, length: 8, length2: 6, minTurnAngle: 10 },
         itemStyle: {
           borderColor: tooltipBg,
           borderWidth: 2,
@@ -543,6 +551,10 @@ onBeforeUnmount(() => {
   themeObserver = null;
   chart?.dispose();
   chart = null;
+});
+
+watch(dateRange, (val) => {
+  if (matchDateRangePreset(val) === "1m") chartType.value = "pie";
 });
 
 watch(chartType, () => {
@@ -830,6 +842,11 @@ function providerCategoryLabel(value: string): string {
 .rbtn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.title-loader {
+  display: inline-flex;
+  align-items: center;
 }
 
 .refresh-icon--spin {
@@ -1205,6 +1222,7 @@ function providerCategoryLabel(value: string): string {
 
 .toolbar__filters-row {
   display: flex;
+  gap: 10px;
 }
 
 @media (max-width: 980px) {
