@@ -44,12 +44,12 @@
         <button
           :class="{ 'rbtn--loading': importingFromGmail }"
           :disabled="loading || importingFromGmail"
-          class="rbtn rbtn--primary"
+          class="rbtn rbtn--primary gmail-import-btn"
           type="button"
           @click="handleGmailImportButton"
         >
           <GmailLogo :size="16" class="btn-icon" />
-          {{ gmailImportButtonLabel }}
+          <span class="gmail-import-btn__label">{{ gmailImportButtonLabel }}</span>
         </button>
         <MobileActionButton
           :class="{ 'rbtn--loading': uploadingInvoices }"
@@ -82,12 +82,12 @@
               <button
                 :class="{ 'rbtn--loading': exporting }"
                 :disabled="!exportAllowed || !excelAllowed || loading || total === 0 || exporting"
-                class="rbtn rbtn--ghost"
+                class="rbtn rbtn--ghost hero-action"
                 type="button"
                 @click="exportInvoicesToExcel"
               >
                 <n-icon :component="DownloadOutline" class="btn-icon" />
-                {{ l.common.exportExcel }}
+                <span class="hero-action__label">{{ l.common.exportExcel }}</span>
               </button>
             </span>
           </template>
@@ -99,12 +99,12 @@
               <button
                 :class="{ 'rbtn--loading': sendingSixMonthReport }"
                 :disabled="!exportAllowed || !excelAllowed || loading || sendingSixMonthReport"
-                class="rbtn rbtn--ghost"
+                class="rbtn rbtn--ghost hero-action"
                 type="button"
                 @click="sendSixMonthInvoiceReport"
               >
                 <n-icon :component="MailOutline" class="btn-icon" />
-                {{ l.invoices.sixMonth }}
+                <span class="hero-action__label">{{ l.invoices.sixMonth }}</span>
               </button>
             </span>
           </template>
@@ -207,19 +207,6 @@
         :label="option.label"
       />
       <ResponsiveFilterButton
-        v-for="option in visibleStatusPills"
-        :key="option.value"
-        type="button"
-        class="pill pill--compact"
-        :class="{ 'pill--active': (filters.status ?? '') === option.value }"
-        @click="setStatus(option.value)"
-
-        :aria-pressed="(filters.status ?? '') === option.value"
-        :count="option.count"
-        :filter-key="option.value"
-        :label="option.label"
-      />
-      <ResponsiveFilterButton
         v-if="unpaidDueCount > 0 || filters.unpaidOnly"
         type="button"
         class="pill pill--compact"
@@ -242,7 +229,6 @@
         filter-key="duplicates"
       />
       <div class="filterbar__controls">
-        <DateRangePresets v-model="dateRange" @change="load(true)" />
         <div class="toolbar__view-toggle">
           <n-tooltip placement="top">
             <template #trigger>
@@ -275,6 +261,8 @@
         </div>
       </div>
     </div>
+
+    <DateRangePresets v-model="dateRange" class="date-presets-row" @change="load(true)" />
 
     <MobileFilterPanel :active-count="[filters.type, filters.category, filters.currency, filters.suppliers?.length, dateRange].filter(Boolean).length"
                        class="toolbar">
@@ -2142,6 +2130,7 @@ function replaceRow(updated: ImportedInvoice) {
 .pill--compact {
   padding: 6px 13px;
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .pill--soft {
@@ -2215,12 +2204,51 @@ function replaceRow(updated: ImportedInvoice) {
   width: 260px;
 }
 
+.date-presets-row {
+  margin-bottom: 10px;
+}
+
 .filterbar__controls {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
   margin-inline-start: auto;
+}
+
+@media (max-width: 640px) {
+  .gmail-import-btn,
+  .hero-action {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 6px;
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .gmail-import-btn__label,
+  .hero-action__label {
+    display: none;
+  }
+
+  .filterbar.filterbar--compact {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filterbar.filterbar--compact::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filterbar__controls {
+    flex-shrink: 0;
+    width: auto;
+    margin-inline-start: 0;
+  }
 }
 
 .toolbar__view-toggle {
