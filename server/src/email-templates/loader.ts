@@ -11,3 +11,7 @@ export function loadAuthTemplate(name: "verify-email" | "reset-password"): strin
 export function loadReminderTemplate(name: "default" | "inspection" | "contract" | "invoice" | "grouped"): string {
   return readFileSync(join(__dirname, "reminders", `${name}.html`), "utf-8");
 }
+
+export function loadDigitalTemplate(name: "expense-report", locale: "he" | "en" | "ru" = "he"): string {
+  return readFileSync(join(__dirname, "digital", `${name}-${locale}.html`), "utf-8");
+}

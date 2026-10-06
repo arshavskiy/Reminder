@@ -283,7 +283,7 @@ async function handleLogin() {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       credentials: "include",
-      body: JSON.stringify({email: loginEmail.value, password: loginPassword.value, ...readIntent()}),
+      body: JSON.stringify({email: loginEmail.value, password: loginPassword.value, locale: localeStore.locale, ...readIntent()}),
     });
     const data = await res.json() as any;
     if (!res.ok) {
@@ -338,6 +338,7 @@ async function handleRegister() {
         email: regEmail.value,
         password: regPassword.value,
         name: regName.value,
+        locale: localeStore.locale,
         ...readIntent(),
       }),
     });
