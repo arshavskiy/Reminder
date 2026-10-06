@@ -23,18 +23,6 @@
             {{ l.expensesMsg.export }}
           </button>
         </n-dropdown>
-        <n-tooltip>
-          <template #trigger>
-            <button
-              class="rbtn rbtn--ghost rbtn--icon"
-              type="button"
-              @click="showAlertsModal = true"
-            >
-              <n-icon :component="NotificationsOutline" :size="16" class="btn-icon" />
-            </button>
-          </template>
-          {{ l.expensesMsg.spendingAlerts }}
-        </n-tooltip>
         <button
           :disabled="loading"
           class="rbtn rbtn--ghost"
@@ -46,11 +34,6 @@
         </button>
       </template>
     </PageHeader>
-
-    <SpendingAlertsModal
-      v-model:show="showAlertsModal"
-      :categories="availableCategories"
-    />
 
     <InvoiceSectionNav />
 
@@ -264,6 +247,7 @@ import {
   HomeOutline,
   LayersOutline,
   NotificationsOutline,
+  NotificationsSharp,
   PeopleOutline,
   PieChartOutline,
   RefreshOutline,

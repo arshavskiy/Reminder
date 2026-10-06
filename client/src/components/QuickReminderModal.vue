@@ -7,7 +7,7 @@
     style="width: 480px; max-width: 95vw"
     @update:show="(value: boolean) => emit('update:show', value)"
   >
-    <n-form label-placement="top" :dir="dir">
+    <n-form label-placement="top" :dir="dir" :show-feedback="false" class="reminder-create-form">
       <p class="quick-reminder__hint">{{ l.reminders.personalReminderHint }}</p>
       <n-form-item :label="l.remindersMsg.title" required>
         <n-input v-model:value="title" :placeholder="l.notifications.quickAddTitlePlaceholder" @keydown.enter.prevent="submit" />
@@ -16,22 +16,18 @@
         <n-date-picker v-model:value="targetDateMs" type="date" style="width: 100%" />
       </n-form-item>
       <n-form-item :label="l.notifications.quickAddCategoryLabel">
-        <n-select
+        <ReminderCategorySelect
           v-model:value="category"
           :options="categoryOptions"
           :placeholder="l.notifications.quickAddCategoryPlaceholder"
-          clearable
-          filterable
-          tag
-          :virtual-scroll="false"
         />
       </n-form-item>
       <n-form-item :label="l.notifications.quickAddRemindBeforeLabel">
         <n-input v-model:value="remindBeforeDays" :placeholder="l.notifications.quickAddRemindBeforePlaceholder" />
       </n-form-item>
-      <n-form-item>
+      <div class="reminder-checkbox-row">
         <n-checkbox v-model:checked="alsoEmailSelf">{{ l.reminders.alsoEmailSelf }}</n-checkbox>
-      </n-form-item>
+      </div>
     </n-form>
     <template #action>
       <div class="quick-reminder__actions">
@@ -45,9 +41,10 @@
 </template>
 
 <script lang="ts" setup>
+import ReminderCategorySelect from "./ReminderCategorySelect.vue";
 import {computed, ref, watch} from "vue";
 import {useRouter} from "vue-router";
-import {NButton, NCheckbox, NDatePicker, NForm, NFormItem, NInput, NModal, NSelect, useMessage} from "naive-ui";
+import {NButton, NCheckbox, NDatePicker, NForm, NFormItem, NInput, NModal, useMessage} from "naive-ui";
 import {api} from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {useI18n} from "../composables/useI18n.js";
@@ -89,15 +86,14 @@ function reset() {
   alsoEmailSelf.value = false;
 }
 
-// A fresh form each time it opens; the category list is fetched once it is first needed.
+// Refresh saved user categories each time the form opens.
 watch(() => props.show, async (open) => {
   if (!open) return;
   reset();
-  if (!knownCategories.value.length) {
-    try {
-      knownCategories.value = (await api.reminders.categories()).categories.map((item) => item.name).filter(Boolean);
-    } catch { /* the list just offers "Personal" */ }
-  }
+  knownCategories.value = [];
+  try {
+    knownCategories.value = (await api.reminders.categories(true)).categories.map((item) => item.name).filter(Boolean);
+  } catch { /* the list just offers "Personal" */ }
 });
 
 function dateString(ms: number): string {
@@ -115,7 +111,7 @@ async function submit() {
     await api.reminders.createPersonal({
       title: title.value.trim(),
       target_date: dateString(targetDateMs.value),
-      reminder_category: category.value || "Personal",
+      reminder_category: category.value?.trim() || "Personal",
       email_to: alsoEmailSelf.value ? (authStore.user?.email ?? null) : null,
       remind_before_days: remindBeforeDays.value.trim() || null,
       sync_calendar: true,
@@ -140,7 +136,7 @@ function openFullForm() {
 
 <style scoped>
 .quick-reminder__hint {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 13px;
   color: var(--text-secondary);
 }

@@ -41,19 +41,16 @@
 
           {{ t("common.deleteN", {n: selectedInvoiceCount}) }}
         </MobileActionButton>
-        <MobileActionButton
+        <button
           :class="{ 'rbtn--loading': importingFromGmail }"
           :disabled="loading || importingFromGmail"
           class="rbtn rbtn--primary"
           type="button"
           @click="handleGmailImportButton"
-          :label="gmailImportButtonLabel">
-          <template #icon>
-            <GmailLogo :size="16" class="btn-icon"/>
-          </template>
-
+        >
+          <GmailLogo :size="16" class="btn-icon" />
           {{ gmailImportButtonLabel }}
-        </MobileActionButton>
+        </button>
         <MobileActionButton
           :class="{ 'rbtn--loading': uploadingInvoices }"
           :disabled="loading || uploadingInvoices"
@@ -82,17 +79,16 @@
         <n-tooltip placement="top">
           <template #trigger>
             <span>
-              <MobileActionButton
+              <button
                 :class="{ 'rbtn--loading': exporting }"
                 :disabled="!exportAllowed || !excelAllowed || loading || total === 0 || exporting"
                 class="rbtn rbtn--ghost"
                 type="button"
                 @click="exportInvoicesToExcel"
-                :label="l.common.exportExcel"><template #icon><n-icon :component="DownloadOutline" class="btn-icon"/>
-      </template>
-
+              >
+                <n-icon :component="DownloadOutline" class="btn-icon" />
                 {{ l.common.exportExcel }}
-              </MobileActionButton>
+              </button>
             </span>
           </template>
           {{ excelAllowed ? l.invoices.excelTooltip : excelExportLockedMessage }}
@@ -100,17 +96,16 @@
         <n-tooltip placement="top">
           <template #trigger>
             <span>
-              <MobileActionButton
+              <button
                 :class="{ 'rbtn--loading': sendingSixMonthReport }"
                 :disabled="!exportAllowed || !excelAllowed || loading || sendingSixMonthReport"
                 class="rbtn rbtn--ghost"
                 type="button"
                 @click="sendSixMonthInvoiceReport"
-                :label="l.invoices.sixMonth"><template #icon><n-icon :component="MailOutline" class="btn-icon"/>
-      </template>
-
+              >
+                <n-icon :component="MailOutline" class="btn-icon" />
                 {{ l.invoices.sixMonth }}
-              </MobileActionButton>
+              </button>
             </span>
           </template>
           {{ excelAllowed ? l.invoices.sixMonthTooltip : excelExportLockedMessage }}
@@ -136,35 +131,23 @@
 
           {{ l.documents.monthlyReport }}
         </MobileActionButton>
+        <n-tooltip placement="top">
+          <template #trigger>
+            <button class="rbtn rbtn--ghost rbtn--icon" type="button" @click="showAlertsModal = true">
+              <n-icon :component="NotificationsSharp" :size="16" class="alerts-bell-icon" />
+            </button>
+          </template>
+          {{ l.expensesMsg.spendingAlerts }}
+        </n-tooltip>
       </template>
     </PageHeader>
 
+    <SpendingAlertsModal v-model:show="showAlertsModal" :categories="[]" />
+
     <InvoiceSectionNav />
 
-    <div class="import-panel">
-      <div class="import-panel__actions">
-        <button
-          :class="{ 'rbtn--loading': importingFromGmail }"
-          :disabled="loading || importingFromGmail"
-          class="rbtn rbtn--primary"
-          type="button"
-          @click="handleGmailImportButton"
-        >
-          <GmailLogo :size="16" class="btn-icon" />
-          {{ gmailImportButtonLabel }}
-        </button>
-        <button
-          :class="{ 'rbtn--loading': uploadingInvoices }"
-          :disabled="loading || uploadingInvoices"
-          class="rbtn rbtn--ghost"
-          type="button"
-          @click="openInvoiceUploadPicker"
-        >
-          <n-icon :component="CloudUploadOutline" class="btn-icon" />
-          {{ l.common.upload }}
-        </button>
-      </div>
-      <label v-if="gmailInvoiceScanAllowed" class="import-panel__scan" :title="gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : undefined">
+    <div v-if="gmailInvoiceScanAllowed" class="import-panel">
+      <label class="import-panel__scan" :title="gmailConnected === false ? l.invoicesMsg.dailyScanNeedsGmail : undefined">
         <n-switch :value="invoicesAutoScan" :loading="invoicesAutoScanSaving" :disabled="gmailConnected === false" @update:value="setInvoicesAutoScan" />
         <span>
           <strong>{{ l.invoicesMsg.dailyScan }}</strong>
@@ -173,9 +156,45 @@
       </label>
     </div>
 
+    <GmailImportJobStatus
+      v-if="visibleGmailImportJob"
+      :job="visibleGmailImportJob"
+      :dismissible="!importingFromGmail"
+      @dismiss="lastGmailImportJob = null"
+    />
+    <div
+      v-if="(inlineOnlyLoading || inlineOnlyEmails.length) && !inlineOnlyDismissed"
+      class="link-only-notice"
+      :class="{ 'link-only-notice--pending': inlineOnlyLoading }"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="link-only-notice__text">
+        <strong class="link-only-notice__title">
+          <n-spin v-if="inlineOnlyLoading" :size="18" />
+          <n-icon v-else :component="MailOutline" :size="20" />
+          <span v-if="inlineOnlyLoading">{{ l.invoicesMsg.inlineSearching }}</span>
+          <span v-else>{{ t("invoicesMsg.inlineFound", {count: inlineOnlyEmails.length}) }}</span>
+        </strong>
+        <span v-if="inlineOnlyLoading">{{ l.invoicesMsg.inlineStillRunning }}</span>
+        <span v-else>{{ l.invoicesMsg.inlineHint }}</span>
+      </div>
+      <button
+        v-if="!inlineOnlyLoading"
+        class="rbtn rbtn--primary"
+        :class="{ 'rbtn--loading': importingFromGmail }"
+        type="button"
+        :disabled="importingFromGmail"
+        @click="handleImportInlineAll"
+      >
+        <GmailLogo :size="16" class="btn-icon" />
+        {{ importingFromGmail ? l.invoicesMsg.importing : l.invoicesMsg.importAll }}
+      </button>
+    </div>
+
     <div class="filterbar filterbar--compact">
       <ResponsiveFilterButton
-        v-for="option in documentCategoryStrip"
+        v-for="option in visibleDocumentCategoryPills"
         :key="option.value"
         type="button"
         class="pill pill--compact pill--soft"
@@ -188,7 +207,7 @@
         :label="option.label"
       />
       <ResponsiveFilterButton
-        v-for="option in statusStrip"
+        v-for="option in visibleStatusPills"
         :key="option.value"
         type="button"
         class="pill pill--compact"
@@ -222,39 +241,42 @@
         :label="l.common.duplicates"
         filter-key="duplicates"
       />
-      <div class="toolbar__view-toggle">
-        <n-tooltip placement="top">
-          <template #trigger>
-            <button
-              :class="{ 'rbtn--ghost-active': viewMode === 'cards' }"
-              :aria-label="l.common.cards"
-              class="rbtn rbtn--ghost rbtn--icon"
-              type="button"
-              @click="viewMode = 'cards'"
-            >
-              <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
-            </button>
-          </template>
-          {{ l.common.cards }}
-        </n-tooltip>
-        <n-tooltip placement="top">
-          <template #trigger>
-            <button
-              :class="{ 'rbtn--ghost-active': viewMode === 'table' }"
-              :aria-label="l.common.tableView"
-              class="rbtn rbtn--ghost rbtn--icon"
-              type="button"
-              @click="viewMode = 'table'"
-            >
-              <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
-            </button>
-          </template>
-          {{ l.common.tableView }}
-        </n-tooltip>
+      <div class="filterbar__controls">
+        <DateRangePresets v-model="dateRange" @change="load(true)" />
+        <div class="toolbar__view-toggle">
+          <n-tooltip placement="top">
+            <template #trigger>
+              <button
+                :class="{ 'rbtn--ghost-active': viewMode === 'cards' }"
+                :aria-label="l.common.cards"
+                class="rbtn rbtn--ghost rbtn--icon"
+                type="button"
+                @click="viewMode = 'cards'"
+              >
+                <n-icon :component="GridOutline" :size="16" class="btn-icon"/>
+              </button>
+            </template>
+            {{ l.common.cards }}
+          </n-tooltip>
+          <n-tooltip placement="top">
+            <template #trigger>
+              <button
+                :class="{ 'rbtn--ghost-active': viewMode === 'table' }"
+                :aria-label="l.common.tableView"
+                class="rbtn rbtn--ghost rbtn--icon"
+                type="button"
+                @click="viewMode = 'table'"
+              >
+                <n-icon :component="ListOutline" :size="16" class="btn-icon"/>
+              </button>
+            </template>
+            {{ l.common.tableView }}
+          </n-tooltip>
+        </div>
       </div>
     </div>
 
-    <MobileFilterPanel :active-count="[filters.type, filters.cashFlow, filters.category, filters.currency, filters.suppliers?.length, dateRange].filter(Boolean).length"
+    <MobileFilterPanel :active-count="[filters.type, filters.category, filters.currency, filters.suppliers?.length, dateRange].filter(Boolean).length"
                        class="toolbar">
       <template #search>
         <n-input
@@ -271,14 +293,6 @@
         clearable
         filterable
         :placeholder="l.gmail.docType"
-        class="toolbar__type"
-        @update:value="load(true)"
-      />
-      <n-select
-        v-model:value="filters.cashFlow"
-        :options="cashFlowFilterOptions"
-        clearable
-        :placeholder="l.invoices.cashFlowPlaceholder"
         class="toolbar__type"
         @update:value="load(true)"
       />
@@ -320,7 +334,6 @@
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
         {{ l.invoices.mergeSuppliers }}
       </button>
-      <DateRangePresets v-model="dateRange" @change="load(true)" />
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
@@ -330,41 +343,6 @@
       />
     </MobileFilterPanel>
 
-    <GmailImportJobStatus
-      v-if="visibleGmailImportJob"
-      :job="visibleGmailImportJob"
-      :dismissible="!importingFromGmail"
-      @dismiss="lastGmailImportJob = null"
-    />
-    <div
-      v-if="(inlineOnlyLoading || inlineOnlyEmails.length) && !inlineOnlyDismissed"
-      class="link-only-notice"
-      :class="{ 'link-only-notice--pending': inlineOnlyLoading }"
-      role="status"
-      aria-live="polite"
-    >
-      <div class="link-only-notice__text">
-        <strong class="link-only-notice__title">
-          <n-spin v-if="inlineOnlyLoading" :size="18" />
-          <n-icon v-else :component="MailOutline" :size="20" />
-          <span v-if="inlineOnlyLoading">{{ l.invoicesMsg.inlineSearching }}</span>
-          <span v-else>{{ t("invoicesMsg.inlineFound", {count: inlineOnlyEmails.length}) }}</span>
-        </strong>
-        <span v-if="inlineOnlyLoading">{{ l.invoicesMsg.inlineStillRunning }}</span>
-        <span v-else>{{ l.invoicesMsg.inlineHint }}</span>
-      </div>
-      <button
-        v-if="!inlineOnlyLoading"
-        class="rbtn rbtn--primary"
-        :class="{ 'rbtn--loading': importingFromGmail }"
-        type="button"
-        :disabled="importingFromGmail"
-        @click="handleImportInlineAll"
-      >
-        <GmailLogo :size="16" class="btn-icon" />
-        {{ importingFromGmail ? l.invoicesMsg.importing : l.invoicesMsg.importAll }}
-      </button>
-    </div>
     <DriveExportJobStatus
       v-if="visibleDriveExportJob"
       :job="visibleDriveExportJob"
@@ -376,16 +354,6 @@
       <div v-if="!rows.length && !loading" class="empty">
         <n-icon :component="DocumentTextOutline" :size="48" class="empty__icon" />
         <p>{{ l.invoices.empty }}</p>
-        <button
-          :class="{ 'rbtn--loading': importingFromGmail }"
-          :disabled="importingFromGmail"
-          class="rbtn rbtn--primary mt-3"
-          type="button"
-          @click="handleGmailImportButton"
-        >
-          <GmailLogo :size="16" class="btn-icon" />
-          {{ gmailImportButtonLabel }}
-        </button>
       </div>
 
       <div v-else-if="rows.length && viewMode === 'cards'" class="invoice-grid">
@@ -807,9 +775,9 @@
 <script setup lang="ts">
 defineOptions({ name: "InvoicesPage" });
 import MobileMappedValue from "../components/MobileMappedValue.vue";
+import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import MobileFilterPanel from "../components/MobileFilterPanel.vue";
 import MobileActionButton from "../components/MobileActionButton.vue";
-import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import { computed, h, onMounted, onUnmounted, reactive, ref, watch, type Component } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -843,6 +811,7 @@ import {
   GridOutline,
   ListOutline,
   MailOutline,
+  NotificationsSharp,
   PricetagOutline,
   RefreshOutline,
   SwapVerticalOutline,
@@ -852,6 +821,7 @@ import PageHeader from "../components/PageHeader.vue";
 import {useI18n} from "../composables/useI18n.js";
 import {useDevModal} from "../composables/useDevModal.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
+import SpendingAlertsModal from "../components/SpendingAlertsModal.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
@@ -887,6 +857,7 @@ const totalAll = ref(0);
 const visibleLimit = ref<number | null>(null);
 const loading = ref(false);
 const exporting = ref(false);
+const showAlertsModal = ref(false);
 const deletingSelected = ref(false);
 const uploadingInvoices = ref(false);
 const sendingSixMonthReport = ref(false);
@@ -925,7 +896,6 @@ const filters = reactive({
   status: null as string | null,
   type: null as string | null,
   documentCategory: null as ImportedInvoice["document_category"] | null,
-  cashFlow: null as string | null,
   category: null as string | null,
   currency: null as string | null,
   suppliers: [] as string[],
@@ -941,7 +911,6 @@ usePersistedTableState("invoices", {
     status: filters.status,
     type: filters.type,
     documentCategory: filters.documentCategory,
-    cashFlow: filters.cashFlow,
     category: filters.category,
     currency: filters.currency,
     suppliers: [...filters.suppliers],
@@ -956,7 +925,6 @@ usePersistedTableState("invoices", {
     filters.status = asString(saved.status);
     filters.type = asString(saved.type);
     filters.documentCategory = asString(saved.documentCategory) as typeof filters.documentCategory;
-    filters.cashFlow = asString(saved.cashFlow);
     filters.category = asString(saved.category);
     filters.currency = asString(saved.currency);
     filters.suppliers = asStringArray(saved.suppliers);
@@ -1050,6 +1018,12 @@ const documentCategoryStrip = computed(() => [
   { label: l.value.common.creditNotes, value: "credit_note", count: documentCategoryCounts.value.credit_note ?? 0 },
 ]);
 
+// Keep the full option lists for column filters; only simplify the quick pills.
+const visibleDocumentCategoryPills = computed(() =>
+  documentCategoryStrip.value.filter((option) => option.value !== "bill" && option.value !== "payment_request"),
+);
+const visibleStatusPills = computed(() => statusStrip.value.filter((option) => option.value === "new"));
+
 let searchTimer: number | undefined;
 watch(() => filters.q, () => {
   window.clearTimeout(searchTimer);
@@ -1092,7 +1066,6 @@ async function load(force = false) {
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
       documentCategory: filters.documentCategory ?? undefined,
-      cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
       currency: filters.currency ?? undefined,
       supplier: supplierFilterParam(),
@@ -1514,7 +1487,6 @@ async function exportInvoicesToExcel() {
       q: filters.q,
       status: filters.status ?? undefined,
       type: filters.type ?? undefined,
-      cashFlow: filters.cashFlow ?? undefined,
       category: filters.category ?? undefined,
       currency: filters.currency ?? undefined,
       supplier: supplierFilterParam(),
@@ -1542,8 +1514,7 @@ async function exportInvoicesToExcel() {
       [c.invoiceNumber]: row.invoice_number ?? "",
       [c.customerNumber]: row.customer_number ?? "",
       [c.billingPeriod]: row.billing_period ?? "",
-      [c.providerCategory]: invoiceProviderCategoryLabel(row),
-      [c.providerLabel]: row.provider_label ?? "",
+      [c.providerLabel]: row.provider_label ? row.provider_label.replace(/^[^-]+ - /, "") : "",
       [c.category]: row.expense_category ?? "",
       [c.file]: row.file_name,
     }));
@@ -2024,6 +1995,10 @@ function replaceRow(updated: ImportedInvoice) {
 </script>
 
 <style scoped>
+.alerts-bell-icon {
+  color: var(--brand-color);
+}
+
 .invoices-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2146,7 +2121,7 @@ function replaceRow(updated: ImportedInvoice) {
 }
 
 .invoices-page :deep(.invoice-section-nav) {
-  margin-top: 2px;
+  margin-bottom: 12px;
 }
 
 .pill {
@@ -2240,11 +2215,18 @@ function replaceRow(updated: ImportedInvoice) {
   width: 260px;
 }
 
+.filterbar__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-inline-start: auto;
+}
+
 .toolbar__view-toggle {
   display: inline-flex;
   gap: 2px;
   padding: 3px;
-  margin-inline-start: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
   border-radius: 10px;

@@ -17,6 +17,7 @@
           size="small"
           class="spending-alerts__cat"
           filterable
+          tag
         />
         <n-input-number
           v-model:value="alert.threshold"
@@ -51,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue"; // localized categories
 import { NIcon, NInputNumber, NModal, NSelect, NTooltip, useMessage } from "naive-ui";
 import { AddOutline, TrashOutline } from "@vicons/ionicons5";
 import { useI18n } from "../composables/useI18n.js";
@@ -65,14 +66,18 @@ const message = useMessage();
 const alerts = ref<SpendingAlert[]>([]);
 const saving = ref(false);
 
-const categoryOptions = ref<{ label: string; value: string }[]>([]);
-
-function buildOptions() {
-  categoryOptions.value = props.categories.map((c) => ({ label: c, value: c }));
-}
+const categoryOptions = computed(() => {
+  const cats = l.value.providerCategory as Record<string, string>;
+  const known = Object.entries(cats).map(([value, label]) => ({ label, value }));
+  // Also include any categories from invoices that aren't in the known list
+  const knownKeys = new Set(Object.keys(cats));
+  const extra = props.categories
+    .filter((c) => !knownKeys.has(c))
+    .map((c) => ({ label: c, value: c }));
+  return [...known, ...extra];
+});
 
 onMounted(async () => {
-  buildOptions();
   try {
     const data = await api.profile.getSpendingAlerts();
     alerts.value = data.alerts.map((a) => ({ ...a }));

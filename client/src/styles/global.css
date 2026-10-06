@@ -861,6 +861,31 @@ html[dir="rtl"] .n-modal.app-confirm-dialog .n-dialog {
     color: var(--text-primary);
 }
 
+.reminder-create-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.reminder-create-form .n-form-item-label {
+    padding-bottom: 6px;
+}
+
+.reminder-create-form .reminder-checkbox-row {
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+}
+
+.reminder-create-form .n-checkbox__label {
+    padding-inline: 8px 0;
+}
+
+.reminder-create-form .personal-reminder-hint,
+.reminder-create-form .quick-reminder__hint {
+    margin: 0;
+}
+
 .app-confirm-dialog .n-dialog__content,
 .n-modal.n-dialog .n-dialog__content {
     margin: 12px 0 0;

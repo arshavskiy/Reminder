@@ -222,7 +222,7 @@
 
     <!-- Create reminder modal -->
     <n-modal v-model:show="showCreate" :title="l.reminders.newReminder" :show-icon="false" preset="dialog" style="width: 520px; max-width: 95vw">
-      <n-form label-placement="top" v-if="newReminder">
+      <n-form label-placement="top" :show-feedback="false" class="reminder-create-form" v-if="newReminder">
         <n-form-item :label="l.reminders.reminderKindLabel">
           <n-radio-group :value="isPersonalReminder ? 'personal' : 'client'" name="reminder-kind" @update:value="onReminderKindChange">
             <n-radio-button value="personal">{{ l.reminders.reminderKindPersonal }}</n-radio-button>
@@ -240,14 +240,10 @@
             <n-date-picker v-model:value="personalTargetDateMs" type="date" style="width: 100%" />
           </n-form-item>
           <n-form-item :label="l.notifications.quickAddCategoryLabel">
-            <n-select
+            <ReminderCategorySelect
               v-model:value="newReminder.category"
               :options="newReminderCategoryOptions"
               :placeholder="l.notifications.quickAddCategoryPlaceholder"
-              clearable
-              filterable
-              tag
-              :virtual-scroll="false"
             />
           </n-form-item>
           <n-form-item :label="l.notifications.quickAddRemindBeforeLabel">
@@ -256,9 +252,9 @@
               :placeholder="l.notifications.quickAddRemindBeforePlaceholder"
             />
           </n-form-item>
-          <n-form-item>
+          <div class="reminder-checkbox-row">
             <n-checkbox v-model:checked="personalAlsoEmailSelf">{{ l.reminders.alsoEmailSelf }}</n-checkbox>
-          </n-form-item>
+          </div>
         </template>
 
         <!-- ── Normal (client/category) reminder ── -->
@@ -316,14 +312,10 @@
           />
         </n-form-item>
         <n-form-item :label="l.remindersMsg.categoryOptional">
-          <n-select
+          <ReminderCategorySelect
             v-model:value="newReminder.category"
             :options="newReminderCategoryOptions"
             :placeholder="l.remindersMsg.noCategory"
-            clearable
-            filterable
-            tag
-            :virtual-scroll="false"
           />
         </n-form-item>
         <n-form-item :label="l.remindersMsg.attachmentOptional">
@@ -347,9 +339,9 @@
         </n-form-item>
         </template>
 
-        <n-form-item>
+        <div class="reminder-checkbox-row">
           <n-checkbox v-model:checked="createSyncCalendar">{{ l.reminders.syncToGoogleCalendar }}</n-checkbox>
-        </n-form-item>
+        </div>
         <n-form-item v-if="createSyncCalendar" :label="l.reminders.calendarItemType">
           <n-radio-group v-model:value="createCalendarKind" name="calendar-kind">
             <n-radio-button value="task">{{ l.reminders.calendarKindTask }}</n-radio-button>
@@ -407,6 +399,7 @@
 </template>
 
 <script setup lang="ts">
+import ReminderCategorySelect from "../components/ReminderCategorySelect.vue";
 import MobileMappedValue from "../components/MobileMappedValue.vue";
 import ResponsiveFilterButton from "../components/ResponsiveFilterButton.vue";
 import {computed, h, onMounted, ref, type Component} from "vue";
@@ -827,6 +820,7 @@ async function openCreate() {
   personalTargetDateMs.value = null;
   personalAlsoEmailSelf.value = false;
   personalRemindBeforeDays.value = "";
+  void loadReminderCategories(true);
   showCreate.value = true;
 }
 
@@ -954,7 +948,7 @@ async function doCreate() {
       await api.reminders.createPersonal({
         title: newReminder.value.title.trim(),
         target_date: targetDate,
-        reminder_category: newReminder.value.category || "Personal",
+        reminder_category: newReminder.value.category?.trim() || "Personal",
         email_to: personalAlsoEmailSelf.value ? (authStore.user?.email ?? null) : null,
         remind_before_days: personalRemindBeforeDays.value.trim() || null,
         sync_calendar: createSyncCalendar.value,
@@ -1011,7 +1005,7 @@ async function doCreate() {
       client_id: newReminder.value.client_id,
       document_id: attachedDocumentId,
       document_reference: attachMode.value === "reference" ? attachReference.value.trim() || null : null,
-      reminder_category: newReminder.value.category,
+      reminder_category: newReminder.value.category?.trim() || null,
       trigger_date: triggerDate,
       advance_days: 0,
       title: newReminder.value.title,
@@ -2160,7 +2154,7 @@ usePersistedTableState("reminders", {
 }
 
 .personal-reminder-hint {
-  margin: -4px 0 12px;
+  margin: 0;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.45;
