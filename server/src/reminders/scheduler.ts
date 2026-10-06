@@ -20,6 +20,7 @@ import {parseObjectRecord, parseReminderEmailTo, pickContractEmail, pickContract
 import {buildGroupedItemsTable, expiryFromReminderTitle, groupedReminderKey} from "./groupedReminderEmail";
 import {isProcessPaused} from "../ops/processControl";
 import {checkBillingReminders} from "../plans/billingReminders";
+import {checkMonthlyExpenseReports} from "../reports/monthlyExpenseReport";
 import {
   AUTO_SCAN_HISTORY_MONTHS,
   AUTO_SCAN_USERS_PER_TICK,
@@ -84,6 +85,7 @@ export function startScheduler() {
     }
     if (settings.reminderEnabled) await runWithHealth("checkReminders", checkReminders);
     await runWithHealth("checkMonthlyReports", checkMonthlyReports);
+    await runWithHealth("checkMonthlyExpenseReports", () => checkMonthlyExpenseReports(new Date()));
       await runWithHealth("checkBillingReminders", checkBillingReminders);
     if (settings.reminderEnabled) await runWithHealth("checkEscalations", checkEscalations);
     await runWithHealth("syncCalendars", syncAllCalendars);
