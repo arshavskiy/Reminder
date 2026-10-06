@@ -7319,32 +7319,48 @@ paths:
   /api/invoices/annual-summary.pdf:
     get:
       summary: Download the annual expense summary as a PDF
+      description: |-
+        Generates a one-page PDF of all imported invoices for the given calendar year,
+        grouped by expense category. Available to Digital, Basic and Business plans.
+        The route is under `/api/invoices` (not `/api/reports`) so it bypasses the
+        `pages.reports` feature gate that is blocked for Digital-plan users.
       tags:
         - Reports and Search
       parameters:
         - name: year
           in: query
           required: false
+          description: Calendar year (2000–2100). Defaults to the current year.
           schema:
             type: integer
+            minimum: 2000
+            maximum: 2100
         - name: locale
           in: query
           required: false
+          description: PDF language and text direction. Defaults to `he`.
           schema:
             type: string
             enum: [he, en, ru]
       responses:
         "200":
-          description: PDF file
+          description: PDF binary stream
           content:
             application/pdf:
               schema:
                 type: string
                 format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="annual-expenses-2026.pdf"'
         "400":
-          description: Invalid year
+          description: Invalid year parameter
         "401":
           description: Not signed in
+        "403":
+          description: Plan does not include invoice access (pages.invoices feature gate)
         "500":
           description: PDF generation failed
   /api/reports/monthly/send:
