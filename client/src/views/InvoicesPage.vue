@@ -286,7 +286,7 @@
       @dismiss="lastDriveExportJob = null"
     />
 
-    <n-spin :show="loading">
+    <div>
       <div v-if="!rows.length && !loading" class="empty">
         <n-icon :component="DocumentTextOutline" :size="48" class="empty__icon" />
         <p>{{ l.invoices.empty }}</p>
@@ -478,8 +478,7 @@
                     {{ l.invoicesMsg.pairedTooltip }}
                   </n-tooltip>
                   <span v-if="row.inline_no_file" class="invoice-nofile-flag">
-                    <n-icon :component="MailOutline" :size="12" />
-                    {{ l.invoicesMsg.noFile }}
+                    <n-icon :component="MailOutline" :size="14" />
                   </span>
                   <span class="invoice-supplier-cell__meta">
                     <span class="invoice-supplier-cell__client invoice-cell-truncate" dir="auto" :title="clientLabel(row)">{{ clientLabel(row) }}</span>
@@ -580,7 +579,7 @@
           @update:page-size="() => load(true)"
         />
       </div>
-    </n-spin>
+    </div>
 
     <n-modal
       v-model:show="businessModal.show"
