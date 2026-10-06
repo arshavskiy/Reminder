@@ -1139,6 +1139,14 @@ export const api = {
     markAllRead: () => post<{ ok: boolean }>("/notifications/read-all"),
   },
 
+  review: {
+    list: (params?: { status?: string; limit?: number; offset?: number }) =>
+      get<{ items: ReviewItem[]; total: number }>(`/review${qs(params)}`),
+    count: () => get<{ pending: number }>("/review/count", true),
+    approve: (ids: string[]) => post<{ ok: boolean; approved: number; pending: number }>("/review/approve", { ids }),
+    dismiss: (id: string) => post<{ ok: boolean; remindersDismissed: number; pending: number }>(`/review/${id}/dismiss`, {}),
+  },
+
   tasks: {
     list: (params?: { status?: string; clientId?: number }) => {
       return get<Task[]>(`/tasks${qs(params)}`);
