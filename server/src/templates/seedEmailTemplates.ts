@@ -2,13 +2,18 @@
 // Users can edit / clone / disable. Bound to no doc_template = used as fallback.
 
 import { col } from "../db/db";
-import { loadReminderTemplate } from "../email-templates/loader";
+import { loadReminderTemplate, loadDigitalTemplate } from "../email-templates/loader";
 import type { EmailTemplate } from "../../src/shared/types.js";
 
 const DEFAULT_HTML    = loadReminderTemplate("default");
 const INSPECTION_HTML = loadReminderTemplate("inspection");
 const CONTRACT_HTML   = loadReminderTemplate("contract");
 const INVOICE_HTML    = loadReminderTemplate("invoice");
+const INVOICE_EN_HTML = loadReminderTemplate("invoice", "en");
+const INVOICE_RU_HTML = loadReminderTemplate("invoice", "ru");
+const EXPENSE_REPORT_HE_HTML = loadDigitalTemplate("expense-report", "he");
+const EXPENSE_REPORT_EN_HTML = loadDigitalTemplate("expense-report", "en");
+const EXPENSE_REPORT_RU_HTML = loadDigitalTemplate("expense-report", "ru");
 const MONTHLY_REPORT_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head><meta charset="UTF-8"></head>
@@ -68,6 +73,41 @@ const SEEDS: TemplateSeed[] = [
     html: INVOICE_HTML,
     is_default: 0,
     doc_template_name: "חשבונית",
+  },
+  {
+    name: "Invoice Payment Reminder (EN)",
+    subject: "[Payment] {{client_company}} — Invoice {{document_number}}",
+    html: INVOICE_EN_HTML,
+    is_default: 0,
+    doc_template_name: null,
+  },
+  {
+    name: "Напоминание об оплате счёта (RU)",
+    subject: "[Оплата] {{client_company}} — Счёт {{document_number}}",
+    html: INVOICE_RU_HTML,
+    is_default: 0,
+    doc_template_name: null,
+  },
+  {
+    name: "סיכום הוצאות חודשי (Digital)",
+    subject: "סיכום הוצאות {{month_label}} — {{grand_total}}",
+    html: EXPENSE_REPORT_HE_HTML,
+    is_default: 0,
+    doc_template_name: null,
+  },
+  {
+    name: "Monthly Expense Summary (Digital EN)",
+    subject: "{{month_label}} expense summary — {{grand_total}}",
+    html: EXPENSE_REPORT_EN_HTML,
+    is_default: 0,
+    doc_template_name: null,
+  },
+  {
+    name: "Ежемесячный отчёт о расходах (Digital RU)",
+    subject: "Расходы за {{month_label}} — {{grand_total}}",
+    html: EXPENSE_REPORT_RU_HTML,
+    is_default: 0,
+    doc_template_name: null,
   },
 ];
 

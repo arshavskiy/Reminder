@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; direction: ltr; background: #f0fdf4; padding: 24px; color: #2c3e50; margin: 0; }
+    .card { background: #ffffff; border-radius: 14px; padding: 36px 32px; max-width: 620px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .logo { text-align: center; margin-bottom: 20px; }
+    .logo img { max-height: 56px; }
+    .header-bar { background: linear-gradient(135deg, #065f46, #059669); border-radius: 10px; padding: 18px 24px; margin-bottom: 24px; text-align: center; }
+    .header-bar h1 { color: #fff; margin: 0; font-size: 20px; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .header-bar .subtitle { color: rgba(255,255,255,0.85); font-size: 13px; margin-top: 6px; }
+    .alert-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #14532d; border: 1px solid #86efac; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 700; margin-bottom: 20px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; }
+    .fields { background: #fafbfc; border: 1px solid #e5e9ef; border-radius: 10px; margin-bottom: 16px; width: 100%; border-collapse: collapse; }
+    .field td { padding: 10px 16px; border-bottom: 1px solid #e5e9ef; font-size: 14px; }
+    .field:last-child td { border-bottom: none; }
+    .field .label { color: #6b7280; text-align: left; }
+    .field .value { color: #111827; font-weight: 600; text-align: right; }
+    .field-due td { background: #fef9c3; }
+    .field-due .value { color: #713f12; font-size: 15px; }
+    .amount-box { background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; }
+    .amount-box .amount-label { font-size: 13px; color: #166534; margin-bottom: 6px; font-weight: 600; }
+    .amount-box .amount-value { font-size: 32px; font-weight: 800; color: #14532d; }
+    .body-text { background: #f0fdf4; border-left: 4px solid #16a34a; padding: 14px 18px; border-radius: 10px 0 0 10px; font-size: 14px; color: #14532d; margin: 16px 0; line-height: 1.6; }
+    .warning-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 14px 18px; margin: 16px 0; text-align: center; }
+    .warning-box p { margin: 0; font-size: 14px; color: #9a3412; font-weight: 600; }
+    .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e9ef; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {{#if logo_url}}
+    <div class="logo"><img src="{{logo_url}}" alt="Logo"/></div>
+    {{/if}}
+
+    <div class="header-bar">
+      <h1>Invoice Payment Reminder</h1>
+      <div class="subtitle">Hello {{contact_person|there}} — {{document_type|Invoice}}, {{client_company|Client}}</div>
+    </div>
+
+    <div class="alert-badge">{{advance_days}} days until payment due</div>
+
+    <div class="section-title">Client Details</div>
+    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
+      {{#if client_company}}<tr class="field"><td class="label">Client / Company</td><td class="value">{{client_company}}</td></tr>{{/if}}
+      {{#if contact_person}}<tr class="field"><td class="label">Contact Person</td><td class="value">{{contact_person}}</td></tr>{{/if}}
+      {{#if contact_phone}}<tr class="field"><td class="label">Phone</td><td class="value">{{contact_phone}}</td></tr>{{/if}}
+    </table>
+
+    <div class="section-title">Invoice Details</div>
+    <table cellpadding="0" cellspacing="0" class="fields" role="presentation">
+      {{#if document_number}}<tr class="field"><td class="label">Invoice Number</td><td class="value">{{document_number}}</td></tr>{{/if}}
+      {{#if expiry_date}}<tr class="field field-due"><td class="label">Payment Due Date</td><td class="value">{{expiry_date}}</td></tr>{{/if}}
+      {{#if trigger_date}}<tr class="field"><td class="label">Reminder Date</td><td class="value">{{trigger_date}}</td></tr>{{/if}}
+    </table>
+
+    {{#if items_table}}
+    <div class="section-title">Items</div>
+    {{items_table}}
+    {{/if}}
+
+    {{#if amount}}
+    <div class="amount-box">
+      <div class="amount-label">Amount Due</div>
+      <div class="amount-value">{{amount}} {{currency|₪}}</div>
+    </div>
+    {{/if}}
+
+    {{#if body}}
+    <div class="body-text">{{body}}</div>
+    {{/if}}
+
+    <div class="warning-box">
+      <p>⚠️ Please settle the payment before the due date</p>
+    </div>
+
+    <div class="footer">
+      {{from_name|RemindOCR}} — Automated payment management reminder<br>
+      Please do not reply to this message
+    </div>
+  </div>
+</body>
+</html>
