@@ -6194,6 +6194,7 @@ paths:
   /api/invoices/vendors/category:
     post:
       summary: Set a category for a vendor
+      description: Updates existing invoices for the authenticated user's exact supplier name and saves the category for future uploads and Gmail imports. A null category clears existing categories and removes the saved rule. Supplier names are trimmed and matched case-sensitively.
       tags:
         - Invoices
       requestBody:
@@ -8641,6 +8642,33 @@ paths:
                   error:
                     type: string
                     example: Unauthorized
+  /api/review/{id}/corrections:
+    put:
+      summary: Correct a pending invoice review without approving it
+      tags: [Import Review]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_name, amount, currency, issue_date]
+              properties:
+                supplier_name: {type: string, maxLength: 300}
+                amount: {type: number}
+                currency: {type: string, minLength: 3, maxLength: 3}
+                issue_date: {type: string, format: date}
+      responses:
+        "200": {description: Invoice and extracted document fields updated}
+        "400": {description: Invalid correction fields}
+        "401": {description: Not signed in}
+        "404": {description: Pending invoice review not found for this user}
+        "500": {description: Corrections could not be saved}
   /api/review/{id}/dismiss:
     post:
       summary: Dismiss an import (not wanted)

@@ -41,6 +41,8 @@ export interface ReviewItem {
   flagged_at: string | null;
   supplier: string | null;
   amount_display: string | null;
+  amount: number | null;
+  currency: string;
   issue_date: string | null;
   invoice_id: string | null;
   download_url: string | null;
@@ -1139,14 +1141,6 @@ export const api = {
     markAllRead: () => post<{ ok: boolean }>("/notifications/read-all"),
   },
 
-  review: {
-    list: (params?: { status?: string; limit?: number; offset?: number }) =>
-      get<{ items: ReviewItem[]; total: number }>(`/review${qs(params)}`),
-    count: () => get<{ pending: number }>("/review/count", true),
-    approve: (ids: string[]) => post<{ ok: boolean; approved: number; pending: number }>("/review/approve", { ids }),
-    dismiss: (id: string) => post<{ ok: boolean; remindersDismissed: number; pending: number }>(`/review/${id}/dismiss`, {}),
-  },
-
   tasks: {
     list: (params?: { status?: string; clientId?: number }) => {
       return get<Task[]>(`/tasks${qs(params)}`);
@@ -1213,6 +1207,8 @@ export const api = {
   },
 
   review: {
+    correct: (id: string, body: {supplier_name: string; amount: number; currency: string; issue_date: string}) =>
+      put<{ok: boolean}>(`/review/${encodeURIComponent(id)}/corrections`, body),
     list: (params: { status?: "pending" | "approved" | "dismissed"; limit?: number; offset?: number } = {}) =>
       get<{ items: ReviewItem[]; total: number }>(`/review${qs(params)}`, true),
     count: () => get<{ pending: number }>("/review/count", true),

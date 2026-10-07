@@ -76,6 +76,8 @@ export interface ReviewItem {
   flagged_at: string | null;
   supplier: string | null;
   amount_display: string | null;
+  amount: number | null;
+  currency: string;
   issue_date: string | null;
   invoice_id: string | null;
   download_url: string | null;
@@ -121,6 +123,8 @@ export async function listReviewItems(
       flagged_at: doc.review?.flagged_at ? new Date(doc.review.flagged_at).toISOString() : null,
       supplier: invoice?.supplier_name ?? null,
       amount_display: amountDisplay(invoice),
+      amount: typeof invoice?.amount === "number" ? invoice.amount : null,
+      currency: invoice?.currency ?? "ILS",
       issue_date: invoice?.issue_date ? String(invoice.issue_date).slice(0, 10) : null,
       invoice_id: invoice ? String(invoice._id) : null,
       download_url: `/api/documents/${id}/download?dl=1`,
@@ -172,4 +176,29 @@ export async function dismissReview(userId: string, id: string): Promise<{ ok: b
     { $set: { status: "dismissed", updated_at: new Date() } } as any,
   );
   return { ok: true, remindersDismissed: Number(reminders?.modifiedCount ?? 0) };
+}
+
+
+export async function correctReview(userId: string, id: string, changes: {
+  supplier_name: string; amount: number; currency: string; issue_date: string;
+}): Promise<boolean> {
+  const _id = objectId(id);
+  if (!_id) return false;
+  const document = await col<any>("documents").findOne({_id, user_id: userId, "review.status": "pending"});
+  if (!document) return false;
+  const invoice = await col<any>("invoices").findOne({document_id: id, user_id: userId});
+  if (!invoice) return false;
+  const now = new Date();
+  await col<any>("invoices").updateOne({_id: invoice._id, user_id: userId}, {$set: {
+    ...changes, fields: {...parseFields(invoice.fields), ...changes}, updated_at: now,
+  }});
+  await col<any>("documents").updateOne({_id, user_id: userId}, {$set: {
+    extracted_fields: JSON.stringify({...parseFields(document.extracted_fields), ...changes}), updated_at: now,
+    manual_field_keys: [...new Set([
+      ...(Array.isArray(document.manual_field_keys) ? document.manual_field_keys : []),
+      ...Object.keys(changes),
+    ])],
+  }});
+  // Approval is a separate action: a save failure must never approve the item.
+  return true;
 }

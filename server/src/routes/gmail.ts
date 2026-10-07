@@ -1,3 +1,4 @@
+import {getSupplierCategory} from "../invoices/supplierCategories.js";
 import express from "express";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
@@ -1060,6 +1061,7 @@ export async function importInlineReceiptMessage(
   const renewalNote = receipt.renewalAmount
     ? `Next charge ${receipt.renewalAmount.toFixed(2)} ${receipt.currency}/${receipt.renewalInterval ?? "period"}${receipt.renewalDate ? ` from ${receipt.renewalDate}` : ""}`
     : null;
+  const supplierCategory = await getSupplierCategory(userId, supplierName);
   const saved = await col("invoices").findOneAndUpdate(
     { user_id: userId, document_id: documentKey } as any,
     {
@@ -1069,6 +1071,7 @@ export async function importInlineReceiptMessage(
         inline_no_file: true,
         gmail_message_id: messageId,
         supplier_name: supplierName,
+        ...(supplierCategory !== undefined && {provider_category: supplierCategory}),
         invoice_number: receipt.transactionId,
         document_subtype: "קבלה",
         issue_date: issueDate,
@@ -1085,6 +1088,7 @@ export async function importInlineReceiptMessage(
         drive_web_link: null,
         fields: {
           supplier_name: supplierName,
+          ...(supplierCategory !== undefined && {provider_category: supplierCategory}),
           vendor_name: receipt.vendor,
           merchant: receipt.merchant,
           renewal_amount: receipt.renewalAmount ?? null,

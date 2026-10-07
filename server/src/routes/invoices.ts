@@ -1,3 +1,4 @@
+import {saveSupplierCategory} from "../invoices/supplierCategories.js";
 import express from "express";
 import ExcelJS from "exceljs";
 import { ObjectId } from "mongodb";
@@ -611,6 +612,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       return;
     }
 
+    await saveSupplierCategory(userId, supplierName, providerCategory);
     const now = new Date();
     const result = await col("invoices").updateMany(
       { user_id: userId, supplier_name: supplierName } as any,

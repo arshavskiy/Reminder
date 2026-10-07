@@ -276,6 +276,7 @@
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
         {{ l.invoices.mergeSuppliers }}
       </button>
+      <SavedFilterViews page="invoices" :snapshot="savedFilterSnapshot" @apply="applySavedFilters" />
       <!-- mobile-only: suppliers + dates inside panel -->
       <n-select
         v-model:value="filters.suppliers"
@@ -776,6 +777,7 @@ import {useI18n} from "../composables/useI18n.js";
 import {useDevModal} from "../composables/useDevModal.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import SpendingAlertsModal from "../components/SpendingAlertsModal.vue";
+import SavedFilterViews from "../components/SavedFilterViews.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
@@ -882,7 +884,7 @@ const filters = reactive({
 // search is left out on purpose: a forgotten search term makes the list look empty.
 const PAGE_SIZES = [10, 20, 50, 100] as const;
 const SORT_KEYS: InvoiceSortKey[] = ["supplier", "status", "date", "client", "category", "type", "amount", "dueDate"];
-usePersistedTableState("invoices", {
+const invoiceTableState = {
   snapshot: () => ({
     status: filters.status,
     type: filters.type,
@@ -897,7 +899,7 @@ usePersistedTableState("invoices", {
     sortDir: sortDir.value,
     pageSize: pageSize.value,
   }),
-  restore: (saved) => {
+  restore: (saved: Record<string, unknown>) => {
     filters.status = asString(saved.status);
     filters.type = asString(saved.type);
     filters.documentCategory = asString(saved.documentCategory) as typeof filters.documentCategory;
@@ -912,7 +914,15 @@ usePersistedTableState("invoices", {
     sortDir.value = pickOne(saved.sortDir, ["asc", "desc"] as const, "desc");
     pageSize.value = pickOne(saved.pageSize, PAGE_SIZES, 20);
   },
-});
+};
+usePersistedTableState("invoices", invoiceTableState);
+function savedFilterSnapshot() { return {...invoiceTableState.snapshot(), q: filters.q, viewMode: viewMode.value}; }
+function applySavedFilters(saved: Record<string, unknown>) {
+  invoiceTableState.restore(saved);
+  filters.q = asString(saved.q) ?? "";
+  viewMode.value = saved.viewMode === "cards" ? "cards" : "table";
+  load(true);
+}
 const businessModal = reactive({
   show: false,
   row: null as ImportedInvoice | null,
@@ -1960,7 +1970,7 @@ async function updateInvoiceProviderCategory(row: ImportedInvoice, value: string
   try {
     const result = await api.invoices.setSupplierCategory({ supplierName, provider_category: category });
     rows.value = rows.value.map((item) => item.supplier_name === supplierName ? { ...item, provider_category: category } : item);
-    message.success(t("invoicesMsg.categoryUpdated", {count: result.modified, supplier: supplierName}));
+    message.success(t(category ? "invoicesMsg.supplierCategorySaved" : "invoicesMsg.supplierCategoryCleared", {count: result.modified, supplier: supplierName}));
   } catch {
     message.error(l.value.invoicesMsg.categoryError);
   }

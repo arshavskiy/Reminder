@@ -16,6 +16,7 @@ const USER_SCOPED_COLLECTIONS = [
   "contracts",
   "contract_advances",
   "invoices",
+  "supplier_category_rules",
   "reminders",
   "tasks",
   "timeline_events",

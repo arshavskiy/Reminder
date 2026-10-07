@@ -1,3 +1,4 @@
+import {getSupplierCategory} from "../invoices/supplierCategories.js";
 import {resolveInspectionType} from "../documents/inspectionType.js";
 import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync} from "fs";
 import {createHash} from "crypto";
@@ -3702,6 +3703,11 @@ async function saveInvoiceRecord(
     fields,
     updated_at: now,
   };
+  const supplierCategory = await getSupplierCategory(options.userId, supplierName);
+  if (supplierCategory !== undefined) {
+    invoiceFields.provider_category = supplierCategory;
+    fields.provider_category = supplierCategory;
+  }
   const receiptLikeInvoice = isReceiptLikeInvoiceDocument(invoiceFields.document_subtype, fields);
   if (clientName && !receiptLikeInvoice) {
     invoiceFields.client_company = clientName;
