@@ -285,6 +285,7 @@
         class="toolbar__supplier toolbar__supplier--mobile"
         @update:value="load(true)"
       />
+      <DateRangePresets v-model="dateRange" class="toolbar__dates--mobile" @change="load(true)" />
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
@@ -587,7 +588,7 @@
           v-model:page-size="pageSize"
           :item-count="total"
           :page-sizes="[10, 20, 50, 100]"
-          :show-size-picker="!isMobile"
+          :show-size-picker="true"
           :page-slot="isMobile ? 5 : 9"
           :simple="isMobile"
           @update:page="() => load(false)"
@@ -2254,7 +2255,6 @@ function replaceRow(updated: ImportedInvoice) {
   }
 
   .filterbar.filterbar--compact {
-    flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
   }
