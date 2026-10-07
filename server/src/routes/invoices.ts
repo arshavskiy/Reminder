@@ -470,7 +470,9 @@ export function registerInvoiceRoutes(app: express.Application) {
       const spread = median > 0 ? (maxAmt - minAmt) / median : 1;
       const avg = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length);
       const lastDate = entries.map((e) => e.date).sort().at(-1)!;
-      const category = entries.at(-1)!.category;
+      const catFreq = new Map<string, number>();
+      for (const e of entries) catFreq.set(e.category, (catFreq.get(e.category) ?? 0) + 1);
+      const category = [...catFreq.entries()].sort((a, b) => b[1] - a[1])[0][0];
       results.push({
         supplier, category,
         occurrences: entries.length,
