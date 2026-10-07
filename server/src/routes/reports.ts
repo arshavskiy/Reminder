@@ -250,14 +250,20 @@ export function registerReportRoutes(app: express.Application) {
       return;
     }
 
-    const from = new Date(year, 0, 1);
-    const to   = new Date(year + 1, 0, 1);
+    const fromTs = new Date(year, 0, 1).getTime();
+    const toTs   = new Date(year + 1, 0, 1).getTime();
 
-    const invoices = await col("invoices").find({
+    const allInvoices = await col("invoices").find({
       user_id: auth.userId,
-      cash_flow: { $ne: "income" },
-      invoice_date: { $gte: from, $lt: to },
     }).toArray() as any[];
+
+    const invoices = allInvoices.filter((inv: any) => {
+      if (inv.cash_flow === "income") return false;
+      const ts = inv.issue_date
+        ? (typeof inv.issue_date === "number" ? inv.issue_date : new Date(inv.issue_date).getTime())
+        : null;
+      return ts !== null && ts >= fromTs && ts < toTs;
+    });
 
     const CATEGORY_LABELS: Record<string, Record<string, string>> = {
       transport:   { he: "תחבורה",        en: "Transport",       ru: "Транспорт" },
@@ -300,9 +306,8 @@ export function registerReportRoutes(app: express.Application) {
       const amount: number = inv.amount_ils ?? inv.amount ?? 0;
       if (!Number.isFinite(amount) || amount <= 0) continue;
       const catKey = normalizeProviderCategory(inv.provider_category) ?? "general";
-      const month: number = inv.invoice_date instanceof Date
-        ? inv.invoice_date.getMonth()
-        : new Date(inv.invoice_date).getMonth();
+      const invTs = typeof inv.issue_date === "number" ? inv.issue_date : new Date(inv.issue_date ?? 0).getTime();
+      const month: number = new Date(invTs).getMonth();
       grandTotal += amount;
       catTotals.set(catKey, (catTotals.get(catKey) ?? 0) + amount);
       monthTotals.set(month, (monthTotals.get(month) ?? 0) + amount);
