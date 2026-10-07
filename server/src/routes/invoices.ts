@@ -422,14 +422,18 @@ export function registerInvoiceRoutes(app: express.Application) {
   // with a consistent amount (within 15% of the median).
   app.get("/api/invoices/recurring", async (req, res) => {
     let userId: string;
+    let planId: string;
     try {
-      userId = (await requireAuth(req.headers.cookie)).userId;
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+      planId = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
     }
-    const fromTs = parseDateTs(req.query.dateFrom);
+    const trialCutoff = planId === "trial" ? Date.now() - 30 * 24 * 60 * 60 * 1000 : null;
+    const fromTs = parseDateTs(req.query.dateFrom) ?? trialCutoff ?? undefined;
     const toTs = parseDateTs(req.query.dateTo, true);
     const invoices = await col("invoices")
       .find({ user_id: userId } as any, { projection: { supplier_name: 1, amount: 1, currency: 1, issue_date: 1, provider_category: 1, cash_flow: 1, pair_role: 1 } } as any)
@@ -492,14 +496,18 @@ export function registerInvoiceRoutes(app: express.Application) {
   // GET /api/invoices/missing-receipts — invoices that have no paired receipt.
   app.get("/api/invoices/missing-receipts", async (req, res) => {
     let userId: string;
+    let planId: string;
     try {
-      userId = (await requireAuth(req.headers.cookie)).userId;
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+      planId = effectivePlanId(ctx.user);
     } catch (e) {
       const err = e as HTTPException;
       res.status(err.status ?? 401).json({ error: err.message });
       return;
     }
-    const fromTs = parseDateTs(req.query.dateFrom);
+    const trialCutoff = planId === "trial" ? Date.now() - 30 * 24 * 60 * 60 * 1000 : null;
+    const fromTs = parseDateTs(req.query.dateFrom) ?? trialCutoff ?? undefined;
     const toTs = parseDateTs(req.query.dateTo, true);
     const limit = clampInt(req.query.limit, 50, 1, 200);
     const invoices = await col("invoices")
