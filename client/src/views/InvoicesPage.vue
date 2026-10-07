@@ -590,7 +590,7 @@
           :page-sizes="[10, 20, 50, 100]"
           :show-size-picker="true"
           :page-slot="isMobile ? 5 : 9"
-          :simple="isMobile"
+          :simple="false"
           @update:page="() => load(false)"
           @update:page-size="() => load(true)"
         />
