@@ -1,9 +1,11 @@
 <template>
   <n-select
     v-if="compact"
+    size="small"
     :value="activePreset"
     :options="selectOptions"
-    :placeholder="l.common.dateRangeAria"
+    :placeholder="l.common.date"
+    :aria-label="l.common.dateRangeAria"
     clearable
     class="date-presets-select"
     @update:value="selectById"
@@ -60,7 +62,7 @@ function presetTitle(id: DateRangePresetId): string {
 }
 
 const selectOptions = computed(() =>
-  DATE_RANGE_PRESETS.map(p => ({ label: presetTitle(p.id), value: p.id }))
+  DATE_RANGE_PRESETS.map(p => ({ label: p.label, value: p.id }))
 );
 
 function select(id: DateRangePresetId) {

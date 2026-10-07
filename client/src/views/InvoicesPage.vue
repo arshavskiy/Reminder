@@ -201,11 +201,10 @@
             {{ l.common.tableView }}
           </n-tooltip>
         </div>
+        <div class="presets-mobile-row">
+          <DateRangePresets v-model="dateRange" compact @change="load(true)" />
+        </div>
       </div>
-    </div>
-
-    <div class="presets-mobile-row">
-      <DateRangePresets v-model="dateRange" compact @change="load(true)" />
     </div>
 
     <div class="presets-and-dates-row">
@@ -2875,7 +2874,9 @@ function replaceRow(updated: ImportedInvoice) {
 
   .presets-mobile-row {
     display: block;
-    margin-bottom: 8px;
+    flex: 0 0 80px;
+    width: 80px;
+    min-width: 0;
   }
 
   .toolbar__supplier--mobile,
