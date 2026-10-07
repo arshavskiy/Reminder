@@ -316,13 +316,6 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.contracts,
         },
         {
-          label: localeStore.catalog.review.navLabel,
-          key: "review",
-          minPlan: "expired" as const,
-          feature: FEATURES.pages.documents,
-          badge: reviewQueue.pending,
-        },
-        {
           label: localeStore.catalog.documents.activityLog,
           key: "activity",
           query: {kind: "document"},
@@ -377,6 +370,13 @@ const allNav = computed<NavItem[]>(() => {
           key: "invoices/expenses",
           minPlan: ["digital", "basic", "business"] as const,
           feature: FEATURES.pages.invoices,
+        },
+        {
+          label: localeStore.catalog.review.navLabel,
+          key: "review",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.invoices,
+          badge: reviewQueue.pending,
         },
       ],
     },
