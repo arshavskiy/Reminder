@@ -2786,6 +2786,7 @@ const JOB_NAME_HE: Record<string, string> = {
   checkDiscoveryScans: "Discovery Scans (daily/weekly)",
   checkInvoiceScans: "Invoice Scans (daily Gmail import)",
   checkSpendingAlerts: "Spending Alerts (monthly threshold check)",
+  checkBudgetPaceAlerts: "Budget Pace Alerts (mid-month projection)",
   checkMonthlyExpenseReports: "Monthly Expense Reports (Digital, 2nd of month)",
 };
 

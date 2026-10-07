@@ -92,6 +92,7 @@ export function startScheduler() {
     await runWithHealth("checkDiscoveryScans", checkDiscoveryScans);
     await runWithHealth("checkInvoiceScans", checkInvoiceScans);
     await runWithHealth("checkSpendingAlerts", checkSpendingAlerts);
+    await runWithHealth("checkBudgetPaceAlerts", checkBudgetPaceAlerts);
     await col("scheduler_health").updateOne(
       { name: "tick" },
       { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
@@ -1250,6 +1251,81 @@ async function syncContractRemindersToCalendar(userId: string | undefined, contr
     }
   } catch (e) {
     logger.warn("calendar_contract_sync_failed", { user_id: userId, contract_id: contractId, error: String(e) });
+  }
+}
+
+/** Pure helper — exported for tests. Returns projected month-end spend for a category. */
+export function projectMonthEndSpend(spentSoFar: number, daysElapsed: number, daysInMonth: number): number {
+  if (daysElapsed <= 0) return 0;
+  return Math.round((spentSoFar / daysElapsed) * daysInMonth);
+}
+
+async function checkBudgetPaceAlerts(now = new Date()) {
+  // Run on days 14–16 only (mid-month window; scheduler ticks hourly so dedup by month key)
+  const day = now.getDate();
+  if (day < 14 || day > 16) return;
+
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), day, 23, 59, 59);
+
+  const users = await col("users").find({ spending_alerts: { $exists: true, $not: { $size: 0 } } } as any).toArray() as any[];
+  for (const user of users) {
+    const userId = String(user._id);
+    const alerts: Array<{ category: string; threshold: number; currency: string }> = Array.isArray(user.spending_alerts) ? user.spending_alerts : [];
+    if (!alerts.length) continue;
+
+    // Dedup: skip if pace alert already sent this month
+    const alreadySent = await col("notifications").findOne({
+      user_id: userId,
+      kind: "budget_pace_alert",
+      spending_alert_month: monthKey,
+    } as any);
+    if (alreadySent) continue;
+
+    const invoices = await col("invoices").find({
+      user_id: userId,
+      issue_date: { $gte: fromDate.toISOString().slice(0, 10), $lte: todayEnd.toISOString().slice(0, 10) },
+    } as any, { projection: { provider_category: 1, amount: 1, cash_flow: 1 } } as any).toArray() as any[];
+
+    const categoryTotals = new Map<string, number>();
+    for (const inv of invoices) {
+      if (inv.cash_flow === "income") continue;
+      if (typeof inv.amount !== "number" || !Number.isFinite(inv.amount)) continue;
+      const cat = inv.provider_category || "general";
+      categoryTotals.set(cat, (categoryTotals.get(cat) ?? 0) + inv.amount);
+    }
+
+    // Project to month-end: spentSoFar / daysElapsed * daysInMonth
+    const daysElapsed = day;
+    const triggered: Array<{ category: string; projected: number; threshold: number }> = [];
+    for (const alert of alerts) {
+      const spentSoFar = categoryTotals.get(alert.category) ?? 0;
+      if (spentSoFar === 0) continue;
+      const projected = projectMonthEndSpend(spentSoFar, daysElapsed, daysInMonth);
+      if (projected >= alert.threshold) {
+        triggered.push({ category: alert.category, projected, threshold: alert.threshold });
+      }
+    }
+    if (!triggered.length) continue;
+
+    for (const t of triggered) {
+      const title = `צפי חריגה בהוצאות: ${t.category}`;
+      const body = `בקצב הנוכחי, הוצאות ${monthKey} ב"${t.category}" יגיעו ל-₪${t.projected} (סף: ₪${t.threshold})`;
+      await col("notifications").insertOne({
+        user_id: userId,
+        kind: "budget_pace_alert",
+        title,
+        body,
+        spending_alert_month: monthKey,
+        spending_alert_category: t.category,
+        created_at: new Date(),
+        read_at: null,
+      } as any);
+      await sendToUser(userId, { title, body, data: { url: "/invoices/expenses", kind: "budget_pace_alert" } }).catch(() => {});
+      logger.info("budget_pace_alert_fired", { user_id: userId, month: monthKey, category: t.category, projected: t.projected, threshold: t.threshold });
+    }
   }
 }
 
