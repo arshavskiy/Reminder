@@ -338,6 +338,11 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.reminders,
         },
         {
+          label: localeStore.locale === "en" ? "Discover reminders" : localeStore.locale === "ru" ? "Поиск напоминаний" : "גילוי תזכורות",
+          key: "discover-reminders",
+          feature: FEATURES.pages.discovery,
+        },
+        {
           label: localeStore.catalog.reminders.activityLog,
           key: "activity",
           query: {kind: "email"},
@@ -345,12 +350,6 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.reminders,
         },
       ],
-    },
-    {
-      label: localeStore.locale === "en" ? "Discover reminders" : localeStore.locale === "ru" ? "Поиск напоминаний" : "גילוי תזכורות",
-      key: "discover-reminders",
-      icon: SearchOutline,
-      feature: FEATURES.pages.discovery,
     },
     {
       label: nav.invoices,
