@@ -205,7 +205,7 @@
     </div>
 
     <div class="presets-mobile-row">
-      <DateRangePresets v-model="dateRange" @change="load(true)" />
+      <DateRangePresets v-model="dateRange" compact @change="load(true)" />
     </div>
 
     <div class="presets-and-dates-row">

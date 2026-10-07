@@ -1,6 +1,15 @@
 <template>
+  <n-select
+    v-if="compact"
+    :value="activePreset"
+    :options="selectOptions"
+    :placeholder="l.common.dateRangeAria"
+    clearable
+    class="date-presets-select"
+    @update:value="selectById"
+  />
   <!-- dir=ltr keeps 1m..3y in ascending order inside the RTL toolbar. -->
-  <div class="date-presets" dir="ltr" role="group" :aria-label="l.common.dateRangeAria">
+  <div v-else class="date-presets" dir="ltr" role="group" :aria-label="l.common.dateRangeAria">
     <button
       v-for="preset in DATE_RANGE_PRESETS"
       :key="preset.id"
@@ -19,6 +28,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { NSelect } from "naive-ui";
 import {
   DATE_RANGE_PRESETS,
   matchDateRangePreset,
@@ -30,7 +40,7 @@ import { useI18n } from "../composables/useI18n.js";
 
 const { l } = useI18n();
 
-const props = defineProps<{ modelValue: DateRangeTuple | null }>();
+const props = defineProps<{ modelValue: DateRangeTuple | null; compact?: boolean }>();
 const emit = defineEmits<{
   "update:modelValue": [value: DateRangeTuple | null];
   change: [value: DateRangeTuple | null];
@@ -49,10 +59,20 @@ function presetTitle(id: DateRangePresetId): string {
   return map[id];
 }
 
+const selectOptions = computed(() =>
+  DATE_RANGE_PRESETS.map(p => ({ label: presetTitle(p.id), value: p.id }))
+);
+
 function select(id: DateRangePresetId) {
   // Clicking the active preset clears it, so the chips can toggle back to
   // "all time" without reaching for the date picker's clear button.
   const next = activePreset.value === id ? null : resolveDateRangePreset(id);
+  emit("update:modelValue", next);
+  emit("change", next);
+}
+
+function selectById(id: DateRangePresetId | null) {
+  const next = id ? resolveDateRangePreset(id) : null;
   emit("update:modelValue", next);
   emit("change", next);
 }
@@ -98,6 +118,10 @@ function select(id: DateRangePresetId) {
   background: var(--bg-card);
   color: var(--brand-color);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+
+.date-presets-select {
+  width: 100%;
 }
 
 @media (max-width: 720px) {
