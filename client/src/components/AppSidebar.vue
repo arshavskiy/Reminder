@@ -371,6 +371,18 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.invoices,
         },
         {
+          label: localeStore.catalog.recurring.title,
+          key: "invoices/recurring",
+          minPlan: ["digital", "basic", "business"] as const,
+          feature: FEATURES.pages.invoices,
+        },
+        {
+          label: localeStore.catalog.missingReceipts.title,
+          key: "invoices/missing-receipts",
+          minPlan: ["digital", "basic", "business"] as const,
+          feature: FEATURES.pages.invoices,
+        },
+        {
           label: localeStore.catalog.review.navLabel,
           key: "review",
           minPlan: "expired" as const,
@@ -385,6 +397,20 @@ const allNav = computed<NavItem[]>(() => {
       icon: MailOutline,
       minRole: "admin",
       feature: FEATURES.pages.gmail,
+      children: [
+        {
+          label: nav.gmail,
+          key: "gmail",
+          minRole: "admin" as const,
+          feature: FEATURES.pages.gmail,
+        },
+        {
+          label: localeStore.catalog.importHistoryMsg.title,
+          key: "gmail/import-history",
+          minRole: "admin" as const,
+          feature: FEATURES.pages.gmail,
+        },
+      ],
     },
   ];
 });
@@ -467,6 +493,9 @@ function isActiveNav(key: string, query?: Record<string, string>): boolean {
     return !query?.kind || route.query.kind === query.kind;
   }
   if (key === "invoices" && path.startsWith("/invoices/expenses")) return false;
+  if (key === "invoices" && path.startsWith("/invoices/recurring")) return false;
+  if (key === "invoices" && path.startsWith("/invoices/missing-receipts")) return false;
+  if (key === "gmail" && path.startsWith("/gmail/import-history")) return false;
   const onPage = key.includes("/")
     ? path === `/${key}` || path.startsWith(`/${key}/`)
     : activeKey.value === key || path === `/${key}` || path.startsWith(`/${key}/`);

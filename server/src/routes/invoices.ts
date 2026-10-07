@@ -417,6 +417,126 @@ export function registerInvoiceRoutes(app: express.Application) {
     });
   });
 
+  // GET /api/invoices/recurring — detect likely recurring / subscription payments.
+  // Groups invoices by supplier and flags those with 3+ occurrences across distinct months
+  // with a consistent amount (within 15% of the median).
+  app.get("/api/invoices/recurring", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const fromTs = parseDateTs(req.query.dateFrom);
+    const toTs = parseDateTs(req.query.dateTo, true);
+    const invoices = await col("invoices")
+      .find({ user_id: userId } as any, { projection: { supplier_name: 1, amount: 1, currency: 1, issue_date: 1, provider_category: 1, cash_flow: 1, pair_role: 1 } } as any)
+      .toArray() as InvoiceRow[];
+
+    const groups = new Map<string, { amount: number; month: string; date: string; category: string }[]>();
+    for (const inv of invoices) {
+      const supplier = (inv.supplier_name ?? "").trim();
+      if (!supplier) continue;
+      const amount = typeof inv.amount === "number" ? inv.amount : null;
+      if (amount === null || amount <= 0) continue;
+      const cashFlow = normalizeCashFlow(inferInvoiceCashFlow(inv));
+      if (cashFlow === "income") continue;
+      const dateStr = inv.issue_date ? String(inv.issue_date).slice(0, 10) : null;
+      if (!dateStr) continue;
+      const ts = new Date(dateStr).getTime();
+      if (fromTs && ts < fromTs) continue;
+      if (toTs && ts > toTs) continue;
+      const month = dateStr.slice(0, 7);
+      if (!groups.has(supplier)) groups.set(supplier, []);
+      groups.get(supplier)!.push({ amount, month, date: dateStr, category: inv.provider_category ?? "general" });
+    }
+
+    const results: {
+      supplier: string; category: string; occurrences: number; months_active: number;
+      avg_amount: number; min_amount: number; max_amount: number; last_date: string;
+      amount_stable: boolean;
+    }[] = [];
+
+    for (const [supplier, entries] of groups) {
+      if (entries.length < 3) continue;
+      const distinctMonths = new Set(entries.map((e) => e.month));
+      if (distinctMonths.size < 2) continue;
+      const amounts = entries.map((e) => e.amount).sort((a, b) => a - b);
+      const median = amounts[Math.floor(amounts.length / 2)];
+      const minAmt = amounts[0];
+      const maxAmt = amounts[amounts.length - 1];
+      const spread = median > 0 ? (maxAmt - minAmt) / median : 1;
+      const avg = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length);
+      const lastDate = entries.map((e) => e.date).sort().at(-1)!;
+      const category = entries.at(-1)!.category;
+      results.push({
+        supplier, category,
+        occurrences: entries.length,
+        months_active: distinctMonths.size,
+        avg_amount: avg,
+        min_amount: roundMoney(minAmt),
+        max_amount: roundMoney(maxAmt),
+        last_date: lastDate,
+        amount_stable: spread <= 0.15,
+      });
+    }
+
+    results.sort((a, b) => b.occurrences - a.occurrences || b.avg_amount - a.avg_amount);
+    res.json({ items: results, total: results.length });
+  });
+
+  // GET /api/invoices/missing-receipts — invoices that have no paired receipt.
+  app.get("/api/invoices/missing-receipts", async (req, res) => {
+    let userId: string;
+    try {
+      userId = (await requireAuth(req.headers.cookie)).userId;
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const fromTs = parseDateTs(req.query.dateFrom);
+    const toTs = parseDateTs(req.query.dateTo, true);
+    const limit = clampInt(req.query.limit, 50, 1, 200);
+    const invoices = await col("invoices")
+      .find({ user_id: userId } as any, { projection: { supplier_name: 1, amount: 1, currency: 1, issue_date: 1, document_subtype: 1, provider_category: 1, status: 1, paired_with: 1, pair_status: 1 } } as any)
+      .sort({ issue_date: -1 } as any)
+      .limit(2000)
+      .toArray() as InvoiceRow[];
+    const providers = await loadGmailSearchProviders();
+    const rows = invoices
+      .filter((inv) => {
+        if (inv.status === "archived" || inv.status === "rejected") return false;
+        const role = roleOf(invoiceDocumentCategory(inv.document_subtype));
+        if (role !== "invoice") return false;
+        if (hasActivePair({ pairedWith: inv.paired_with ? String(inv.paired_with) : null, pairStatus: inv.pair_status ?? null })) return false;
+        const dateStr = inv.issue_date ? String(inv.issue_date).slice(0, 10) : null;
+        if (!dateStr) return false;
+        const ts = new Date(dateStr).getTime();
+        if (fromTs && ts < fromTs) return false;
+        if (toTs && ts > toTs) return false;
+        return true;
+      })
+      .slice(0, limit)
+      .map((inv) => {
+        const supplier = (inv.supplier_name ?? "").trim();
+        const gmailQuery = supplier
+          ? `from:(${supplier}) קבלה OR receipt OR payment`
+          : "קבלה OR receipt OR payment";
+        return {
+          id: String(inv._id),
+          supplier_name: supplier || null,
+          amount: typeof inv.amount === "number" ? roundMoney(inv.amount) : null,
+          currency: inv.currency ?? "ILS",
+          issue_date: inv.issue_date ? String(inv.issue_date).slice(0, 10) : null,
+          gmail_search_url: `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(gmailQuery)}`,
+        };
+      });
+    res.json({ items: rows, total: rows.length });
+  });
+
   app.post("/api/invoices/reports/six-months/send", async (req, res) => {
     let userId: string;
     try {

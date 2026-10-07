@@ -85,6 +85,7 @@
       <n-form class="review-form" @submit.prevent="save">
         <n-form-item :label="c.name"><n-input v-model:value="draftTitle" :disabled="saving" /></n-form-item>
         <n-form-item :label="c.date"><input v-model="draftDate" type="date" required :disabled="saving" class="date-input" /></n-form-item>
+        <n-form-item v-if="selected?.kind === 'warranty'" :label="c.returnDeadline"><input v-model="draftReturnDeadline" type="date" :disabled="saving" class="date-input" /></n-form-item>
         <n-checkbox v-model:checked="draftEmail" :disabled="saving">{{ c.emailMe }}</n-checkbox>
         <n-checkbox v-model:checked="draftCalendar" :disabled="saving">{{ c.addToCalendar }}</n-checkbox>
         <p class="review-note">{{ c.warnAhead }}</p>
@@ -192,6 +193,7 @@ const showReview = ref(false);
 const selected = ref<ObligationSuggestion | null>(null);
 const draftTitle = ref("");
 const draftDate = ref("");
+const draftReturnDeadline = ref("");
 const draftEmail = ref(true);
 const draftCalendar = ref(true);
 const saving = ref(false);
@@ -263,6 +265,7 @@ function review(item: ObligationSuggestion) {
   draftTitle.value = `${c.value.kinds[item.kind]}: ${item.entity_name}`;
   const today = new Date();
   draftDate.value = item.warning ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}` : item.due_date;
+  draftReturnDeadline.value = "";
   saveError.value = "";
   showReview.value = true;
 }
@@ -273,6 +276,9 @@ async function save() {
   try {
     const result = await api.reminders.createPersonal({ title: draftTitle.value.trim(), target_date: draftDate.value, advance_days: [7, 1], email_self: draftEmail.value, sync_calendar: draftCalendar.value, origin: "discovery" });
     if (!result.created) throw new Error(c.value.notCreated);
+    if (selected.value.kind === "warranty" && draftReturnDeadline.value) {
+      await api.reminders.createPersonal({ title: `${c.value.returnDeadline}: ${selected.value.entity_name}`, target_date: draftReturnDeadline.value, advance_days: [7, 1], email_self: draftEmail.value, sync_calendar: draftCalendar.value, origin: "discovery" }).catch(() => {});
+    }
     saved.value.add(selected.value.id);
     await api.gmail.updateDiscovery(selected.value.id, "created");
     showReview.value = false;

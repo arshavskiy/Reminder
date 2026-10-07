@@ -304,6 +304,27 @@ export interface InvoiceExpenseMonthlyResponse {
   series: InvoiceExpenseMonthlySeries[];
 }
 
+export interface MissingReceiptItem {
+  id: string;
+  supplier_name: string | null;
+  amount: number | null;
+  currency: string;
+  issue_date: string | null;
+  gmail_search_url: string;
+}
+
+export interface RecurringPaymentItem {
+  supplier: string;
+  category: string;
+  occurrences: number;
+  months_active: number;
+  avg_amount: number;
+  min_amount: number;
+  max_amount: number;
+  last_date: string;
+  amount_stable: boolean;
+}
+
 export interface SpendingAlert {
   category: string;
   threshold: number;
@@ -927,6 +948,10 @@ export const api = {
       post<{ ok: true; recipients: string[]; count: number; period: { from: string; to: string } }>("/invoices/reports/six-months/send", {}),
     expenseMonthly: (params?: { dateBasis?: "invoice" | "import"; proofFilter?: "all" | "paid" | "requested" | "income"; category?: string; supplier?: string; dateFrom?: string; dateTo?: string; top?: number }, force = false) =>
       get<InvoiceExpenseMonthlyResponse>(`/invoices/expenses/monthly${qs(params)}`, force),
+    recurringPayments: (params?: { dateFrom?: string; dateTo?: string }) =>
+      get<{ items: RecurringPaymentItem[]; total: number }>(`/invoices/recurring${qs(params)}`),
+    missingReceipts: (params?: { dateFrom?: string; dateTo?: string; limit?: number }) =>
+      get<{ items: MissingReceiptItem[]; total: number }>(`/invoices/missing-receipts${qs(params)}`),
     upload: async (
       files: File[],
       options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean; liteImport?: boolean },

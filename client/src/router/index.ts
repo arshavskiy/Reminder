@@ -168,6 +168,16 @@ const appRoutes: RouteRecordRaw[] = [
             meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
         },
         {
+            path: "/invoices/recurring",
+            component: () => import("../views/RecurringPaymentsPage.vue"),
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
+        },
+        {
+            path: "/invoices/missing-receipts",
+            component: () => import("../views/MissingReceiptsPage.vue"),
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
+        },
+        {
             path: "/invoices/:id",
             component: () => import("../views/InvoiceDetailPage.vue"),
             meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
@@ -269,6 +279,7 @@ const appRoutes: RouteRecordRaw[] = [
             meta: {feature: FEATURES.pages.gmail, requirePlan: "business"},
         },
         {path: "/gmail-inbox", redirect: "/gmail"},
+        {path: "/gmail/import-history", component: () => import("../views/ImportHistoryPage.vue"), meta: {feature: FEATURES.pages.gmail, requirePlan: "business"}},
         {path: "/admin", component: AdminPage, meta: {requireRole: "admin"}},
         {path: "/403", component: () => import("../views/ForbiddenPage.vue")},
 ];

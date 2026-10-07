@@ -129,6 +129,34 @@
         </div>
       </section>
 
+      <section v-if="!isIncomeView && spendingAlerts.length > 0" class="budget-progress-section">
+        <header class="expense-panel__head">
+          <h2>{{ l.expensesMsg.budgetProgress }}</h2>
+        </header>
+        <div class="budget-bars">
+          <div v-for="b in budgetProgress" :key="b.category" class="budget-bar">
+            <div class="budget-bar__head">
+              <span class="budget-bar__label">{{ (l.providerCategory as Record<string,string>)[b.category] ?? b.category }}</span>
+              <span class="budget-bar__amounts">
+                {{ formatMoney(b.used) }} / {{ formatMoney(b.threshold) }}
+              </span>
+            </div>
+            <div class="budget-bar__track">
+              <div
+                class="budget-bar__fill"
+                :class="{ 'budget-bar__fill--over': b.over }"
+                :style="{ width: b.pct + '%' }"
+              />
+            </div>
+            <div class="budget-bar__foot">
+              <span v-if="b.over" class="budget-bar__over">+{{ formatMoney(b.used - b.threshold) }}</span>
+              <span v-else class="budget-bar__remaining">{{ t("expensesMsg.budgetRemaining", { remaining: formatMoney(b.threshold - b.used) }) }}</span>
+              <span class="budget-bar__pct" :class="{ 'budget-bar__pct--over': b.over }">{{ b.pct }}%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="expense-layout">
         <div class="expense-chart-panel">
           <header class="expense-panel__head">
@@ -267,7 +295,7 @@ import DateRangePresets from "../components/DateRangePresets.vue";
 import { matchDateRangePreset, resolveDateRangePreset } from "../shared/dateRangePresets.js";
 import { usePersistedTableState } from "../composables/useTableState.js";
 import { decodeDateRange, encodeDateRange, pickOne } from "../shared/tableState";
-import { api, type InvoiceExpenseMonthlySeries } from "../services/apiService.js";
+import { api, type InvoiceExpenseMonthlySeries, type SpendingAlert } from "../services/apiService.js";
 import {useAuthStore} from "../stores/auth.js";
 import {featureFlagsForUser, resolveUserPlan} from "../shared/pricingPlans.js";
 
@@ -297,10 +325,25 @@ const categories = ref<string[]>([]);
 const householdTotal = ref(0);
 const supplierNames = ref<string[]>([]);
 const chartSeries = ref<InvoiceExpenseMonthlySeries[]>([]);
+const categorySeries = ref<{ category: string; total: number; count: number }[]>([]);
 const totalAmount = ref(0);
 const totalInvoices = ref(0);
 const exporting = ref(false);
 const showAlertsModal = ref(false);
+const spendingAlerts = ref<SpendingAlert[]>([]);
+
+const budgetProgress = computed(() =>
+  spendingAlerts.value
+    .filter((a) => a.threshold > 0)
+    .map((alert) => {
+      const used = categorySeries.value
+        .filter((row) => row.category === alert.category)
+        .reduce((sum, row) => sum + row.total, 0);
+      const pct = Math.min(100, Math.round((used / alert.threshold) * 100));
+      return { category: alert.category, threshold: alert.threshold, used, pct, over: used > alert.threshold };
+    })
+    .filter((b) => b.used > 0 || b.threshold > 0)
+);
 const exportAllowed = computed(() => featureFlagsForUser(authStore.user).excelExport);
 const availableCategories = computed(() => categories.value.length ? categories.value : ["general"]);
 const themeTick = ref(0);
@@ -541,6 +584,7 @@ onMounted(() => {
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   load();
+  api.profile.getSpendingAlerts().then((r) => { spendingAlerts.value = r.alerts; }).catch(() => {});
 });
 
 onBeforeUnmount(() => {
@@ -590,6 +634,7 @@ async function load(force = false) {
     suppliers.value = result.suppliers;
     supplierNames.value = result.supplierNames ?? [];
     categories.value = result.categories;
+    categorySeries.value = result.categorySeries ?? [];
     householdTotal.value = (result.categorySeries ?? [])
       .filter((row) => row.category === "household")
       .reduce((sum, row) => sum + row.total, 0);
@@ -1024,6 +1069,91 @@ function providerCategoryLabel(value: string): string {
   margin: 0;
   padding: 8px 16px 16px;
   color: var(--text-secondary);
+}
+
+.budget-progress-section {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  margin-bottom: 16px;
+}
+
+.budget-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  padding: 0 16px 16px;
+}
+
+.budget-bar__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.budget-bar__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-bar__amounts {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.budget-bar__track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.budget-bar__fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--brand-color);
+  transition: width 0.3s ease;
+}
+
+.budget-bar__fill--over {
+  background: var(--color-error, #d03050);
+}
+
+.budget-bar__foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.budget-bar__remaining {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.budget-bar__over {
+  font-size: 11px;
+  color: var(--color-error, #d03050);
+  font-weight: 600;
+}
+
+.budget-bar__pct {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-bar__pct--over {
+  color: var(--color-error, #d03050);
+  font-weight: 600;
 }
 
 .expense-chart-panel,
