@@ -66,6 +66,8 @@
                 </button>
               </th>
               <th class="recurring-stable">{{ l.recurring.colStable }}</th>
+              <th class="recurring-num">{{ l.recurring.colNextCharge }}</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -86,6 +88,24 @@
                 <n-tag v-if="item.amount_stable" type="success" size="small">{{ l.recurring.stable }}</n-tag>
                 <n-tag v-else type="warning" size="small">{{ l.recurring.variable }}</n-tag>
               </td>
+              <td class="recurring-num recurring-predicted">
+                <span v-if="item.next_predicted_date" class="predicted-date">{{ item.next_predicted_date }}</span>
+                <span v-else class="predicted-none">—</span>
+              </td>
+              <td class="recurring-action">
+                <n-tooltip :disabled="!item.next_predicted_date" placement="top">
+                  <template #trigger>
+                    <button
+                      class="btn btn--ghost btn--xs icon-btn"
+                      :disabled="!item.next_predicted_date || remindingSet.has(item.supplier)"
+                      @click="createReminder(item)"
+                    >
+                      <n-icon :component="remindingSet.has(item.supplier) ? CheckmarkOutline : AlarmOutline" :size="15" />
+                    </button>
+                  </template>
+                  {{ l.recurring.remindMe }}
+                </n-tooltip>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -100,8 +120,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { NIcon, NInput, NSpin, NTag, useMessage } from "naive-ui";
-import { ArrowDownOutline, ArrowUpOutline, RefreshOutline, RepeatOutline, SwapVerticalOutline } from "@vicons/ionicons5";
+import { NIcon, NInput, NSpin, NTag, NTooltip, useMessage } from "naive-ui";
+import { AlarmOutline, ArrowDownOutline, ArrowUpOutline, CheckmarkOutline, RefreshOutline, RepeatOutline, SwapVerticalOutline } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import { useI18n } from "../composables/useI18n.js";
 import { api, type RecurringPaymentItem } from "../services/apiService.js";
@@ -112,6 +132,7 @@ const message = useMessage();
 const items = ref<RecurringPaymentItem[]>([]);
 const loading = ref(false);
 const searchQ = ref("");
+const remindingSet = ref(new Set<string>());
 const sortBy = ref<keyof RecurringPaymentItem>("occurrences");
 const sortDir = ref<"asc" | "desc">("desc");
 
@@ -143,6 +164,27 @@ function formatMoney(value: number): string {
 function categoryLabel(key: string): string {
   const cats = l.value.providerCategory as Record<string, string>;
   return cats[key] ?? key;
+}
+
+async function createReminder(item: RecurringPaymentItem) {
+  if (!item.next_predicted_date) {
+    message.warning(l.value.recurring.noPrediction);
+    return;
+  }
+  try {
+    const title = l.value.recurring.remindTitle.replace("{supplier}", item.supplier);
+    await api.reminders.createPersonal({
+      title,
+      target_date: item.next_predicted_date,
+      advance_days: [3, 1],
+      email_self: true,
+      origin: "discovery",
+    });
+    remindingSet.value = new Set([...remindingSet.value, item.supplier]);
+    message.success(l.value.recurring.remindCreated);
+  } catch {
+    message.error(l.value.recurring.remindError);
+  }
 }
 
 async function load(force = false) {
@@ -277,5 +319,20 @@ onMounted(() => load());
 .recurring-empty__icon {
   color: var(--text-muted, var(--text-secondary));
   opacity: 0.5;
+}
+
+.recurring-predicted {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.predicted-date {
+  color: var(--brand-color);
+  font-weight: 500;
+}
+
+.recurring-action {
+  text-align: center;
+  padding-inline: 8px;
 }
 </style>
