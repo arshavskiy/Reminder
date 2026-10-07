@@ -460,7 +460,7 @@ export function registerInvoiceRoutes(app: express.Application) {
     const results: {
       supplier: string; category: string; occurrences: number; months_active: number;
       avg_amount: number; min_amount: number; max_amount: number; last_date: string;
-      amount_stable: boolean;
+      amount_stable: boolean; next_predicted_date: string | null;
     }[] = [];
 
     for (const [supplier, entries] of groups) {
@@ -473,10 +473,28 @@ export function registerInvoiceRoutes(app: express.Application) {
       const maxAmt = amounts[amounts.length - 1];
       const spread = median > 0 ? (maxAmt - minAmt) / median : 1;
       const avg = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length);
-      const lastDate = entries.map((e) => e.date).sort().at(-1)!;
+      const sortedDates = entries.map((e) => e.date).sort();
+      const lastDate = sortedDates.at(-1)!;
       const catFreq = new Map<string, number>();
       for (const e of entries) catFreq.set(e.category, (catFreq.get(e.category) ?? 0) + 1);
       const category = [...catFreq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+      // Predict next charge: median gap between consecutive sorted dates
+      let next_predicted_date: string | null = null;
+      if (sortedDates.length >= 2) {
+        const gaps: number[] = [];
+        for (let i = 1; i < sortedDates.length; i++) {
+          gaps.push(Date.parse(sortedDates[i]) - Date.parse(sortedDates[i - 1]));
+        }
+        gaps.sort((a, b) => a - b);
+        const medianGapMs = gaps[Math.floor(gaps.length / 2)];
+        const predictedTs = Date.parse(lastDate) + medianGapMs;
+        // Only surface future predictions
+        if (predictedTs > Date.now()) {
+          next_predicted_date = new Date(predictedTs).toISOString().slice(0, 10);
+        }
+      }
+
       results.push({
         supplier, category,
         occurrences: entries.length,
@@ -486,6 +504,7 @@ export function registerInvoiceRoutes(app: express.Application) {
         max_amount: roundMoney(maxAmt),
         last_date: lastDate,
         amount_stable: spread <= 0.15,
+        next_predicted_date,
       });
     }
 
@@ -961,6 +980,47 @@ export function registerInvoiceRoutes(app: express.Application) {
     const presented = presentInvoice(result, doc ?? undefined, undefined, providers, true);
     await enrichAmountIls([presented]);
     res.json(presented);
+  });
+
+  // Saved filter views — server-side storage replacing localStorage
+  app.get("/api/invoices/saved-views", async (req, res) => {
+    let userId: string;
+    try { ({ userId } = await requireAuth(req.headers.cookie)); } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const page = typeof req.query.page === "string" ? req.query.page : null;
+    if (!page) { res.status(400).json({ error: "page required" }); return; }
+    const views = await col("saved_views").find({ user_id: userId, page } as any, { projection: { _id: 0, name: 1, state: 1 } } as any).sort({ created_at: 1 } as any).limit(20).toArray();
+    res.json({ views });
+  });
+
+  app.post("/api/invoices/saved-views", async (req, res) => {
+    let userId: string;
+    try { ({ userId } = await requireAuth(req.headers.cookie)); } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const { page, name, state } = req.body ?? {};
+    if (!page || typeof page !== "string") { res.status(400).json({ error: "page required" }); return; }
+    if (!name || typeof name !== "string" || !name.trim() || name.length > 60) { res.status(400).json({ error: "Invalid name" }); return; }
+    if (!state || typeof state !== "object" || Array.isArray(state)) { res.status(400).json({ error: "state must be an object" }); return; }
+    const trimName = name.trim();
+    const existing = await col("saved_views").countDocuments({ user_id: userId, page } as any);
+    const existingByName = await col("saved_views").findOne({ user_id: userId, page, name: trimName } as any);
+    if (!existingByName && existing >= 20) { res.status(400).json({ error: "Saved view limit reached" }); return; }
+    await col("saved_views").updateOne(
+      { user_id: userId, page, name: trimName } as any,
+      { $set: { user_id: userId, page, name: trimName, state, updated_at: new Date() }, $setOnInsert: { created_at: new Date() } } as any,
+      { upsert: true },
+    );
+    const views = await col("saved_views").find({ user_id: userId, page } as any, { projection: { _id: 0, name: 1, state: 1 } } as any).sort({ created_at: 1 } as any).limit(20).toArray();
+    res.json({ views });
+  });
+
+  app.delete("/api/invoices/saved-views", async (req, res) => {
+    let userId: string;
+    try { ({ userId } = await requireAuth(req.headers.cookie)); } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const page = typeof req.query.page === "string" ? req.query.page : null;
+    const name = typeof req.query.name === "string" ? req.query.name : null;
+    if (!page || !name) { res.status(400).json({ error: "page and name required" }); return; }
+    await col("saved_views").deleteOne({ user_id: userId, page, name } as any);
+    const views = await col("saved_views").find({ user_id: userId, page } as any, { projection: { _id: 0, name: 1, state: 1 } } as any).sort({ created_at: 1 } as any).limit(20).toArray();
+    res.json({ views });
   });
 }
 

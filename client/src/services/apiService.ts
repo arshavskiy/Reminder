@@ -323,6 +323,7 @@ export interface RecurringPaymentItem {
   max_amount: number;
   last_date: string;
   amount_stable: boolean;
+  next_predicted_date: string | null;
 }
 
 export interface SpendingAlert {
@@ -780,6 +781,16 @@ async function del(path: string): Promise<void> {
   }
 }
 
+async function delJson<T>(path: string): Promise<T> {
+  const res = await fetch(BASE + path, { method: "DELETE", credentials: "include" });
+  if (!res.ok) {
+    const err = new Error(await responseErrorMessage(res, `DELETE ${path} failed: ${res.status}`)) as any;
+    err.status = res.status;
+    throw err;
+  }
+  return res.json() as Promise<T>;
+}
+
 async function responseErrorMessage(res: Response, fallback: string): Promise<string> {
   const contentType = res.headers.get("Content-Type") ?? "";
   if (contentType.includes("application/json")) {
@@ -952,6 +963,13 @@ export const api = {
       get<{ items: RecurringPaymentItem[]; total: number }>(`/invoices/recurring${qs(params)}`),
     missingReceipts: (params?: { dateFrom?: string; dateTo?: string; limit?: number }) =>
       get<{ items: MissingReceiptItem[]; total: number }>(`/invoices/missing-receipts${qs(params)}`),
+    savedViews: {
+      list: (page: string) => get<{ views: Array<{ name: string; state: Record<string, unknown> }> }>(`/invoices/saved-views?page=${encodeURIComponent(page)}`),
+      save: (page: string, name: string, state: Record<string, unknown>) =>
+        post<{ views: Array<{ name: string; state: Record<string, unknown> }> }>("/invoices/saved-views", { page, name, state }),
+      remove: (page: string, name: string) =>
+        delJson<{ views: Array<{ name: string; state: Record<string, unknown> }> }>(`/invoices/saved-views?page=${encodeURIComponent(page)}&name=${encodeURIComponent(name)}`),
+    },
     upload: async (
       files: File[],
       options?: { doAi?: boolean; doEntities?: boolean; doReminders?: boolean; reprocessDuplicates?: boolean; skipCloudStorage?: boolean; liteImport?: boolean },
