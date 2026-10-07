@@ -13,24 +13,66 @@
     </PageHeader>
 
 
+    <div class="recurring-search">
+      <n-input
+        v-model:value="searchQ"
+        :placeholder="l.invoices.searchPlaceholder"
+        clearable
+        size="small"
+        class="recurring-search__input"
+      />
+    </div>
+
     <n-spin :show="loading && !items.length">
-      <div v-if="items.length" class="recurring-table-wrap">
+      <div v-if="filteredItems.length" class="recurring-table-wrap">
         <table class="recurring-table">
           <thead>
             <tr>
-              <th>{{ l.recurring.colSupplier }}</th>
-              <th>{{ l.recurring.colCategory }}</th>
-              <th>{{ l.recurring.colOccurrences }}</th>
-              <th>{{ l.recurring.colMonths }}</th>
-              <th>{{ l.recurring.colAvgAmount }}</th>
-              <th>{{ l.recurring.colRange }}</th>
-              <th>{{ l.recurring.colLastSeen }}</th>
-              <th>{{ l.recurring.colStable }}</th>
+              <th>
+                <button class="sort-btn" @click="setSortBy('supplier')">
+                  {{ l.recurring.colSupplier }}
+                  <n-icon :component="sortBy === 'supplier' ? (sortDir === 'asc' ? ArrowUpOutline : ArrowDownOutline) : SwapVerticalOutline" :size="13" />
+                </button>
+              </th>
+              <th>
+                <button class="sort-btn" @click="setSortBy('category')">
+                  {{ l.recurring.colCategory }}
+                  <n-icon :component="sortBy === 'category' ? (sortDir === 'asc' ? ArrowUpOutline : ArrowDownOutline) : SwapVerticalOutline" :size="13" />
+                </button>
+              </th>
+              <th class="recurring-num">
+                <button class="sort-btn sort-btn--end" @click="setSortBy('occurrences')">
+                  {{ l.recurring.colOccurrences }}
+                  <n-icon :component="sortBy === 'occurrences' ? (sortDir === 'asc' ? ArrowUpOutline : ArrowDownOutline) : SwapVerticalOutline" :size="13" />
+                </button>
+              </th>
+              <th class="recurring-num">
+                <button class="sort-btn sort-btn--end" @click="setSortBy('months_active')">
+                  {{ l.recurring.colMonths }}
+                  <n-icon :component="sortBy === 'months_active' ? (sortDir === 'asc' ? ArrowUpOutline : ArrowDownOutline) : SwapVerticalOutline" :size="13" />
+                </button>
+              </th>
+              <th class="recurring-num">
+                <button class="sort-btn sort-btn--end" @click="setSortBy('avg_amount')">
+                  {{ l.recurring.colAvgAmount }}
+                  <n-icon :component="sortBy === 'avg_amount' ? (sortDir === 'asc' ? ArrowUpOutline : ArrowDownOutline) : SwapVerticalOutline" :size="13" />
+                </button>
+              </th>
+              <th class="recurring-num">{{ l.recurring.colRange }}</th>
+              <th class="recurring-num">
+                <button class="sort-btn sort-btn--end" @click="setSortBy('last_date')">
+                  {{ l.recurring.colLastSeen }}
+                  <n-icon :component="sortBy === 'last_date' ? (sortDir === 'asc' ? ArrowUpOutline : ArrowDownOutline) : SwapVerticalOutline" :size="13" />
+                </button>
+              </th>
+              <th class="recurring-stable">{{ l.recurring.colStable }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in items" :key="item.supplier" :class="{ 'recurring-row--stable': item.amount_stable }">
-              <td dir="auto" class="recurring-supplier">{{ item.supplier }}</td>
+            <tr v-for="item in filteredItems" :key="item.supplier" :class="{ 'recurring-row--stable': item.amount_stable }">
+              <td class="recurring-supplier">
+                <span dir="auto" class="recurring-truncate" :title="item.supplier">{{ item.supplier }}</span>
+              </td>
               <td>{{ categoryLabel(item.category) }}</td>
               <td class="recurring-num">{{ item.occurrences }}</td>
               <td class="recurring-num">{{ item.months_active }}</td>
@@ -57,9 +99,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { NIcon, NSpin, NTag, useMessage } from "naive-ui";
-import { RefreshOutline, RepeatOutline } from "@vicons/ionicons5";
+import { computed, onMounted, ref } from "vue";
+import { NIcon, NInput, NSpin, NTag, useMessage } from "naive-ui";
+import { ArrowDownOutline, ArrowUpOutline, RefreshOutline, RepeatOutline, SwapVerticalOutline } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
 import { useI18n } from "../composables/useI18n.js";
 import { api, type RecurringPaymentItem } from "../services/apiService.js";
@@ -69,6 +111,30 @@ const message = useMessage();
 
 const items = ref<RecurringPaymentItem[]>([]);
 const loading = ref(false);
+const searchQ = ref("");
+const sortBy = ref<keyof RecurringPaymentItem>("occurrences");
+const sortDir = ref<"asc" | "desc">("desc");
+
+function setSortBy(key: keyof RecurringPaymentItem) {
+  if (sortBy.value === key) {
+    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+  } else {
+    sortBy.value = key;
+    sortDir.value = key === "supplier" || key === "category" ? "asc" : "desc";
+  }
+}
+
+const filteredItems = computed(() => {
+  let list = items.value;
+  const q = searchQ.value.trim().toLowerCase();
+  if (q) list = list.filter(i => i.supplier.toLowerCase().includes(q) || (i.category ?? "").toLowerCase().includes(q));
+  return [...list].sort((a, b) => {
+    const av = a[sortBy.value] ?? "";
+    const bv = b[sortBy.value] ?? "";
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir.value === "asc" ? cmp : -cmp;
+  });
+});
 
 function formatMoney(value: number): string {
   return new Intl.NumberFormat(intl.value, { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(value);
@@ -97,56 +163,91 @@ onMounted(() => load());
 <style scoped>
 .title-loader { margin-inline-start: 8px; vertical-align: middle; }
 
+.recurring-search {
+  margin-bottom: 12px;
+}
+
+.recurring-search__input {
+  max-width: 320px;
+}
+
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sort-btn--end {
+  justify-content: flex-end;
+  width: 100%;
+}
+
 .recurring-table-wrap {
-  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--bg-card);
 }
 
 .recurring-table {
   width: 100%;
-  border-collapse: collapse;
+  min-width: 820px;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 13px;
 }
 
-.recurring-table thead th {
-  padding: 10px 14px;
+.recurring-table th,
+.recurring-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border-color);
   text-align: start;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
+  vertical-align: middle;
 }
 
-.recurring-table tbody tr {
-  border-bottom: 1px solid var(--border-color);
-  transition: background 0.15s;
+.recurring-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.recurring-table tbody tr:last-child {
+.recurring-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.recurring-table tbody tr:hover {
-  background: var(--bg-elevated);
-}
-
-.recurring-table td {
-  padding: 10px 14px;
-  vertical-align: middle;
+.recurring-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--brand-color) 5%, var(--bg-card));
 }
 
 .recurring-supplier {
   font-weight: 500;
-  max-width: 200px;
+}
+
+.recurring-truncate {
+  display: block;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.recurring-num {
+.recurring-table .recurring-num {
   font-variant-numeric: tabular-nums;
   text-align: end;
 }
@@ -156,7 +257,7 @@ onMounted(() => load());
   color: var(--text-secondary);
 }
 
-.recurring-stable {
+.recurring-table .recurring-stable {
   text-align: center;
 }
 
