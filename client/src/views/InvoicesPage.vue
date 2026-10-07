@@ -204,6 +204,10 @@
       </div>
     </div>
 
+    <div class="presets-mobile-row">
+      <DateRangePresets v-model="dateRange" @change="load(true)" />
+    </div>
+
     <div class="presets-and-dates-row">
       <DateRangePresets v-model="dateRange" @change="load(true)" />
       <n-select
@@ -285,7 +289,6 @@
         class="toolbar__supplier toolbar__supplier--mobile"
         @update:value="load(true)"
       />
-      <DateRangePresets v-model="dateRange" class="toolbar__dates--mobile" @change="load(true)" />
       <n-date-picker
         v-model:value="dateRange"
         type="daterange"
@@ -2210,6 +2213,10 @@ function replaceRow(updated: ImportedInvoice) {
   width: 260px;
 }
 
+.presets-mobile-row {
+  display: none;
+}
+
 .presets-and-dates-row {
   display: flex;
   align-items: center;
@@ -2864,6 +2871,11 @@ function replaceRow(updated: ImportedInvoice) {
 
   .presets-and-dates-row {
     display: none;
+  }
+
+  .presets-mobile-row {
+    display: block;
+    margin-bottom: 8px;
   }
 
   .toolbar__supplier--mobile,
