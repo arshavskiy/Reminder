@@ -12,7 +12,6 @@
       </template>
     </PageHeader>
 
-    <InvoiceSectionNav />
 
     <p class="missing-hint">{{ l.missingReceipts.hint }}</p>
 
@@ -55,7 +54,6 @@ import { onMounted, ref } from "vue";
 import { NIcon, NSpin, useMessage } from "naive-ui";
 import { CheckmarkCircleOutline, MailOutline, RefreshOutline } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
-import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import { useI18n } from "../composables/useI18n.js";
 import { api, type MissingReceiptItem } from "../services/apiService.js";
 

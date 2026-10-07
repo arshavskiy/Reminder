@@ -12,7 +12,6 @@
       </template>
     </PageHeader>
 
-    <InvoiceSectionNav />
 
     <n-spin :show="loading && !items.length">
       <div v-if="items.length" class="recurring-table-wrap">
@@ -62,7 +61,6 @@ import { onMounted, ref } from "vue";
 import { NIcon, NSpin, NTag, useMessage } from "naive-ui";
 import { RefreshOutline, RepeatOutline } from "@vicons/ionicons5";
 import PageHeader from "../components/PageHeader.vue";
-import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import { useI18n } from "../composables/useI18n.js";
 import { api, type RecurringPaymentItem } from "../services/apiService.js";
 
