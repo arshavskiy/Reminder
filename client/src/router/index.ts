@@ -160,17 +160,27 @@ const appRoutes: RouteRecordRaw[] = [
         {
             path: "/invoices",
             component: () => import("../views/InvoicesPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "digital", "basic", "business"]}
         },
         {
             path: "/invoices/expenses",
             component: () => import("../views/ExpenseAnalyticsPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "digital", "basic", "business"]}
+        },
+        {
+            path: "/invoices/recurring",
+            component: () => import("../views/RecurringPaymentsPage.vue"),
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "digital", "basic", "business"]}
+        },
+        {
+            path: "/invoices/missing-receipts",
+            component: () => import("../views/MissingReceiptsPage.vue"),
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "digital", "basic", "business"]}
         },
         {
             path: "/invoices/:id",
             component: () => import("../views/InvoiceDetailPage.vue"),
-            meta: {feature: FEATURES.pages.invoices, requirePlan: ["digital", "basic", "business"]}
+            meta: {feature: FEATURES.pages.invoices, requirePlan: ["trial", "digital", "basic", "business"]}
         },
     {path: "/clients", component: ClientsPage, meta: {feature: FEATURES.pages.clients, requirePlan: "expired"}},
         {
@@ -269,6 +279,7 @@ const appRoutes: RouteRecordRaw[] = [
             meta: {feature: FEATURES.pages.gmail, requirePlan: "business"},
         },
         {path: "/gmail-inbox", redirect: "/gmail"},
+        {path: "/gmail/import-history", component: () => import("../views/ImportHistoryPage.vue"), meta: {feature: FEATURES.pages.gmail, requirePlan: ["trial", "digital", "basic", "business"]}},
         {path: "/admin", component: AdminPage, meta: {requireRole: "admin"}},
         {path: "/403", component: () => import("../views/ForbiddenPage.vue")},
 ];

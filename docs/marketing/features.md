@@ -49,7 +49,8 @@ Bring business documents, important dates and email reminders into one workflow.
 - Monthly contract PDF reports and document-linked records for follow-up.
 - Invoice and receipt records with editable extracted fields.
 - Monthly expense analysis, vendor category management, vendor merge and six-month report email.
-- Invoice-history import through Gmail is a Business capability; it is not included in Basic.
+- Recurring payment detection, missing-receipt tracking with Gmail search, category budgets with spending alerts, and an annual expense PDF.
+- Invoice-history import through Gmail: 12 months on Digital, 36 months on Pro; not included in Starter.
 
 ### Specialist inspection workflows
 
@@ -57,8 +58,8 @@ Bring business documents, important dates and email reminders into one workflow.
 - Equipment-category classification in document lists, distinct from the specific machine name.
 - Manual inspection records and generated report PDFs with configurable print templates.
 - Equipment spreadsheet import with preview/confirmation and duplicate report-number review.
-- Field checklists and equipment photos on Business.
-- Digital is a manual-workflow plan: no document imports, Gmail imports or AI extraction.
+- Field checklists and equipment photos on Pro.
+- Digital is the household plan: reminders, discovery and invoices only, without inspections, clients or Google Drive.
 
 ### Integrations and administration
 
@@ -70,19 +71,23 @@ Bring business documents, important dates and email reminders into one workflow.
 
 ## Plans for new English-market subscriptions
 
-| Capability | Trial | Digital | Basic | Business |
+| Capability | Trial | Digital | Starter (`basic`) | Pro (`business`) |
 | --- | --- | --- | --- | --- |
-| Listed price | $0 / 30 days | $45 / month | $75 / month | $119 / month |
-| Document imports | 20 total | None | 50 / month | Unlimited |
-| OCR / AI extraction | Yes | No | Yes | Yes |
-| Client reminders, Excel, monthly reports | Yes | Yes | Yes | Yes |
-| File storage / Drive | Yes | No | Yes | Yes |
-| Users / connected email accounts | 2 / 2 | 2 / 0 | 2 / 2 | Unlimited / unlimited |
+| Listed price | $0 / 30 days | $15 / month | $29 / month | $75 / month |
+| Document imports | 20 total | Unlimited (invoices and receipts) | 50 / month | Unlimited |
+| OCR / AI extraction | Yes | Yes | Yes | Yes |
+| Automatic reminders, Excel, monthly reports | Yes | Yes | Yes | Yes |
+| File storage / Google Drive | Yes / Yes | Yes / No | Yes / Yes | Yes / Yes |
+| Users / connected email accounts | 2 / 2 | 2 / 2 (household invite) | 2 / 2 | Unlimited / unlimited |
 | Inspection Gmail history | 16 months | None | 16 months | 24 months |
-| Invoice Gmail history | 1 month (runtime trial allowance) | None | None | 36 months |
-| Google Calendar / calendar feed / field work | No | No | No | Yes |
-| Email-in (forward documents to a personal address) | No | No | No | Yes |
-| Camera capture, share-to-app | Yes | No | Yes | Yes |
+| Invoice Gmail history | 1 month | 12 months | None | 36 months |
+| Google Calendar / calendar feed | Yes | Yes | Yes | Yes |
+| Field work (checklists, equipment photos) | No | No | No | Yes |
+| Email-in (forward documents to a personal address) | No | Yes | No | Yes |
+| Camera capture, share-to-app | Yes | Yes | Yes | Yes |
+| Recurring payments, missing receipts, category budgets, annual expense PDF | No | Yes | Yes | Yes |
+| Monthly expense summary email | No | Yes | No | No |
+| Review queue with corrections | Yes | No | Yes | Yes |
 
 Upload and Gmail imports share the quota. Trial quota is total across the trial, not monthly. No credit card is required for the trial. Prices and subscription terms are confirmed before payment; existing customers retain agreed terms. Unlimited describes the catalog entitlement, not a processing-speed or service-level guarantee.
 

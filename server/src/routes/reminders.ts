@@ -484,6 +484,7 @@ export function registerReminderRoutes(app: express.Application) {
       model: body.model ?? null,
       serial_number: body.serial_number ?? null,
       license_number: body.license_number ?? null,
+      return_deadline: body.return_deadline ?? null,
       calendar_sync: body.sync_calendar !== false && body.sync_calendar !== "false",
       calendar_kind: body.calendar_kind === "task" ? "task" : "event",
       calendar_time: body.calendar_kind === "task" ? null : parseCalendarTime(body.calendar_time),
@@ -969,6 +970,7 @@ export function registerReminderRoutes(app: express.Application) {
       "document_id", "document_reference",
       "client_company", "client_name", "contact_person", "client_email", "client_phone", "contract_number", "contract_type",
       "equipment_type", "manufacturer", "model", "serial_number", "license_number",
+      "return_deadline",
     ];
     for (const f of fields) {
       if (body[f] !== undefined) updates[f] = body[f];

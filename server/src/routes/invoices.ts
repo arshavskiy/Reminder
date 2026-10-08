@@ -1,3 +1,4 @@
+import {saveSupplierCategory} from "../invoices/supplierCategories.js";
 import express from "express";
 import ExcelJS from "exceljs";
 import { ObjectId } from "mongodb";
@@ -416,6 +417,155 @@ export function registerInvoiceRoutes(app: express.Application) {
     });
   });
 
+  // GET /api/invoices/recurring — detect likely recurring / subscription payments.
+  // Groups invoices by supplier and flags those with 3+ occurrences across distinct months
+  // with a consistent amount (within 15% of the median).
+  app.get("/api/invoices/recurring", async (req, res) => {
+    let userId: string;
+    let planId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+      planId = effectivePlanId(ctx.user);
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const trialCutoff = planId === "trial" ? Date.now() - 30 * 24 * 60 * 60 * 1000 : null;
+    const fromTs = parseDateTs(req.query.dateFrom) ?? trialCutoff ?? undefined;
+    const toTs = parseDateTs(req.query.dateTo, true);
+    const invoices = await col("invoices")
+      .find({ user_id: userId } as any, { projection: { supplier_name: 1, amount: 1, currency: 1, issue_date: 1, provider_category: 1, cash_flow: 1, pair_role: 1 } } as any)
+      .toArray() as InvoiceRow[];
+
+    const groups = new Map<string, { amount: number; month: string; date: string; category: string }[]>();
+    for (const inv of invoices) {
+      const supplier = (inv.supplier_name ?? "").trim();
+      if (!supplier) continue;
+      const amount = typeof inv.amount === "number" ? inv.amount : null;
+      if (amount === null || amount <= 0) continue;
+      const cashFlow = normalizeCashFlow(inferInvoiceCashFlow(inv));
+      if (cashFlow === "income") continue;
+      const dateStr = inv.issue_date ? String(inv.issue_date).slice(0, 10) : null;
+      if (!dateStr) continue;
+      const ts = new Date(dateStr).getTime();
+      if (fromTs && ts < fromTs) continue;
+      if (toTs && ts > toTs) continue;
+      const month = dateStr.slice(0, 7);
+      if (!groups.has(supplier)) groups.set(supplier, []);
+      groups.get(supplier)!.push({ amount, month, date: dateStr, category: inv.provider_category ?? "general" });
+    }
+
+    const results: {
+      supplier: string; category: string; occurrences: number; months_active: number;
+      avg_amount: number; min_amount: number; max_amount: number; last_date: string;
+      amount_stable: boolean; next_predicted_date: string | null;
+    }[] = [];
+
+    for (const [supplier, entries] of groups) {
+      if (entries.length < 3) continue;
+      const distinctMonths = new Set(entries.map((e) => e.month));
+      if (distinctMonths.size < 2) continue;
+      const amounts = entries.map((e) => e.amount).sort((a, b) => a - b);
+      const median = amounts[Math.floor(amounts.length / 2)];
+      const minAmt = amounts[0];
+      const maxAmt = amounts[amounts.length - 1];
+      const spread = median > 0 ? (maxAmt - minAmt) / median : 1;
+      const avg = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length);
+      const sortedDates = entries.map((e) => e.date).sort();
+      const lastDate = sortedDates.at(-1)!;
+      const catFreq = new Map<string, number>();
+      for (const e of entries) catFreq.set(e.category, (catFreq.get(e.category) ?? 0) + 1);
+      const category = [...catFreq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+      // Predict next charge: median gap between consecutive sorted dates
+      let next_predicted_date: string | null = null;
+      if (sortedDates.length >= 2) {
+        const gaps: number[] = [];
+        for (let i = 1; i < sortedDates.length; i++) {
+          gaps.push(Date.parse(sortedDates[i]) - Date.parse(sortedDates[i - 1]));
+        }
+        gaps.sort((a, b) => a - b);
+        const medianGapMs = gaps[Math.floor(gaps.length / 2)];
+        const predictedTs = Date.parse(lastDate) + medianGapMs;
+        // Only surface future predictions
+        if (predictedTs > Date.now()) {
+          next_predicted_date = new Date(predictedTs).toISOString().slice(0, 10);
+        }
+      }
+
+      results.push({
+        supplier, category,
+        occurrences: entries.length,
+        months_active: distinctMonths.size,
+        avg_amount: avg,
+        min_amount: roundMoney(minAmt),
+        max_amount: roundMoney(maxAmt),
+        last_date: lastDate,
+        amount_stable: spread <= 0.15,
+        next_predicted_date,
+      });
+    }
+
+    results.sort((a, b) => b.occurrences - a.occurrences || b.avg_amount - a.avg_amount);
+    res.json({ items: results, total: results.length });
+  });
+
+  // GET /api/invoices/missing-receipts — invoices that have no paired receipt.
+  app.get("/api/invoices/missing-receipts", async (req, res) => {
+    let userId: string;
+    let planId: string;
+    try {
+      const ctx = await requireAuth(req.headers.cookie);
+      userId = ctx.userId;
+      planId = effectivePlanId(ctx.user);
+    } catch (e) {
+      const err = e as HTTPException;
+      res.status(err.status ?? 401).json({ error: err.message });
+      return;
+    }
+    const trialCutoff = planId === "trial" ? Date.now() - 30 * 24 * 60 * 60 * 1000 : null;
+    const fromTs = parseDateTs(req.query.dateFrom) ?? trialCutoff ?? undefined;
+    const toTs = parseDateTs(req.query.dateTo, true);
+    const limit = clampInt(req.query.limit, 50, 1, 200);
+    const invoices = await col("invoices")
+      .find({ user_id: userId } as any, { projection: { supplier_name: 1, amount: 1, currency: 1, issue_date: 1, document_subtype: 1, provider_category: 1, status: 1, paired_with: 1, pair_status: 1 } } as any)
+      .sort({ issue_date: -1 } as any)
+      .limit(2000)
+      .toArray() as InvoiceRow[];
+    const providers = await loadGmailSearchProviders();
+    const rows = invoices
+      .filter((inv) => {
+        if (inv.status === "archived" || inv.status === "rejected") return false;
+        const role = roleOf(invoiceDocumentCategory(inv.document_subtype));
+        if (role !== "invoice") return false;
+        if (hasActivePair({ pairedWith: inv.paired_with ? String(inv.paired_with) : null, pairStatus: inv.pair_status ?? null })) return false;
+        const dateStr = inv.issue_date ? String(inv.issue_date).slice(0, 10) : null;
+        if (!dateStr) return false;
+        const ts = new Date(dateStr).getTime();
+        if (fromTs && ts < fromTs) return false;
+        if (toTs && ts > toTs) return false;
+        return true;
+      })
+      .slice(0, limit)
+      .map((inv) => {
+        const supplier = (inv.supplier_name ?? "").trim();
+        const gmailQuery = supplier
+          ? `from:(${supplier}) קבלה OR receipt OR payment`
+          : "קבלה OR receipt OR payment";
+        return {
+          id: String(inv._id),
+          supplier_name: supplier || null,
+          amount: typeof inv.amount === "number" ? roundMoney(inv.amount) : null,
+          currency: inv.currency ?? "ILS",
+          issue_date: inv.issue_date ? String(inv.issue_date).slice(0, 10) : null,
+          gmail_search_url: `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(gmailQuery)}`,
+        };
+      });
+    res.json({ items: rows, total: rows.length });
+  });
+
   app.post("/api/invoices/reports/six-months/send", async (req, res) => {
     let userId: string;
     try {
@@ -611,6 +761,7 @@ export function registerInvoiceRoutes(app: express.Application) {
       return;
     }
 
+    await saveSupplierCategory(userId, supplierName, providerCategory);
     const now = new Date();
     const result = await col("invoices").updateMany(
       { user_id: userId, supplier_name: supplierName } as any,
@@ -829,6 +980,47 @@ export function registerInvoiceRoutes(app: express.Application) {
     const presented = presentInvoice(result, doc ?? undefined, undefined, providers, true);
     await enrichAmountIls([presented]);
     res.json(presented);
+  });
+
+  // Saved filter views — server-side storage replacing localStorage
+  app.get("/api/invoices/saved-views", async (req, res) => {
+    let userId: string;
+    try { ({ userId } = await requireAuth(req.headers.cookie)); } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const page = typeof req.query.page === "string" ? req.query.page : null;
+    if (!page) { res.status(400).json({ error: "page required" }); return; }
+    const views = await col("saved_views").find({ user_id: userId, page } as any, { projection: { _id: 0, name: 1, state: 1 } } as any).sort({ created_at: 1 } as any).limit(20).toArray();
+    res.json({ views });
+  });
+
+  app.post("/api/invoices/saved-views", async (req, res) => {
+    let userId: string;
+    try { ({ userId } = await requireAuth(req.headers.cookie)); } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const { page, name, state } = req.body ?? {};
+    if (!page || typeof page !== "string") { res.status(400).json({ error: "page required" }); return; }
+    if (!name || typeof name !== "string" || !name.trim() || name.length > 60) { res.status(400).json({ error: "Invalid name" }); return; }
+    if (!state || typeof state !== "object" || Array.isArray(state)) { res.status(400).json({ error: "state must be an object" }); return; }
+    const trimName = name.trim();
+    const existing = await col("saved_views").countDocuments({ user_id: userId, page } as any);
+    const existingByName = await col("saved_views").findOne({ user_id: userId, page, name: trimName } as any);
+    if (!existingByName && existing >= 20) { res.status(400).json({ error: "Saved view limit reached" }); return; }
+    await col("saved_views").updateOne(
+      { user_id: userId, page, name: trimName } as any,
+      { $set: { user_id: userId, page, name: trimName, state, updated_at: new Date() }, $setOnInsert: { created_at: new Date() } } as any,
+      { upsert: true },
+    );
+    const views = await col("saved_views").find({ user_id: userId, page } as any, { projection: { _id: 0, name: 1, state: 1 } } as any).sort({ created_at: 1 } as any).limit(20).toArray();
+    res.json({ views });
+  });
+
+  app.delete("/api/invoices/saved-views", async (req, res) => {
+    let userId: string;
+    try { ({ userId } = await requireAuth(req.headers.cookie)); } catch (e) { const err = e as HTTPException; res.status(err.status ?? 401).json({ error: err.message }); return; }
+    const page = typeof req.query.page === "string" ? req.query.page : null;
+    const name = typeof req.query.name === "string" ? req.query.name : null;
+    if (!page || !name) { res.status(400).json({ error: "page and name required" }); return; }
+    await col("saved_views").deleteOne({ user_id: userId, page, name } as any);
+    const views = await col("saved_views").find({ user_id: userId, page } as any, { projection: { _id: 0, name: 1, state: 1 } } as any).sort({ created_at: 1 } as any).limit(20).toArray();
+    res.json({ views });
   });
 }
 

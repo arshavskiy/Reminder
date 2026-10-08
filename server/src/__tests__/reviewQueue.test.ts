@@ -201,3 +201,33 @@ describe("review routes", () => {
     expect((await call("POST", "/api/review/bad/dismiss")).status).toBe(404);
   });
 });
+
+
+describe("review corrections", () => {
+  const changes = {supplier_name: "Corrected supplier", amount: 42.5, currency: "usd", issue_date: "2026-10-07"};
+  it("saves both invoice and extraction fields without approving", async () => {
+    const d = doc({review: {status: "pending"}, extracted_fields: JSON.stringify({invoice_number: "KEEP"})});
+    const inv = invoiceFor(d, {fields: {invoice_number: "KEEP"}});
+    rows("documents").push(d); rows("invoices").push(inv);
+    const response = await call("PUT", `/api/review/${d._id}/corrections`, changes);
+    expect(response.status).toBe(200);
+    expect(find("invoices", inv._id)).toMatchObject({amount: 42.5, currency: "USD", supplier_name: changes.supplier_name});
+    expect(JSON.parse(find("documents", d._id).extracted_fields)).toMatchObject({invoice_number: "KEEP", amount: 42.5});
+    expect(find("documents", d._id).review.status).toBe("pending");
+    expect(find("documents", d._id).manual_field_keys).toContain("amount");
+  });
+  it("rejects invalid amounts and impossible dates", async () => {
+    for (const body of [{...changes, amount: "42"}, {...changes, issue_date: "2026-02-30"}, {...changes, supplier_name: " "}]) {
+      expect((await call("PUT", `/api/review/${new ObjectId()}/corrections`, body)).status).toBe(400);
+    }
+  });
+  it("cannot modify another user's invoice or a completed review", async () => {
+    const d = doc({user_id: "other", review: {status: "pending"}});
+    rows("documents").push(d); rows("invoices").push(invoiceFor(d, {user_id: "other"}));
+    expect((await call("PUT", `/api/review/${d._id}/corrections`, changes)).status).toBe(404);
+    d.user_id = "user-1"; d.review.status = "approved";
+    expect((await call("PUT", `/api/review/${d._id}/corrections`, changes)).status).toBe(404);
+    mocks.signedIn = false;
+    expect((await call("PUT", `/api/review/${d._id}/corrections`, changes)).status).toBe(401);
+  });
+});

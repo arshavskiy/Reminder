@@ -344,7 +344,7 @@
           >
             <div class="format-card__icon">📊</div>
             <div class="format-card__name">Excel (.xlsx)</div>
-            <div class="format-card__desc">{{ excelAllowed ? "גיליון Excel עם כיוון מימין לשמאל" : "זמין במסלולי סטארטר ופרו בלבד" }}</div>
+            <div class="format-card__desc">{{ excelAllowed ? "גיליון Excel עם כיוון מימין לשמאל" : "זמין במסלולי בסיסי ועסקי בלבד" }}</div>
           </div>
           <div class="format-card" :class="{ 'format-card--active': exportFormat === 'pdf', 'format-card--disabled': !exportAllowed }"
                @click="selectExportFormat('pdf')">
@@ -1148,7 +1148,7 @@ const showMonthlyReport = ref(false);
 
 function openMonthlyReport() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא דוחות זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("ייצוא דוחות זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   showMonthlyReport.value = true;
@@ -1199,7 +1199,7 @@ const exportedRows = computed(() => filteredRows.value.filter((r) => {
 
 function openExport() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("ייצוא זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   exportStep.value = 0;
@@ -1247,7 +1247,7 @@ function expandRows(rows: any[], mainCols: typeof exportColumns.value) {
 
 function selectExportFormat(format: "csv" | "xlsx" | "pdf") {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("ייצוא זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   if (format === "xlsx" && !excelAllowed.value) {
@@ -1259,7 +1259,7 @@ function selectExportFormat(format: "csv" | "xlsx" | "pdf") {
 
 function doExport() {
   if (!exportAllowed.value) {
-    message.warning("ייצוא זמין במסלולי סטארטר ופרו בלבד");
+    message.warning("ייצוא זמין במסלולי בסיסי ועסקי בלבד");
     return;
   }
   if (exportFormat.value === "xlsx" && !excelAllowed.value) {

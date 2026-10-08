@@ -1,6 +1,6 @@
 import express from "express";
 import { HTTPException, requireAuth } from "../auth/middleware";
-import { approveReviews, countPendingReviews, dismissReview, listReviewItems } from "../review/reviewStore";
+import { approveReviews, correctReview, countPendingReviews, dismissReview, listReviewItems } from "../review/reviewStore";
 import type { ReviewStatus } from "../review/reviewRules";
 
 const STATUSES = new Set<ReviewStatus>(["pending", "approved", "dismissed"]);
@@ -48,6 +48,30 @@ export function registerReviewRoutes(app: express.Application) {
       return;
     }
     res.json({ ok: true, approved: await approveReviews(userId, ids), pending: await countPendingReviews(userId) });
+  });
+
+  app.put("/api/review/:id/corrections", async (req, res) => {
+    const userId = await authedUserId(req, res);
+    if (!userId) return;
+    const body = req.body ?? {};
+    const supplier = typeof body.supplier_name === "string" ? body.supplier_name.trim() : "";
+    const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "";
+    const date = typeof body.issue_date === "string" ? body.issue_date : "";
+    const parsed = new Date(date);
+    if (!supplier || supplier.length > 300 || typeof body.amount !== "number" || !Number.isFinite(body.amount)
+      || !/^[A-Z]{3}$/.test(currency) || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+      || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+      res.status(400).json({error: "Valid supplier, amount, currency and issue date are required"});
+      return;
+    }
+    try {
+      const ok = await correctReview(userId, String(req.params.id), {
+        supplier_name: supplier, amount: body.amount, currency, issue_date: date,
+      });
+      res.status(ok ? 200 : 404).json(ok ? {ok: true} : {error: "Pending invoice review not found"});
+    } catch {
+      res.status(500).json({error: "Could not save corrections"});
+    }
   });
 
   // POST /api/review/:id/dismiss — "not wanted": archive the invoice and dismiss its reminders.

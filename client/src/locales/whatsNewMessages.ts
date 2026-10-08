@@ -19,7 +19,7 @@ export const whatsNewMessages: Record<"he" | "en" | "ru", Messages> = {
     heading: "מה חדש במערכת",
     subheading: "כמה דרכים חדשות להכניס מסמכים ולא לפספס מועדים.",
     dismiss: "הבנתי",
-    businessTag: "מסלול פרו",
+    businessTag: "מסלול עסקי",
     tour: "הדרכה קצרה",
     items: {
       emailIn: { title: "העברת מסמכים בדואר", text: "כתובת אישית: מעבירים אליה חשבונית או תסקיר מכל תיבת דואר, והמערכת מייבאת ומחלצת את התאריכים.", action: "קבלת הכתובת" },

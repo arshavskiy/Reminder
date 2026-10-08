@@ -316,13 +316,6 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.contracts,
         },
         {
-          label: localeStore.catalog.review.navLabel,
-          key: "review",
-          minPlan: "expired" as const,
-          feature: FEATURES.pages.documents,
-          badge: reviewQueue.pending,
-        },
-        {
           label: localeStore.catalog.documents.activityLog,
           key: "activity",
           query: {kind: "document"},
@@ -345,6 +338,11 @@ const allNav = computed<NavItem[]>(() => {
           feature: FEATURES.pages.reminders,
         },
         {
+          label: localeStore.locale === "en" ? "Discover reminders" : localeStore.locale === "ru" ? "Поиск напоминаний" : "גילוי תזכורות",
+          key: "discover-reminders",
+          feature: FEATURES.pages.discovery,
+        },
+        {
           label: localeStore.catalog.reminders.activityLog,
           key: "activity",
           query: {kind: "email"},
@@ -354,29 +352,48 @@ const allNav = computed<NavItem[]>(() => {
       ],
     },
     {
-      label: localeStore.locale === "en" ? "Discover reminders" : localeStore.locale === "ru" ? "Поиск напоминаний" : "גילוי תזכורות",
-      key: "discover-reminders",
-      icon: SearchOutline,
-      feature: FEATURES.pages.discovery,
-    },
-    {
       label: nav.invoices,
       key: "invoices",
       icon: WalletOutline,
-      minPlan: ["digital", "basic", "business"] as const,
+      minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
       feature: FEATURES.pages.invoices,
       children: [
         {
           label: localeStore.catalog.invoices.tabLabel,
           key: "invoices",
-          minPlan: ["digital", "basic", "business"] as const,
+          minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
           feature: FEATURES.pages.invoices,
         },
         {
           label: localeStore.catalog.common.graph,
           key: "invoices/expenses",
-          minPlan: ["digital", "basic", "business"] as const,
+          minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
           feature: FEATURES.pages.invoices,
+        },
+        {
+          label: localeStore.catalog.recurring.title,
+          key: "invoices/recurring",
+          minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
+          feature: FEATURES.pages.invoices,
+        },
+        {
+          label: localeStore.catalog.missingReceipts.title,
+          key: "invoices/missing-receipts",
+          minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
+          feature: FEATURES.pages.invoices,
+        },
+        {
+          label: localeStore.catalog.review.navLabel,
+          key: "review",
+          minPlan: "expired" as const,
+          feature: FEATURES.pages.documents,
+          badge: reviewQueue.pending,
+        },
+        {
+          label: localeStore.catalog.importHistoryMsg.title,
+          key: "gmail/import-history",
+          minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
+          feature: FEATURES.pages.gmail,
         },
       ],
     },
@@ -386,6 +403,20 @@ const allNav = computed<NavItem[]>(() => {
       icon: MailOutline,
       minRole: "admin",
       feature: FEATURES.pages.gmail,
+      children: [
+        {
+          label: nav.gmail,
+          key: "gmail",
+          minRole: "admin" as const,
+          feature: FEATURES.pages.gmail,
+        },
+        {
+          label: localeStore.catalog.importHistoryMsg.title,
+          key: "gmail/import-history",
+          minPlan: ["trial", "digital", "basic", "business"] as PlanId[],
+          feature: FEATURES.pages.gmail,
+        },
+      ],
     },
   ];
 });
@@ -468,6 +499,9 @@ function isActiveNav(key: string, query?: Record<string, string>): boolean {
     return !query?.kind || route.query.kind === query.kind;
   }
   if (key === "invoices" && path.startsWith("/invoices/expenses")) return false;
+  if (key === "invoices" && path.startsWith("/invoices/recurring")) return false;
+  if (key === "invoices" && path.startsWith("/invoices/missing-receipts")) return false;
+  if (key === "gmail" && path.startsWith("/gmail/import-history")) return false;
   const onPage = key.includes("/")
     ? path === `/${key}` || path.startsWith(`/${key}/`)
     : activeKey.value === key || path === `/${key}` || path.startsWith(`/${key}/`);

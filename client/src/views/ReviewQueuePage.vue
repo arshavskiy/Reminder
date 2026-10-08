@@ -34,6 +34,7 @@
             </div>
           </div>
           <div class="review-item__actions">
+            <n-button v-if="item.invoice_id" size="small" :disabled="bulkApproving || busyId === item.id" @click="editingItem = item">{{ r.editDetails }}</n-button>
             <n-button size="small" :loading="busyId === item.id" type="primary" ghost @click="approve(item)">{{ r.approve }}</n-button>
             <n-button size="small" @click="router.push(href(`/documents/${item.id}`))">{{ r.open }}</n-button>
             <n-button size="small" quaternary type="error" :disabled="busyId === item.id" @click="dismiss(item)">{{ r.dismiss }}</n-button>
@@ -43,10 +44,12 @@
     </n-spin>
 
     <n-pagination v-if="total > pageSize" v-model:page="page" :item-count="total" :page-size="pageSize" @update:page="load" />
+    <ReviewCorrectionModal :item="editingItem" @close="editingItem = null" @saved="load" />
   </main>
 </template>
 
 <script lang="ts" setup>
+import ReviewCorrectionModal from "../components/ReviewCorrectionModal.vue";
 import {computed, onMounted, ref} from "vue";
 import {useRouter} from "vue-router";
 import {NButton, NIcon, NPagination, NSpin, NTag, useMessage} from "naive-ui";
@@ -63,6 +66,7 @@ const message = useMessage();
 const {confirm} = useConfirm();
 const queue = useReviewQueueStore();
 
+const editingItem = ref<ReviewItem | null>(null);
 const items = ref<ReviewItem[]>([]);
 const total = ref(0);
 const page = ref(1);

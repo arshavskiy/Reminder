@@ -3221,6 +3221,7 @@ const SCHEDULER_HEALTH_NAMES: Partial<Record<ProcessId, string[]>> = {
   scheduler: [
     "tick", "checkReminders", "checkMonthlyReports", "checkBillingReminders", "checkEscalations",
     "syncCalendars", "checkDiscoveryScans", "checkInvoiceScans", "checkSpendingAlerts",
+    "checkBudgetPaceAlerts", "checkRecurringAmountAlerts", "checkMonthlyExpenseReports",
   ],
   unsubscribe_scan: ["unsubscribeScan"],
   email_campaigns: ["emailCampaignSend"],

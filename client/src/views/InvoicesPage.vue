@@ -201,6 +201,9 @@
             {{ l.common.tableView }}
           </n-tooltip>
         </div>
+        <div class="presets-mobile-row">
+          <DateRangePresets v-model="dateRange" compact @change="load(true)" />
+        </div>
       </div>
     </div>
 
@@ -273,6 +276,7 @@
         <n-icon :component="BriefcaseOutline" class="btn-icon" />
         {{ l.invoices.mergeSuppliers }}
       </button>
+      <SavedFilterViews page="invoices" :snapshot="savedFilterSnapshot" @apply="applySavedFilters" />
       <!-- mobile-only: suppliers + dates inside panel -->
       <n-select
         v-model:value="filters.suppliers"
@@ -587,9 +591,9 @@
           v-model:page-size="pageSize"
           :item-count="total"
           :page-sizes="[10, 20, 50, 100]"
-          :show-size-picker="!isMobile"
+          :show-size-picker="true"
           :page-slot="isMobile ? 5 : 9"
-          :simple="isMobile"
+          :simple="false"
           @update:page="() => load(false)"
           @update:page-size="() => load(true)"
         />
@@ -773,6 +777,7 @@ import {useI18n} from "../composables/useI18n.js";
 import {useDevModal} from "../composables/useDevModal.js";
 import InvoiceSectionNav from "../components/InvoiceSectionNav.vue";
 import SpendingAlertsModal from "../components/SpendingAlertsModal.vue";
+import SavedFilterViews from "../components/SavedFilterViews.vue";
 import DateRangePresets from "../components/DateRangePresets.vue";
 import GmailLogo from "../components/GmailLogo.vue";
 import GoogleDriveLogo from "../components/GoogleDriveLogo.vue";
@@ -791,7 +796,7 @@ import {resolveDateRangePreset} from "../shared/dateRangePresets";
 import {asString, asStringArray, decodeDateRange, encodeDateRange, pickOne} from "../shared/tableState";
 
 const router = useRouter();
-const {l, dir, t, locale, intl} = useI18n();
+const {l, dir, t, locale, intl, href} = useI18n();
 const intlLocale = computed(() => (intl.value));
 const message = useMessage();
 const {confirm} = useConfirm();
@@ -819,6 +824,7 @@ const heroMoreOptions = computed(() => [
   { key: "sixmonth",      label: l.value.invoices.sixMonth,          icon: () => h(NIcon, { component: MailOutline }),        disabled: !exportAllowed.value || !excelAllowed.value },
   { key: "drive",         label: l.value.documents.driveExport,      icon: () => h(NIcon, { component: DownloadOutline }),    disabled: !driveAllowed.value },
   { key: "monthly",       label: l.value.documents.monthlyReport,    icon: () => h(NIcon, { component: DocumentTextOutline }), disabled: !exportAllowed.value },
+  { key: "annual",        label: l.value.invoices.annualPdf,         icon: () => h(NIcon, { component: DocumentTextOutline }) },
 ]);
 
 function handleHeroMoreSelect(key: string) {
@@ -828,6 +834,7 @@ function handleHeroMoreSelect(key: string) {
   else if (key === "sixmonth") sendSixMonthInvoiceReport();
   else if (key === "drive") handleDriveExport();
   else if (key === "monthly") openMonthlyReport();
+  else if (key === "annual") downloadAnnualPdf();
 }
 const deletingSelected = ref(false);
 const uploadingInvoices = ref(false);
@@ -877,7 +884,7 @@ const filters = reactive({
 // search is left out on purpose: a forgotten search term makes the list look empty.
 const PAGE_SIZES = [10, 20, 50, 100] as const;
 const SORT_KEYS: InvoiceSortKey[] = ["supplier", "status", "date", "client", "category", "type", "amount", "dueDate"];
-usePersistedTableState("invoices", {
+const invoiceTableState = {
   snapshot: () => ({
     status: filters.status,
     type: filters.type,
@@ -892,7 +899,7 @@ usePersistedTableState("invoices", {
     sortDir: sortDir.value,
     pageSize: pageSize.value,
   }),
-  restore: (saved) => {
+  restore: (saved: Record<string, unknown>) => {
     filters.status = asString(saved.status);
     filters.type = asString(saved.type);
     filters.documentCategory = asString(saved.documentCategory) as typeof filters.documentCategory;
@@ -907,7 +914,15 @@ usePersistedTableState("invoices", {
     sortDir.value = pickOne(saved.sortDir, ["asc", "desc"] as const, "desc");
     pageSize.value = pickOne(saved.pageSize, PAGE_SIZES, 20);
   },
-});
+};
+usePersistedTableState("invoices", invoiceTableState);
+function savedFilterSnapshot() { return {...invoiceTableState.snapshot(), q: filters.q, viewMode: viewMode.value}; }
+function applySavedFilters(saved: Record<string, unknown>) {
+  invoiceTableState.restore(saved);
+  filters.q = asString(saved.q) ?? "";
+  viewMode.value = saved.viewMode === "cards" ? "cards" : "table";
+  load(true);
+}
 const businessModal = reactive({
   show: false,
   row: null as ImportedInvoice | null,
@@ -1527,6 +1542,18 @@ async function exportInvoicesToExcel() {
   }
 }
 
+async function downloadAnnualPdf() {
+  const year = new Date().getFullYear();
+  const loc = locale.value === "ru" ? "ru" : locale.value === "en" ? "en" : "he";
+  const url = `/api/invoices/annual-summary.pdf?year=${year}&locale=${loc}`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `annual-expenses-${year}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 async function sendSixMonthInvoiceReport() {
   if (!exportAllowed.value) {
     message.warning(l.value.invoicesMsg.reportSendPlanOnly);
@@ -1943,7 +1970,7 @@ async function updateInvoiceProviderCategory(row: ImportedInvoice, value: string
   try {
     const result = await api.invoices.setSupplierCategory({ supplierName, provider_category: category });
     rows.value = rows.value.map((item) => item.supplier_name === supplierName ? { ...item, provider_category: category } : item);
-    message.success(t("invoicesMsg.categoryUpdated", {count: result.modified, supplier: supplierName}));
+    message.success(t(category ? "invoicesMsg.supplierCategorySaved" : "invoicesMsg.supplierCategoryCleared", {count: result.modified, supplier: supplierName}));
   } catch {
     message.error(l.value.invoicesMsg.categoryError);
   }
@@ -2195,6 +2222,10 @@ function replaceRow(updated: ImportedInvoice) {
   width: 260px;
 }
 
+.presets-mobile-row {
+  display: none;
+}
+
 .presets-and-dates-row {
   display: flex;
   align-items: center;
@@ -2240,7 +2271,6 @@ function replaceRow(updated: ImportedInvoice) {
   }
 
   .filterbar.filterbar--compact {
-    flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -2850,6 +2880,13 @@ function replaceRow(updated: ImportedInvoice) {
 
   .presets-and-dates-row {
     display: none;
+  }
+
+  .presets-mobile-row {
+    display: block;
+    flex: 0 0 80px;
+    width: 80px;
+    min-width: 0;
   }
 
   .toolbar__supplier--mobile,

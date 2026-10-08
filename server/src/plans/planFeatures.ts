@@ -12,6 +12,8 @@ export const FAMILY_ALLOWED_FEATURES: ReadonlySet<string> = new Set([
   "pages.invoices",
   "pages.discovery",
   "pages.profile",
+  "pages.documents",
+  "pages.gmail",
   "dashboard.stat_pending_reminders",
   "dashboard.calendar",
   "dashboard.upcoming_reminders",

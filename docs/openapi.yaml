@@ -3665,6 +3665,110 @@ paths:
                 additionalProperties: true
         "400":
           description: Invalid input
+  /api/account/invite:
+    post:
+      summary: Send a household invite email to another address
+      tags:
+        - Account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                locale:
+                  type: string
+                  enum: [he, en, ru]
+      responses:
+        "200":
+          description: Invite sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  inviteUrl:
+                    type: string
+        "400":
+          description: Invalid email
+        "401":
+          description: Not signed in
+        "403":
+          description: Plan does not allow extra users
+        "409":
+          description: Already a member or seat limit reached
+        "500":
+          description: Email send failed
+  /api/account/invite/status:
+    get:
+      summary: List household members and pending invites
+      tags:
+        - Account
+      responses:
+        "200":
+          description: Members and pending invites
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+  /api/account/accept-invite:
+    post:
+      summary: Accept a household invite (links current user to inviter)
+      tags:
+        - Account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Invalid token
+        "401":
+          description: Not signed in
+        "404":
+          description: Invite not found or expired
+        "409":
+          description: Already linked to a household
+  /api/account/invite/member/{memberId}:
+    delete:
+      summary: Remove a linked household member
+      tags:
+        - Account
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Member removed
+        "401":
+          description: Not signed in
+        "404":
+          description: Member not found
   /api/billing/status:
     get:
       summary: Subscription status and renewal links
@@ -6090,6 +6194,7 @@ paths:
   /api/invoices/vendors/category:
     post:
       summary: Set a category for a vendor
+      description: Updates existing invoices for the authenticated user's exact supplier name and saves the category for future uploads and Gmail imports. A null category clears existing categories and removes the saved rule. Supplier names are trimmed and matched case-sensitively.
       tags:
         - Invoices
       requestBody:
@@ -7212,6 +7317,53 @@ paths:
           description: Not signed in
         "403":
           description: Not allowed
+  /api/invoices/annual-summary.pdf:
+    get:
+      summary: Download the annual expense summary as a PDF
+      description: |-
+        Generates a one-page PDF of all imported invoices for the given calendar year,
+        grouped by expense category. Available to Digital, Basic and Business plans.
+        The route is under `/api/invoices` (not `/api/reports`) so it bypasses the
+        `pages.reports` feature gate that is blocked for Digital-plan users.
+      tags:
+        - Reports and Search
+      parameters:
+        - name: year
+          in: query
+          required: false
+          description: Calendar year (2000–2100). Defaults to the current year.
+          schema:
+            type: integer
+            minimum: 2000
+            maximum: 2100
+        - name: locale
+          in: query
+          required: false
+          description: PDF language and text direction. Defaults to `he`.
+          schema:
+            type: string
+            enum: [he, en, ru]
+      responses:
+        "200":
+          description: PDF binary stream
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="annual-expenses-2026.pdf"'
+        "400":
+          description: Invalid year parameter
+        "401":
+          description: Not signed in
+        "403":
+          description: Plan does not include invoice access (pages.invoices feature gate)
+        "500":
+          description: PDF generation failed
   /api/reports/monthly/send:
     post:
       summary: Send the monthly report by email
@@ -8490,6 +8642,33 @@ paths:
                   error:
                     type: string
                     example: Unauthorized
+  /api/review/{id}/corrections:
+    put:
+      summary: Correct a pending invoice review without approving it
+      tags: [Import Review]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_name, amount, currency, issue_date]
+              properties:
+                supplier_name: {type: string, maxLength: 300}
+                amount: {type: number}
+                currency: {type: string, minLength: 3, maxLength: 3}
+                issue_date: {type: string, format: date}
+      responses:
+        "200": {description: Invoice and extracted document fields updated}
+        "400": {description: Invalid correction fields}
+        "401": {description: Not signed in}
+        "404": {description: Pending invoice review not found for this user}
+        "500": {description: Corrections could not be saved}
   /api/review/{id}/dismiss:
     post:
       summary: Dismiss an import (not wanted)

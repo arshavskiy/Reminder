@@ -85,6 +85,7 @@ describe("deleteAccountData", () => {
     expect(deleteMany).toHaveBeenCalled();
     expect(deleteOne).toHaveBeenCalled();
     expect(result.deletedCollections.users).toBe(1);
+    expect(result.deletedCollections.supplier_category_rules).toBe(1);
     expect(deleteFromSpaces).toHaveBeenCalledWith("users/u/avatar/a.png");
     expect(deleteFromSpaces).toHaveBeenCalledWith("images/u/logo.png");
     expect(fetchMock).toHaveBeenCalled();

@@ -85,6 +85,7 @@
       <n-form class="review-form" @submit.prevent="save">
         <n-form-item :label="c.name"><n-input v-model:value="draftTitle" :disabled="saving" /></n-form-item>
         <n-form-item :label="c.date"><input v-model="draftDate" type="date" required :disabled="saving" class="date-input" /></n-form-item>
+        <n-form-item v-if="selected?.kind === 'warranty'" :label="c.returnDeadline"><input v-model="draftReturnDeadline" type="date" :disabled="saving" class="date-input" /></n-form-item>
         <n-checkbox v-model:checked="draftEmail" :disabled="saving">{{ c.emailMe }}</n-checkbox>
         <n-checkbox v-model:checked="draftCalendar" :disabled="saving">{{ c.addToCalendar }}</n-checkbox>
         <p class="review-note">{{ c.warnAhead }}</p>
@@ -192,6 +193,7 @@ const showReview = ref(false);
 const selected = ref<ObligationSuggestion | null>(null);
 const draftTitle = ref("");
 const draftDate = ref("");
+const draftReturnDeadline = ref("");
 const draftEmail = ref(true);
 const draftCalendar = ref(true);
 const saving = ref(false);
@@ -263,6 +265,7 @@ function review(item: ObligationSuggestion) {
   draftTitle.value = `${c.value.kinds[item.kind]}: ${item.entity_name}`;
   const today = new Date();
   draftDate.value = item.warning ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}` : item.due_date;
+  draftReturnDeadline.value = "";
   saveError.value = "";
   showReview.value = true;
 }
@@ -273,6 +276,9 @@ async function save() {
   try {
     const result = await api.reminders.createPersonal({ title: draftTitle.value.trim(), target_date: draftDate.value, advance_days: [7, 1], email_self: draftEmail.value, sync_calendar: draftCalendar.value, origin: "discovery" });
     if (!result.created) throw new Error(c.value.notCreated);
+    if (selected.value.kind === "warranty" && draftReturnDeadline.value) {
+      await api.reminders.createPersonal({ title: `${c.value.returnDeadline}: ${selected.value.entity_name}`, target_date: draftReturnDeadline.value, advance_days: [7, 1], email_self: draftEmail.value, sync_calendar: draftCalendar.value, origin: "discovery" }).catch(() => {});
+    }
     saved.value.add(selected.value.id);
     await api.gmail.updateDiscovery(selected.value.id, "created");
     showReview.value = false;
@@ -340,8 +346,8 @@ a { color: var(--brand-color); }
 .agenda-main { flex: 1; min-width: 0; text-align: start; }
 .agenda-title, .agenda-from { text-align: start; unicode-bidi: plaintext; }
 .agenda-title { margin: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agenda-meta { display: flex; align-items: center; gap: 4px; margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); min-width: 0; }
-.agenda-from { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.agenda-meta { display: flex; align-items: center; gap: 4px; margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); min-width: 0; flex-wrap: wrap; row-gap: 0; }
+.agenda-from { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1; }
 .agenda-quote { display: block; max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
@@ -351,5 +357,11 @@ a { color: var(--brand-color); }
   .stat-card span { font-size: 11px; }
   .stat-card__icon { padding: 6px; }
   .scan-controls > .n-button { width: 100%; }
+  .agenda-row { gap: 8px; padding: 10px 10px; }
+  .agenda-date { width: 36px; }
+  .agenda-date strong { font-size: 17px; }
+  .agenda-meta { flex-wrap: wrap; row-gap: 2px; }
+  .agenda-from { max-width: 100%; }
+  .agenda-title { font-size: 14px; }
 }
 </style>

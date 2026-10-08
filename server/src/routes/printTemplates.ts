@@ -299,7 +299,7 @@ export function registerPrintTemplateRoutes(app: Express) {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
     if (!assertExportAllowed(auth)) {
-      res.status(403).json({error: "export_plan_required", message: "ייצוא PDF זמין במסלולי סטארטר ופרו בלבד."});
+      res.status(403).json({error: "export_plan_required", message: "ייצוא PDF זמין במסלולי בסיסי ועסקי בלבד."});
       return;
     }
       const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;
@@ -321,7 +321,7 @@ export function registerPrintTemplateRoutes(app: Express) {
     let auth: Awaited<ReturnType<typeof requireAuth>>;
     try { auth = await requireAuth(req.headers.cookie ?? undefined); } catch { res.status(401).json({ error: "Unauthorized" }); return; }
     if (!assertExportAllowed(auth)) {
-      res.status(403).json({error: "export_plan_required", message: "ייצוא PDF זמין במסלולי סטארטר ופרו בלבד."});
+      res.status(403).json({error: "export_plan_required", message: "ייצוא PDF זמין במסלולי בסיסי ועסקי בלבד."});
       return;
     }
       const t = await col("print_templates").findOne(visibleTemplateQuery(req.params.id, auth.userId)) as any;

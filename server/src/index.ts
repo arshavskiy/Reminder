@@ -44,6 +44,7 @@ import {closeInspectorLeadsClient, registerAdminRoutes} from "./routes/admin";
 import {registerAdminCampaignRoutes} from "./routes/adminCampaigns";
 import {startUnsubscribeScanScheduler} from "./outreach/unsubscribeScan";
 import {registerBillingRoutes} from "./routes/billing";
+import {registerAccountInviteRoutes} from "./routes/accountInvite";
 import {initPush} from "./push/pushService";
 import {checkSystemDeps, logSystemDepsOnStartup} from "./pipeline/systemDeps";
 import {registerExtractRemindersRoutes} from "./routes/extractReminders";
@@ -207,6 +208,7 @@ app.use("/api/equipment", (req, res, next) => {
 
 registerAuthRoutes(app);
 registerBillingRoutes(app);
+registerAccountInviteRoutes(app);
 app.use("/api/gmail", (req, res, next) => requireAnyFeature(gmailRequiredFeatures(req.path))(req, res, next));
 // Invoices are a plan feature, not an admin one. This was requireMinRole("admin"),
 // which refused every non-admin account regardless of what it had paid for.
@@ -216,12 +218,12 @@ registerGmailObligationRoutes(app);
 registerCalendarRoutes(app);
 registerInboundEmailRoutes(app);
 registerGdriveRoutes(app);
+registerReportRoutes(app);
 registerInvoiceRoutes(app);
 registerDocumentRoutes(app);
 registerClientRoutes(app);
 registerContractRoutes(app);
 registerPaymentRoutes(app);
-registerReportRoutes(app);
 registerReminderRoutes(app);
 registerNotificationRoutes(app);
 registerReviewRoutes(app);

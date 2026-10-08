@@ -131,6 +131,7 @@ export function registerAuthRoutes(app: express.Application) {
             name: profile.name ?? null,
             picture_url: profile.picture ?? null,
             last_login_at: new Date(),
+            ui_locale: uiLocale,
           },
           $setOnInsert: {
             role: "user",
@@ -185,13 +186,14 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/google — GIS credential (ID token) sign-in
   app.post("/api/auth/google", async (req, res) => {
-      const body = req.body as { credential?: string; plan?: string; billing?: string; months?: number | string };
+      const body = req.body as { credential?: string; locale?: string; plan?: string; billing?: string; months?: number | string };
     if (!body.credential) {
       res.status(400).json({ error: "missing_credential" });
       return;
     }
     // No PKCE row on this path — the client posts the intent with the credential.
       const oauthSignupIntent = signupIntentFields(parseSignupIntent(body.plan, body.billing, body.months));
+    const uiLocale = parseUiLocale(body.locale);
 
     try {
       const profile = await verifyIdToken(body.credential);
@@ -215,6 +217,7 @@ export function registerAuthRoutes(app: express.Application) {
             name: profile.name ?? null,
             picture_url: profile.picture ?? null,
             last_login_at: new Date(),
+            ui_locale: uiLocale,
           },
           $setOnInsert: {
             role: "user",
@@ -391,11 +394,12 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/register — email/password registration
   app.post("/api/auth/register", async (req, res) => {
-      const {email, password, name, plan: intentPlan, billing: intentBilling, months: intentMonths} = req.body as {
-          email?: string; password?: string; name?: string; plan?: string; billing?: string; months?: number | string;
+      const {email, password, name, locale: localeParam, plan: intentPlan, billing: intentBilling, months: intentMonths} = req.body as {
+          email?: string; password?: string; name?: string; locale?: string; plan?: string; billing?: string; months?: number | string;
     };
     // Recorded for attribution only — it never grants the plan. See signupIntent.ts.
       const signupIntent = parseSignupIntent(intentPlan, intentBilling, intentMonths);
+    const registrationLocale = parseUiLocale(localeParam);
 
     if (!email || !password) {
       res.status(400).json({ error: "email_and_password_required" });
@@ -450,6 +454,7 @@ export function registerAuthRoutes(app: express.Application) {
       is_active: 1,
       created_at: new Date(),
       last_login_at: null,
+      ui_locale: registrationLocale,
     } as any);
     const userId = insert.insertedId.toString();
     // Pass the trial end date too: without it the plan resolves as a lapsed trial and the
@@ -494,9 +499,10 @@ export function registerAuthRoutes(app: express.Application) {
 
   // POST /api/auth/login — email/password sign-in
   app.post("/api/auth/login", async (req, res) => {
-      const {email, password, plan: intentPlan, billing: intentBilling, months: intentMonths} = req.body as {
-          email?: string; password?: string; plan?: string; billing?: string; months?: number | string;
+      const {email, password, locale: localeParam, plan: intentPlan, billing: intentBilling, months: intentMonths} = req.body as {
+          email?: string; password?: string; locale?: string; plan?: string; billing?: string; months?: number | string;
       };
+    const loginLocale = parseUiLocale(localeParam);
 
     if (!email || !password) {
       res.status(400).json({ error: "email_and_password_required" });
@@ -531,7 +537,7 @@ export function registerAuthRoutes(app: express.Application) {
       return;
     }
 
-    await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date() } });
+    await col("users").updateOne({ _id: user._id }, { $set: { last_login_at: new Date(), ui_locale: loginLocale } });
     await ensureUserSettingsWithEntitlements(user._id.toString(), user);
       try {
           await rememberOneTimeIntentAndRemind(user, parseSignupIntent(intentPlan, intentBilling, intentMonths));
@@ -744,17 +750,19 @@ const DEV_FRONTEND = !isProd
  */
 const POST_LOGIN_PATH = "/dashboard";
 
-function parseUiLocale(value: unknown): "en" | "he" {
-  return value === "en" ? "en" : "he";
+function parseUiLocale(value: unknown): "en" | "he" | "ru" {
+  if (value === "en") return "en";
+  if (value === "ru") return "ru";
+  return "he";
 }
 
-function withLocale(path: string, locale: "en" | "he"): string {
-  if (locale !== "en") return path;
+function withLocale(path: string, locale: "en" | "he" | "ru"): string {
+  if (locale !== "en" && locale !== "ru") return path;
   const q = path.indexOf("?");
   const pathname = q === -1 ? path : path.slice(0, q);
   const search = q === -1 ? "" : path.slice(q);
-  if (pathname === "/en" || pathname.startsWith("/en/")) return path;
-  const prefixed = pathname === "/" ? "/en" : `/en${pathname}`;
+  if (pathname === `/${locale}` || pathname.startsWith(`/${locale}/`)) return path;
+  const prefixed = pathname === "/" ? `/${locale}` : `/${locale}${pathname}`;
   return `${prefixed}${search}`;
 }
 

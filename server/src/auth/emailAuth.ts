@@ -39,7 +39,7 @@ function renderHtml(template: string, vars: Record<string, string>): string {
   );
 }
 
-async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
+export async function sendAuthEmail(options: {to: string; subject: string; html: string; text: string}) {
   const s = getSettings();
   const appName = s.emailFromName ?? "RemindOCR";
   if (!s.emailFrom) {
@@ -90,9 +90,9 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   });
 }
 
-export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string, userName?: string, locale: "en" | "he" = "he") {
+export async function sendPasswordResetEmail(email: string, token: string, baseUrl: string, userName?: string, locale: "en" | "he" | "ru" = "he") {
   const s = getSettings();
-  const resetPath = locale === "en" ? "/en/reset-password" : "/reset-password";
+  const resetPath = locale === "en" ? "/en/reset-password" : locale === "ru" ? "/ru/reset-password" : "/reset-password";
   const resetUrl = `${baseUrl}${resetPath}?token=${token}`;
   const appName = s.emailFromName ?? "RemindOCR";
   // No provider guard here: sendAuthEmail already skips when neither Resend nor

@@ -92,6 +92,8 @@ export function startScheduler() {
     await runWithHealth("checkDiscoveryScans", checkDiscoveryScans);
     await runWithHealth("checkInvoiceScans", checkInvoiceScans);
     await runWithHealth("checkSpendingAlerts", checkSpendingAlerts);
+    await runWithHealth("checkBudgetPaceAlerts", checkBudgetPaceAlerts);
+    await runWithHealth("checkRecurringAmountAlerts", checkRecurringAmountAlerts);
     await col("scheduler_health").updateOne(
       { name: "tick" },
       { $set: { name: "tick", last_run_at: new Date(), last_error: null, consecutive_failures: 0 } },
@@ -1253,6 +1255,87 @@ async function syncContractRemindersToCalendar(userId: string | undefined, contr
   }
 }
 
+/** Pure helper — exported for tests. Returns whether an amount is a spike (> 115% of avg). */
+export function isAmountSpike(amount: number, avg: number): boolean {
+  if (avg <= 0) return false;
+  return amount > avg * 1.15;
+}
+
+/** Pure helper — exported for tests. Returns projected month-end spend for a category. */
+export function projectMonthEndSpend(spentSoFar: number, daysElapsed: number, daysInMonth: number): number {
+  if (daysElapsed <= 0) return 0;
+  return Math.round((spentSoFar / daysElapsed) * daysInMonth);
+}
+
+async function checkBudgetPaceAlerts(now = new Date()) {
+  // Run on days 14–16 only (mid-month window; scheduler ticks hourly so dedup by month key)
+  const day = now.getDate();
+  if (day < 14 || day > 16) return;
+
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), day, 23, 59, 59);
+
+  const users = await col("users").find({ spending_alerts: { $exists: true, $not: { $size: 0 } } } as any).toArray() as any[];
+  for (const user of users) {
+    const userId = String(user._id);
+    const alerts: Array<{ category: string; threshold: number; currency: string }> = Array.isArray(user.spending_alerts) ? user.spending_alerts : [];
+    if (!alerts.length) continue;
+
+    // Dedup: skip if pace alert already sent this month
+    const alreadySent = await col("notifications").findOne({
+      user_id: userId,
+      kind: "budget_pace_alert",
+      spending_alert_month: monthKey,
+    } as any);
+    if (alreadySent) continue;
+
+    const invoices = await col("invoices").find({
+      user_id: userId,
+      issue_date: { $gte: fromDate.toISOString().slice(0, 10), $lte: todayEnd.toISOString().slice(0, 10) },
+    } as any, { projection: { provider_category: 1, amount: 1, cash_flow: 1 } } as any).toArray() as any[];
+
+    const categoryTotals = new Map<string, number>();
+    for (const inv of invoices) {
+      if (inv.cash_flow === "income") continue;
+      if (typeof inv.amount !== "number" || !Number.isFinite(inv.amount)) continue;
+      const cat = inv.provider_category || "general";
+      categoryTotals.set(cat, (categoryTotals.get(cat) ?? 0) + inv.amount);
+    }
+
+    // Project to month-end: spentSoFar / daysElapsed * daysInMonth
+    const daysElapsed = day;
+    const triggered: Array<{ category: string; projected: number; threshold: number }> = [];
+    for (const alert of alerts) {
+      const spentSoFar = categoryTotals.get(alert.category) ?? 0;
+      if (spentSoFar === 0) continue;
+      const projected = projectMonthEndSpend(spentSoFar, daysElapsed, daysInMonth);
+      if (projected >= alert.threshold) {
+        triggered.push({ category: alert.category, projected, threshold: alert.threshold });
+      }
+    }
+    if (!triggered.length) continue;
+
+    for (const t of triggered) {
+      const title = `צפי חריגה בהוצאות: ${t.category}`;
+      const body = `בקצב הנוכחי, הוצאות ${monthKey} ב"${t.category}" יגיעו ל-₪${t.projected} (סף: ₪${t.threshold})`;
+      await col("notifications").insertOne({
+        user_id: userId,
+        kind: "budget_pace_alert",
+        title,
+        body,
+        spending_alert_month: monthKey,
+        spending_alert_category: t.category,
+        created_at: new Date(),
+        read_at: null,
+      } as any);
+      await sendToUser(userId, { title, body, data: { url: "/invoices/expenses", kind: "budget_pace_alert" } }).catch(() => {});
+      logger.info("budget_pace_alert_fired", { user_id: userId, month: monthKey, category: t.category, projected: t.projected, threshold: t.threshold });
+    }
+  }
+}
+
 async function checkSpendingAlerts() {
   const now = new Date();
   // Run on the 1st–3rd of each month only (scheduler ticks hourly so this fires several times — dedup by month key)
@@ -1318,6 +1401,73 @@ async function checkSpendingAlerts() {
       } as any);
       await sendToUser(userId, { title, body, data: { url: "/invoices/expenses", kind: "spending_alert" } }).catch(() => {});
       logger.info("spending_alert_fired", { user_id: userId, month: prevMonthKey, category: t.category, actual: t.actual, threshold: t.threshold });
+    }
+  }
+}
+
+async function checkRecurringAmountAlerts() {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const historyFrom = new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString().slice(0, 10);
+  const recentFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const users = await col("users").find({}).toArray() as any[];
+  for (const user of users) {
+    const userId = String(user._id);
+
+    const invoices = await col("invoices").find({
+      user_id: userId,
+      issue_date: { $gte: historyFrom },
+    } as any, { projection: { supplier_name: 1, amount: 1, issue_date: 1, cash_flow: 1 } } as any).toArray() as any[];
+
+    const supplierMap = new Map<string, Array<{ date: string; amount: number }>>();
+    for (const inv of invoices) {
+      if (inv.cash_flow === "income") continue;
+      if (typeof inv.amount !== "number" || !Number.isFinite(inv.amount) || inv.amount <= 0) continue;
+      const supplier = inv.supplier_name;
+      if (!supplier) continue;
+      if (!supplierMap.has(supplier)) supplierMap.set(supplier, []);
+      supplierMap.get(supplier)!.push({ date: inv.issue_date, amount: inv.amount });
+    }
+
+    for (const [supplier, entries] of supplierMap) {
+      if (entries.length < 3) continue;
+      const months = new Set(entries.map(e => e.date.slice(0, 7)));
+      if (months.size < 3) continue;
+
+      entries.sort((a, b) => a.date < b.date ? -1 : 1);
+      const latest = entries[entries.length - 1];
+      if (latest.date < recentFrom) continue;
+
+      const historical = entries.slice(0, -1);
+      const avg = historical.reduce((s, e) => s + e.amount, 0) / historical.length;
+      if (!isAmountSpike(latest.amount, avg)) continue;
+
+      const alreadySent = await col("notifications").findOne({
+        user_id: userId,
+        kind: "recurring_amount_spike",
+        spike_supplier: supplier,
+        spike_month: monthKey,
+      } as any);
+      if (alreadySent) continue;
+
+      const pct = Math.round((latest.amount / avg - 1) * 100);
+      const title = `עלייה חריגה בחיוב: ${supplier}`;
+      const body = `החיוב האחרון מ-${supplier} (₪${Math.round(latest.amount)}) גבוה ב-${pct}% מהממוצע (₪${Math.round(avg)})`;
+      await col("notifications").insertOne({
+        user_id: userId,
+        kind: "recurring_amount_spike",
+        title,
+        body,
+        spike_supplier: supplier,
+        spike_month: monthKey,
+        spike_amount: latest.amount,
+        spike_avg: avg,
+        created_at: new Date(),
+        read_at: null,
+      } as any);
+      await sendToUser(userId, { title, body, data: { url: "/invoices/recurring", kind: "recurring_amount_spike" } }).catch(() => {});
+      logger.info("recurring_amount_spike_fired", { user_id: userId, supplier, month: monthKey, amount: latest.amount, avg });
     }
   }
 }
