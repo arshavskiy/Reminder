@@ -98,6 +98,7 @@ export interface User {
   company_email?: string | null;
   company_logo_url?: string | null;
   signature_url?: string | null;
+  wa_intake_enabled?: boolean;
 }
 
 export interface Session {

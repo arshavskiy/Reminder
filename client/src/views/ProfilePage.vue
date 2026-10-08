@@ -1280,6 +1280,39 @@
               </div>
             </div>
           </div>
+
+          <!-- WhatsApp document intake -->
+          <div v-if="waIntakeConfig" class="settings-stack" style="margin-top: 24px">
+            <div class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="LogoWhatsapp" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profileSettings.waIntakeTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.waIntakeDesc }}</p>
+                </div>
+              </div>
+              <div class="settings-rows">
+                <div class="settings-row">
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">{{ l.profileSettings.waIntakeToggle }}</span>
+                    <span v-if="waIntakeConfig.displayPhone" class="settings-row__desc">
+                      {{ l.profileSettings.waIntakeNumber }}: <strong dir="ltr">+{{ waIntakeConfig.displayPhone }}</strong>
+                    </span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-switch
+                      :value="user?.wa_intake_enabled ?? false"
+                      :loading="savingWaIntake"
+                      :disabled="!waIntakeConfig.enabled"
+                      @update:value="toggleWaIntake"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section v-if="activeSection === 'theme'">
@@ -1581,6 +1614,7 @@ import {
   LockClosedOutline,
   LogOutOutline,
   LogoGoogle,
+  LogoWhatsapp,
   MailOutline,
   MoonOutline,
   NotificationsOutline,
@@ -1649,6 +1683,34 @@ const activeSection = ref("personal");
 
 const user = computed(() => authStore.user as User | null);
 const userSettings = ref<UserSettings | null>(null);
+
+// ── WhatsApp intake ──────────────────────────────────────────────────────────
+const waIntakeConfig = ref<{enabled: boolean; displayPhone: string | null} | null>(null);
+const savingWaIntake = ref(false);
+
+async function loadWaIntakeConfig() {
+  try { waIntakeConfig.value = await api.whatsappIntake.config(); } catch { /* optional feature */ }
+}
+
+async function toggleWaIntake(val: boolean) {
+  if (val && !user.value?.phone) {
+    message.warning(l.value.profileSettings.waIntakeNoPhone);
+    return;
+  }
+  if (val && waIntakeConfig.value && !waIntakeConfig.value.enabled) {
+    message.warning(l.value.profileSettings.waIntakeNotConfigured);
+    return;
+  }
+  savingWaIntake.value = true;
+  try {
+    await authStore.save({wa_intake_enabled: val} as any);
+    message.success(val ? l.value.profileSettings.waIntakeOn : l.value.profileSettings.waIntakeOff);
+  } catch {
+    message.error(l.value.profileSettings.settingSaveError);
+  } finally {
+    savingWaIntake.value = false;
+  }
+}
 
 // ── Cloud storage toggles ───────────────────────────────────────────────────
 // Unset means enabled: the settings row predates these fields for existing
@@ -2845,6 +2907,7 @@ onMounted(async () => {
   loadGmailStatus();
   loadDriveStatus();
   loadCalendarStatus();
+  loadWaIntakeConfig();
 });
 
 watch(activeSection, (section) => {

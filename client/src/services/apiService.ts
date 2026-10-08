@@ -1608,6 +1608,10 @@ export const api = {
     disable: () => del("/inbound-email"),
   },
 
+  whatsappIntake: {
+    config: () => get<{enabled: boolean; displayPhone: string | null}>("/profile/whatsapp-intake-config"),
+  },
+
   drive: {
     status: () => get<DriveStatus>("/drive/status"),
     enable: (folderName?: string) => post<{

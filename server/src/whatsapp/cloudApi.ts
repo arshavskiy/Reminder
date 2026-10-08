@@ -95,3 +95,37 @@ export const deliveryRank: Record<string, number> = {queued: 0, sending: 1, unkn
 export function isWhatsAppStop(text: unknown): boolean {
   return typeof text === "string" && /^(stop|unsubscribe|הסר|הסרה|הפסק)$/i.test(text.trim());
 }
+
+export async function sendWhatsAppText(to: string, text: string): Promise<void> {
+  if (!whatsappConfigStatus().enabled) return;
+  await graph(`${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+    messaging_product: "whatsapp", recipient_type: "individual", to,
+    type: "text", text: {body: text},
+  });
+}
+
+export async function downloadWhatsAppMedia(mediaId: string): Promise<{buffer: Buffer; mimeType: string; filename: string}> {
+  const meta = await graph(mediaId);
+  const url: string = meta.url;
+  const mimeType: string = meta.mime_type ?? "application/octet-stream";
+  if (!url) throw new WhatsAppApiError("missing_media_url");
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`},
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch { throw new WhatsAppApiError("network_outcome_unknown", false, false); }
+  if (!response.ok) throw new WhatsAppApiError(`meta_${response.status}`);
+  const arrayBuffer = await response.arrayBuffer();
+  const extMap: Record<string, string> = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/tiff": ".tif",
+  };
+  const ext = extMap[mimeType] ?? ".bin";
+  const filename = `wa_${mediaId}${ext}`;
+  return {buffer: Buffer.from(arrayBuffer), mimeType, filename};
+}

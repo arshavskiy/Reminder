@@ -164,6 +164,7 @@ export function registerProfileRoutes(app: express.Application) {
     "company_name", "company_registration", "company_subtitle",
     "company_phone", "company_email", "company_logo_url",
     "signature_url",
+    "wa_intake_enabled",
   ] as const;
 
   app.put("/api/user", async (req, res) => {
@@ -649,6 +650,16 @@ export function registerProfileRoutes(app: express.Application) {
       }
       res.status(500).json({ error: "delete_failed" });
     }
+  });
+
+  // ── WhatsApp intake public config ─────────────────────────────────────────
+  // Returns only the display phone and enabled flag — no secrets.
+  app.get("/api/profile/whatsapp-intake-config", async (req, res) => {
+    const ctx = await auth(req, res);
+    if (!ctx) return;
+    const {whatsappConfigStatus} = await import("../whatsapp/cloudApi.js");
+    const status = whatsappConfigStatus();
+    res.json({enabled: status.enabled, displayPhone: status.sender || null});
   });
 }
 

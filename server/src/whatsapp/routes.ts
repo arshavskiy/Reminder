@@ -1,11 +1,15 @@
 import express from "express";
 import {createHash, timingSafeEqual} from "node:crypto";
+import {writeFileSync, unlinkSync, mkdirSync} from "node:fs";
+import {join} from "node:path";
+import {tmpdir} from "node:os";
 import {ObjectId} from "mongodb";
 import {requireAuth, requireRole, HTTPException} from "../auth/middleware";
-import {runWithPrimaryDb} from "../db/db";
+import {runWithPrimaryDb, col} from "../db/db";
 import {inspectorLeadsCollection} from "../routes/admin";
 import {whatsappCollections, whatsappObjectId} from "./queue";
-import {deliveryRank, isWhatsAppStop, listWhatsAppTemplates, normalizeWhatsAppPhone, verifyWhatsAppSignature, whatsappConfigStatus} from "./cloudApi";
+import {deliveryRank, downloadWhatsAppMedia, isWhatsAppStop, listWhatsAppTemplates, normalizeWhatsAppPhone, sendWhatsAppText, verifyWhatsAppSignature, whatsappConfigStatus} from "./cloudApi";
+import {logger} from "../logger";
 
 export async function handleWhatsAppWebhook(payload: any) {
   if (payload?.object !== "whatsapp_business_account") return;
@@ -35,8 +39,51 @@ export async function handleWhatsAppWebhook(payload: any) {
           // An inbound reply does not establish marketing consent.
           await contacts.updateOne({phone}, {$max: {lastInboundAt: new Date(Number(incoming.timestamp) * 1000 || Date.now())}});
         }
+        // Document/image intake — find the user by phone, run pipeline
+        const mediaType: string | undefined = incoming.type;
+        if (mediaType === "document" || mediaType === "image") {
+          void handleWhatsAppMediaIntake(phone, incoming).catch(err =>
+            logger.error("wa_intake_error", {phone, error: String(err)}));
+        }
       }
     }
+  }
+}
+
+async function handleWhatsAppMediaIntake(phone: string, incoming: any): Promise<void> {
+  // Find user account with this phone and wa_intake_enabled
+  const user = await col("users").findOne({phone, wa_intake_enabled: true} as any) as any;
+  if (!user) return; // no matching account or intake not enabled
+
+  const mediaId: string | undefined = incoming.document?.id ?? incoming.image?.id;
+  const caption: string | undefined = incoming.document?.caption ?? incoming.image?.caption;
+  const originalFilename: string | undefined = incoming.document?.filename;
+  if (!mediaId) return;
+
+  let tmpPath: string | undefined;
+  try {
+    const {buffer, filename} = await downloadWhatsAppMedia(mediaId);
+    const displayName = originalFilename ?? caption ?? filename;
+    const dir = join(tmpdir(), "wa_intake");
+    mkdirSync(dir, {recursive: true});
+    tmpPath = join(dir, filename);
+    writeFileSync(tmpPath, buffer);
+
+    const {importFile} = await import("../pipeline/importer.js") as any;
+    await importFile(tmpPath, undefined, String(user._id), displayName, {
+      queueProcessing: true,
+      processingJobContext: {source: "whatsapp"},
+      skipQuotaCheck: false,
+    });
+
+    await sendWhatsAppText(phone, "✅ קיבלנו את הקובץ ועיבוד בתהליך. תקבל תזכורות לאחר הניתוח.");
+  } catch (err: any) {
+    logger.error("wa_intake_pipeline_error", {phone, userId: String(user._id), error: String(err)});
+    try {
+      await sendWhatsAppText(phone, "⚠️ לא הצלחנו לעבד את הקובץ. אנא נסה שוב או העלה דרך האפליקציה.");
+    } catch { /* best effort */ }
+  } finally {
+    if (tmpPath) try { unlinkSync(tmpPath); } catch { /* ok */ }
   }
 }
 
