@@ -1035,7 +1035,7 @@ html[dir="rtl"] .n-modal.app-confirm-dialog .n-dialog {
     .content :is(.table-wrap, .document-table-wrap, .invoice-table-wrap,
         .clients-table-wrap, .quotes-table-wrap, .billing-table-wrap,
         .inbox-table-wrap, .gmail-doc-table-wrap, .expense-supplier-table__scroll,
-        .quote-lines, .n-data-table) {
+        .recurring-table-wrap, .missing-table-wrap, .quote-lines, .n-data-table) {
         min-width: 0;
         max-width: 100%;
         overflow-x: auto;
@@ -1045,7 +1045,7 @@ html[dir="rtl"] .n-modal.app-confirm-dialog .n-dialog {
     .app-main .content :is(.document-table, .invoice-table, .clients-table, .quotes-table,
         .detail-table, .billing-table, .inbox-table, .gmail-doc-table,
         .import-results__table, .s3-table, .expense-supplier-table__scroll,
-        .quote-lines, .n-data-table) :is(th, td) {
+        .recurring-table, .missing-table, .quote-lines, .n-data-table) :is(th, td) {
         padding: 8px;
         font-size: 12px;
     }

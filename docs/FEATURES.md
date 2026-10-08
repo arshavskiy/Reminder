@@ -126,23 +126,24 @@ Current tier flags:
 
 
 
-| Tier | Gmail invoice history | Google Drive | Google Calendar | Auto email reminders | Auto monthly reports | Excel export | Seats | Email accounts |
+| Tier | Document imports | Gmail inspection history | Gmail invoice history | Google Drive | Google Calendar / ICS | Email-in | Auto email reminders | Auto monthly reports | Excel export | Seats | Email accounts |
+|------|------------------|--------------------------|-----------------------|--------------|-----------------------|----------|----------------------|----------------------|--------------|-------|----------------|
+| Expired (lapsed trial) | None | 16 months | Not included | Off | Off | Off | Off | Off | Off | 1 | 0 |
+| Trial (30 days) | 20 total | 16 months | 1 month | On | On | Off | On | On | On | 2 | 2 |
+| Digital | Unlimited | Not included | 12 months | Off | On | On | On | On | On | 2 | 2 |
+| Starter (`basic`) | 50 / month | 16 months | Not included | On | On | Off | On | On | On | 2 | 2 |
+| Pro (`business`) | Unlimited | 24 months | 36 months | On | On | On | On | On | On | ∞ | ∞ |
 
-|------|------------------------|--------------|-----------------|----------------------|----------------------|--------------|-------|----------------|
+New users start on a 30-day **trial**; a lapsed trial resolves to the expired entitlements. Details: **[ROLES_AND_PLANS.md](./ROLES_AND_PLANS.md)**.
 
-| Free | Not included | Off | Off | Off | Off | Off | 1 | 1 |
+Page access on top of the flags:
 
-| Basic | 12 months | On | Off | On | On | On | 2 | 2 |
+- Invoices, expenses, recurring payments, missing receipts and the annual expense PDF: Digital, Starter and Pro.
+- Review queue (`/review`, behind `pages.documents`): every plan except Digital, whose family overlay (`plans/planFeatures.ts`) hides documents.
+- Monthly expense summary email: Digital only (`reports/monthlyExpenseReport.ts`).
+- Import history (`/gmail/import-history`): Pro plan, shown in the sidebar to admins only.
 
-| Business | 4 years | On | On | On | On | On | ∞ | ∞ |
-
-
-
-New users always start on **free** until paid. Details: **[ROLES_AND_PLANS.md](./ROLES_AND_PLANS.md)**.
-
-
-
-Gmail invoice imports enforce the history flag in both `/api/gmail/inbox` and `/api/gmail/import-all`. Free users receive `gmail_invoice_plan_required`; Basic users are capped at `newer_than:12m`; Business users are capped at `newer_than:48m`.
+Gmail invoice imports enforce the history flag in both `/api/gmail/inbox` and `/api/gmail/import-all`. Plans without it receive `gmail_invoice_plan_required`; the others are capped at their month count.
 
 
 
@@ -1311,9 +1312,25 @@ Expiry dates in reports and contracts are displayed as original date minus one d
 - DNS: MX `in` -> `inbound-smtp.ap-northeast-1.amazonaws.com` (10)
 - Status: deployed on dev; webhook and dedup path verified, fresh-import run pending; not on master
 
+### Expenses and invoices (2026-10-06/07)
+
+- **Recurring payments** (`/invoices/recurring`, `GET /api/invoices/recurring`): invoices grouped by supplier, listed when a supplier has 3+ charges across 2+ months; amount marked stable when the spread is 15% or less
+- **Missing receipts** (`/invoices/missing-receipts`, `GET /api/invoices/missing-receipts`): invoices with no paired receipt, each with a Gmail search link built on the server
+- **Spending alerts and budgets**: per-category monthly thresholds (`SpendingAlertsModal`, `GET`/`PUT /api/user/spending-alerts`), a monthly bell notification from `checkSpendingAlerts`, and budget progress bars (used, remaining, overage) on the expenses page
+- **Annual expense PDF** (`GET /api/invoices/annual-summary.pdf?year=&locale=`): one page per year grouped by category, in Hebrew, English or Russian; see `docs/digital-plan-features.md`
+- **Monthly expense summary email** for Digital accounts, trilingual templates in `email-templates/digital/`
+- **Household invite** (`POST /api/account/invite`): seat-limited magic-link invite from Profile → settings
+- **Supplier category rules** (`supplier_category_rules`): setting a supplier's category applies it to future Gmail and file imports
+- **Saved filter views** on the invoices page (`SavedFilterViews.vue`, stored in localStorage)
+- **Review queue corrections** (`PUT /api/review/:id/corrections`): fix supplier, amount, currency and date on a pending item
+- **Return deadline** on warranty reminders created from discovery: a second reminder for the return date
+- **Auto-match notification**: a bell notification when a receipt is paired with an invoice
+- **Warranty nudge** for Digital accounts on the invoices page, linking to reminder discovery
+- **Import history** (`/gmail/import-history`, admin): per-email file status with retry for failed or rejected files
+
 ### Planned (not built)
 
-VAT/accountant export with SHAAM allocation number, subscription detection, cash-flow forecast, category budgets, certificate expiry tracker, reminders from extracted tasks, WhatsApp intake/channel, review queue, payment gateway, public API.
+VAT/accountant export with SHAAM allocation number, cash-flow forecast, certificate expiry tracker, reminders from extracted tasks, WhatsApp intake/channel, payment gateway, public API.
 
 ### API documentation and tests
 

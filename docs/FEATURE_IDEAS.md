@@ -2,6 +2,57 @@
 
 Scanned from the current RemindOCR app structure and documentation.
 
+## Next up (planned 2026-10-07)
+
+Built on the expense and household features shipped 2026-10-06/07 (recurring payments, missing receipts, budgets, annual PDF, household invite). Suggested order: 1, 2, 4, 5, then 8 and 9.
+
+### Quick wins
+
+1. **Recurring payments → reminders**
+   A "remind me before the next charge" button on each recurring-payments row, with the date predicted from past charges. Alert when a usually stable amount goes up.
+
+2. **Missing receipts: find and import automatically**
+   Run the Gmail search on the server and import the matching receipt, instead of only opening a search link. Weekly email listing receipts that are still missing.
+
+3. **Budget pace alert**
+   Warn mid-month when a category is on track to exceed its budget. Today's spending alert only fires after the month ends.
+
+4. **Trial can open the expense pages**
+   Trial is excluded from the invoice, expenses, recurring and missing-receipts routes (`requirePlan: ["digital", "basic", "business"]`), so trial users never see what Digital sells. Allow it, limited by the trial's one month of invoice history.
+
+5. **Review queue for Digital**
+   Digital imports from Gmail and email-in unattended, but `/review` sits behind `pages.documents`, which the family overlay hides. Gate it on `pages.invoices` as well.
+
+6. **Import history for customers**
+   `/gmail/import-history` is admin-only in the sidebar. Open it to Digital and Pro users, who also run Gmail imports, so they can see failures and retry.
+
+7. **Saved filter views on the server**
+   `SavedFilterViews` stores presets in localStorage. Store them per user so they follow across devices and household members.
+
+### Medium
+
+8. **Accountant export**
+   Monthly bundle of invoice files plus an Excel sheet, optionally emailed to the accountant on a schedule. Include the SHAAM allocation number.
+
+9. **Cash-flow forecast**
+   Upcoming unpaid invoices plus predicted recurring charges, month by month.
+
+10. **Warranty vault**
+    One page per purchase: receipt, warranty end date and return deadline. Ties together discovery, invoices and the return-date reminder.
+
+11. **Bank / credit-card statement import (CSV)**
+    Match card charges against receipts to find missing receipts from the other direction.
+
+12. **Household sharing**
+    Assign a reminder to a household member and send notifications per person. Builds on the household invite.
+
+### Larger (existing roadmap)
+
+13. **WhatsApp reminders** — still the most requested channel in Israel.
+14. **Split Google permissions** — basic sign-in at login; ask for Gmail and Drive access only when used. Helps Google app verification.
+15. **Customer portal and monthly client packets** (Pro).
+16. **Equipment QR codes and offline field mode** (Pro).
+
 ## What תסקל 2.0 sells that we don’t — build these first
 
 Full write-up: [TASKAL_FEATURE_GAPS.md](./TASKAL_FEATURE_GAPS.md) (scanned 2026-08-27).
