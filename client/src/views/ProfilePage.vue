@@ -1703,7 +1703,7 @@ async function toggleWaIntake(val: boolean) {
   }
   savingWaIntake.value = true;
   try {
-    await authStore.save({wa_intake_enabled: val} as any);
+    await authStore.save({wa_intake_enabled: val});
     message.success(val ? l.value.profileSettings.waIntakeOn : l.value.profileSettings.waIntakeOff);
   } catch {
     message.error(l.value.profileSettings.settingSaveError);

@@ -6244,6 +6244,112 @@ paths:
           description: Invalid input
         "401":
           description: Not signed in
+  /api/invoices/recurring:
+    get:
+      summary: List recurring payment subscriptions
+      tags:
+        - Invoices
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+  /api/invoices/missing-receipts:
+    get:
+      summary: List invoices with missing receipts
+      tags:
+        - Invoices
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+  /api/invoices/saved-views:
+    get:
+      summary: List saved filter views for a page
+      tags:
+        - Invoices
+      parameters:
+        - name: page
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+    post:
+      summary: Save (upsert) a filter view
+      tags:
+        - Invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                page:
+                  type: string
+                name:
+                  type: string
+                state:
+                  type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Invalid input
+        "401":
+          description: Not signed in
+    delete:
+      summary: Delete a saved filter view
+      tags:
+        - Invoices
+      parameters:
+        - name: page
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Invalid input
+        "401":
+          description: Not signed in
   /api/invoices/{id}:
     get:
       summary: Get an invoice
@@ -6841,6 +6947,21 @@ paths:
   /api/profile/subscription:
     get:
       summary: Subscription details
+      tags:
+        - Profile
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+  /api/profile/whatsapp-intake-config:
+    get:
+      summary: WhatsApp document intake configuration
       tags:
         - Profile
       responses:

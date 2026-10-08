@@ -12,11 +12,11 @@ describe("family tier page overlay", () => {
     expect(isFamilyPlan({ plan: "business", role: "admin" })).toBe(false);
   });
 
-  it("shows only the dashboard, reminders, invoices, discovery and profile pages", () => {
+  it("shows only the dashboard, reminders, invoices, discovery, profile, documents and gmail pages", () => {
     const flags = applyFamilyFeatureOverlay(everythingOn, KEYS);
     const onPages = KEYS.filter((key) => key.startsWith("pages.") && flags[key]);
-    expect(onPages.sort()).toEqual(["pages.dashboard", "pages.discovery", "pages.invoices", "pages.profile", "pages.reminders"]);
-    for (const hidden of ["pages.documents", "pages.contracts", "pages.clients", "pages.equipment", "pages.field", "pages.reports", "pages.doc_templates", "pages.email_templates", "pages.settings", "pages.search", "pages.gmail"]) {
+    expect(onPages.sort()).toEqual(["pages.dashboard", "pages.discovery", "pages.documents", "pages.gmail", "pages.invoices", "pages.profile", "pages.reminders"]);
+    for (const hidden of ["pages.contracts", "pages.clients", "pages.equipment", "pages.field", "pages.reports", "pages.doc_templates", "pages.email_templates", "pages.settings", "pages.search"]) {
       expect(flags[hidden], hidden).toBe(false);
     }
   });
@@ -49,7 +49,7 @@ describe("family tier page overlay", () => {
   it("allows exactly the documented set", () => {
     expect([...FAMILY_ALLOWED_FEATURES].sort()).toEqual([
       "dashboard.calendar", "dashboard.stat_pending_reminders", "dashboard.upcoming_reminders",
-      "pages.dashboard", "pages.discovery", "pages.invoices", "pages.profile", "pages.reminders",
+      "pages.dashboard", "pages.discovery", "pages.documents", "pages.gmail", "pages.invoices", "pages.profile", "pages.reminders",
     ]);
   });
 });
