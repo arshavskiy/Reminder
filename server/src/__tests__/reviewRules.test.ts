@@ -53,6 +53,7 @@ describe("needsReview", () => {
     const bad = { fields: {}, invoice: { supplier_name: "", amount: null, issue_date: null } };
     expect(needsReview({ source: "upload", ...bad }).needed).toBe(false);
     expect(needsReview({ source: "gmail", ...bad }).needed).toBe(true);
+    expect(needsReview({ source: "whatsapp", ...bad }).needed).toBe(true);
   });
 
   it("does not queue a clean automatic import", () => {

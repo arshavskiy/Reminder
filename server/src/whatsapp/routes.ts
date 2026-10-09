@@ -1,15 +1,12 @@
 import express from "express";
 import {createHash, timingSafeEqual} from "node:crypto";
-import {writeFileSync, unlinkSync, mkdirSync} from "node:fs";
-import {join} from "node:path";
-import {tmpdir} from "node:os";
 import {ObjectId} from "mongodb";
 import {requireAuth, requireRole, HTTPException} from "../auth/middleware";
-import {runWithPrimaryDb, col} from "../db/db";
+import {runWithPrimaryDb} from "../db/db";
 import {inspectorLeadsCollection} from "../routes/admin";
 import {whatsappCollections, whatsappObjectId} from "./queue";
-import {deliveryRank, downloadWhatsAppMedia, isWhatsAppStop, listWhatsAppTemplates, normalizeWhatsAppPhone, sendWhatsAppText, verifyWhatsAppSignature, whatsappConfigStatus} from "./cloudApi";
-import {logger} from "../logger";
+import {deliveryRank, isWhatsAppStop, listWhatsAppTemplates, normalizeWhatsAppPhone, verifyWhatsAppSignature, whatsappConfigStatus} from "./cloudApi";
+import {enqueueWhatsAppIntake} from "./intake";
 
 export async function handleWhatsAppWebhook(payload: any) {
   if (payload?.object !== "whatsapp_business_account") return;
@@ -23,10 +20,10 @@ export async function handleWhatsAppWebhook(payload: any) {
         if (!["sent", "delivered", "read", "failed"].includes(event.status) || typeof event.id !== "string") continue;
         const callback = whatsappObjectId(event.biz_opaque_callback_data);
         const identity = callback ? {_id: callback, phone: normalizeWhatsAppPhone(event.recipient_id)} : {providerId: event.id};
-        await messages.updateOne({...identity, rank: {$lt: deliveryRank[event.status]}}, {$set: {
+        await messages.updateOne({...identity, rank: {$lt: deliveryRank[event.status]}, status: {$ne: "cancelled"}}, {$set: {
           status: event.status, rank: deliveryRank[event.status], providerId: event.id, deliveryUpdatedAt: new Date(),
           ...(event.status === "failed" ? {error: `meta_${Number(event.errors?.[0]?.code) || "delivery_failed"}`} : {}),
-        }});
+        }, ...(event.status !== "failed" ? {$unset: {error: ""}} : {})});
       }
       for (const incoming of Array.isArray(value.messages) ? value.messages : []) {
         const phone = normalizeWhatsAppPhone(incoming.from);
@@ -42,48 +39,10 @@ export async function handleWhatsAppWebhook(payload: any) {
         // Document/image intake — find the user by phone, run pipeline
         const mediaType: string | undefined = incoming.type;
         if (mediaType === "document" || mediaType === "image") {
-          void handleWhatsAppMediaIntake(phone, incoming).catch(err =>
-            logger.error("wa_intake_error", {phone, error: String(err)}));
+          await enqueueWhatsAppIntake(phone, incoming);
         }
       }
     }
-  }
-}
-
-async function handleWhatsAppMediaIntake(phone: string, incoming: any): Promise<void> {
-  // Find user account with this phone and wa_intake_enabled
-  const user = await col("users").findOne({phone, wa_intake_enabled: true} as any) as any;
-  if (!user) return; // no matching account or intake not enabled
-
-  const mediaId: string | undefined = incoming.document?.id ?? incoming.image?.id;
-  const caption: string | undefined = incoming.document?.caption ?? incoming.image?.caption;
-  const originalFilename: string | undefined = incoming.document?.filename;
-  if (!mediaId) return;
-
-  let tmpPath: string | undefined;
-  try {
-    const {buffer, filename} = await downloadWhatsAppMedia(mediaId);
-    const displayName = originalFilename ?? caption ?? filename;
-    const dir = join(tmpdir(), "wa_intake");
-    mkdirSync(dir, {recursive: true});
-    tmpPath = join(dir, filename);
-    writeFileSync(tmpPath, buffer);
-
-    const {importFile} = await import("../pipeline/importer.js") as any;
-    await importFile(tmpPath, undefined, String(user._id), displayName, {
-      queueProcessing: true,
-      processingJobContext: {source: "whatsapp"},
-      skipQuotaCheck: false,
-    });
-
-    await sendWhatsAppText(phone, "✅ קיבלנו את הקובץ ועיבוד בתהליך. תקבל תזכורות לאחר הניתוח.");
-  } catch (err: any) {
-    logger.error("wa_intake_pipeline_error", {phone, userId: String(user._id), error: String(err)});
-    try {
-      await sendWhatsAppText(phone, "⚠️ לא הצלחנו לעבד את הקובץ. אנא נסה שוב או העלה דרך האפליקציה.");
-    } catch { /* best effort */ }
-  } finally {
-    if (tmpPath) try { unlinkSync(tmpPath); } catch { /* ok */ }
   }
 }
 

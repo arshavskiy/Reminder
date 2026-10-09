@@ -3,9 +3,10 @@ import {createHmac} from "node:crypto";
 import {ObjectId} from "mongodb";
 import express from "express";
 import type {Server} from "node:http";
-import {normalizeWhatsAppPhone, supportedTemplate, verifyWhatsAppSignature, sendWhatsAppTemplate, WhatsAppApiError, whatsappConfigStatus} from "../whatsapp/cloudApi";
+import {normalizeWhatsAppPhone, supportedTemplate, verifyWhatsAppSignature, sendWhatsAppTemplate, listWhatsAppTemplates, downloadWhatsAppMedia, WhatsAppApiError, whatsappConfigStatus} from "../whatsapp/cloudApi";
 
-const mocks = vi.hoisted(() => ({collections: {} as Record<string, any>, auth: vi.fn(), leads: vi.fn()}));
+const mocks = vi.hoisted(() => ({collections: {} as Record<string, any>, auth: vi.fn(), leads: vi.fn(), enqueueIntake: vi.fn()}));
+vi.mock("../whatsapp/intake", () => ({enqueueWhatsAppIntake: mocks.enqueueIntake, initializeWhatsAppIntake: vi.fn(), processWhatsAppIntakeOnce: vi.fn()}));
 vi.mock("../db/db", () => ({getPrimaryDb: () => ({collection: (name: string) => mocks.collections[name]}), runWithPrimaryDb: (fn: () => unknown) => fn()}));
 vi.mock("../routes/admin", () => ({inspectorLeadsCollection: () => mocks.leads()}));
 vi.mock("../auth/middleware", async importOriginal => {
@@ -19,7 +20,7 @@ let server: Server | undefined;
 const nativeFetch = globalThis.fetch;
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const [key, value] of Object.entries({WHATSAPP_ACCESS_TOKEN: "test-secret", WHATSAPP_PHONE_NUMBER_ID: "123", WHATSAPP_BUSINESS_ACCOUNT_ID: "456", WHATSAPP_API_VERSION: "v23.0", WHATSAPP_VERIFY_TOKEN: "verify", WHATSAPP_APP_SECRET: "app-secret", WHATSAPP_ENABLED: "true"})) vi.stubEnv(key, value);
+  for (const [key, value] of Object.entries({WHATSAPP_ACCESS_TOKEN: "test-secret", WHATSAPP_PHONE_NUMBER_ID: "123", WHATSAPP_BUSINESS_ACCOUNT_ID: "456", WHATSAPP_API_VERSION: "v23.0", WHATSAPP_VERIFY_TOKEN: "verify", WHATSAPP_APP_SECRET: "app-secret"})) vi.stubEnv(key, value);
   for (const name of ["contacts", "campaigns", "messages", "control"]) {
     mocks.collections[`whatsapp_${name}`] = {findOne: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn().mockResolvedValue({}), updateMany: vi.fn().mockResolvedValue({}), countDocuments: vi.fn().mockResolvedValue(0), find: vi.fn()};
   }
@@ -43,6 +44,51 @@ async function appUrl() {
 }
 
 describe("WhatsApp Cloud API", () => {
+  it("stops template pagination when Meta repeats a cursor", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({data: [], paging: {next: "next", cursors: {after: "same"}}})))
+      .mockResolvedValueOnce(new Response(JSON.stringify({data: [], paging: {next: "next", cursors: {after: "same"}}})))
+      .mockRejectedValue(new Error("pagination did not stop"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(listWhatsAppTemplates()).rejects.toThrow("template_pagination_invalid");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+  it("rejects unsafe media ids before making a provider request", async () => {
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    await expect(downloadWhatsAppMedia("../messages")).rejects.toThrow("invalid_media_id");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("rejects unsupported media before downloading its bytes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({url: "https://lookaside.fbsbx.com/file", mime_type: "application/zip"})));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(downloadWhatsAppMedia("1234")).rejects.toThrow("unsupported_media_type");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("rejects oversized media before downloading its bytes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({url: "https://lookaside.fbsbx.com/file", mime_type: "application/pdf", file_size: 101 * 1024 * 1024})));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(downloadWhatsAppMedia("1234")).rejects.toThrow("media_too_large");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("downloads supported media with the sender ownership check", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({url: "https://lookaside.fbsbx.com/file", mime_type: "application/pdf"})))
+      .mockResolvedValueOnce(new Response("%PDF-test"));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await downloadWhatsAppMedia("789")).toEqual({buffer: Buffer.from("%PDF-test"), filename: "wa_789.pdf", mimeType: "application/pdf"});
+    expect(fetchMock.mock.calls[0][0]).toContain("789?phone_number_id=123");
+  });
+  it("limits streamed bytes even when no content length is provided", async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array(26 * 1024 * 1024)); }, cancel,
+    });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({url: "https://lookaside.fbsbx.com/file", mime_type: "application/pdf"})))
+      .mockResolvedValueOnce(new Response(body)));
+    await expect(downloadWhatsAppMedia("789")).rejects.toThrow("media_too_large");
+    expect(cancel).toHaveBeenCalledOnce();
+  });
   it.each([["058-628-1637", "972586281637"], ["+972 58 628 1637", "972586281637"], ["00972586281637", "972586281637"], ["+1 (202) 555-0123", "12025550123"], ["0586281637 / 0501234567", null], ["hello", null], ["972+586281637", null]])("normalizes %s", (input, result) => {
     expect(normalizeWhatsAppPhone(input)).toBe(result);
   });
@@ -69,8 +115,8 @@ describe("WhatsApp Cloud API", () => {
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(payload).toMatchObject({type: "template", biz_opaque_callback_data: "job-1", template: {components: [{type: "body", parameters: [{type: "text", text: "פבל"}]}]}});
   });
-  it("does not send when disabled", async () => {
-    vi.stubEnv("WHATSAPP_ENABLED", "false");
+  it("does not send when not configured", async () => {
+    vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "");
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     expect(whatsappConfigStatus().enabled).toBe(false);
     await expect(sendWhatsAppTemplate({phone: "972586281637", template: {name: "hello", language: "he", body: "hello", parameters: 0}, parameters: [], callback: "1"})).rejects.toThrow("whatsapp_disabled");
@@ -79,6 +125,17 @@ describe("WhatsApp Cloud API", () => {
 });
 
 describe("WhatsApp routes and webhooks", () => {
+  it("does not acknowledge incoming media until it is durably queued", async () => {
+    const url = await appUrl();
+    mocks.enqueueIntake.mockRejectedValueOnce(new Error("database unavailable"));
+    const body = JSON.stringify({object: "whatsapp_business_account", entry: [{id: "456", changes: [{value: {
+      metadata: {phone_number_id: "123"}, messages: [{id: "wamid.incoming", from: "972586281637", type: "document", document: {id: "789"}}],
+    }}]}]});
+    const signature = `sha256=${createHmac("sha256", "app-secret").update(body).digest("hex")}`;
+    const response = await nativeFetch(`${url}/api/webhooks/whatsapp`, {method: "POST", headers: {"Content-Type": "application/json", "X-Hub-Signature-256": signature}, body});
+    expect(mocks.enqueueIntake).toHaveBeenCalledWith("972586281637", expect.objectContaining({id: "wamid.incoming"}));
+    expect(response.status).toBe(503);
+  });
   it("previews only opted-in unique phones and queues an unchanged preview once", async () => {
     const url = await appUrl();
     const ids = Array.from({length: 3}, () => new ObjectId());
@@ -130,7 +187,9 @@ describe("WhatsApp routes and webhooks", () => {
   it("uses monotonic delivery updates and correlates early webhooks to queued jobs", async () => {
     const id = new ObjectId();
     await handleWhatsAppWebhook({object: "whatsapp_business_account", entry: [{id: "456", changes: [{value: {metadata: {phone_number_id: "123"}, statuses: [{id: "wamid.1", recipient_id: "972586281637", biz_opaque_callback_data: id.toString(), status: "read"}]}}]}]});
-    expect(mocks.collections.whatsapp_messages.updateOne).toHaveBeenCalledWith({_id: id, phone: "972586281637", rank: {$lt: 6}}, expect.objectContaining({$set: expect.objectContaining({status: "read", rank: 6})}));
+    expect(mocks.collections.whatsapp_messages.updateOne).toHaveBeenCalledWith({_id: id, phone: "972586281637", rank: {$lt: 6}, status: {$ne: "cancelled"}}, expect.objectContaining({
+      $set: expect.objectContaining({status: "read", rank: 6}), $unset: {error: ""},
+    }));
   });
   it("processes inbound STOP but ignores another sender's webhook", async () => {
     const payload = (sender: string) => ({object: "whatsapp_business_account", entry: [{id: "456", changes: [{value: {metadata: {phone_number_id: sender}, messages: [{from: "972586281637", text: {body: "הסר"}}]}}]}]});

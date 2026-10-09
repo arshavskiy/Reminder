@@ -657,9 +657,13 @@ export function registerProfileRoutes(app: express.Application) {
   app.get("/api/profile/whatsapp-intake-config", async (req, res) => {
     const ctx = await auth(req, res);
     if (!ctx) return;
-    const {whatsappConfigStatus} = await import("../whatsapp/cloudApi.js");
+    const [{whatsappConfigStatus}, {isFeatureEnabledForUser}] = await Promise.all([
+      import("../whatsapp/cloudApi.js"),
+      import("../features.js"),
+    ]);
     const status = whatsappConfigStatus();
-    res.json({enabled: status.enabled, displayPhone: status.sender || null});
+    const featureEnabled = status.configured && await isFeatureEnabledForUser(ctx.userId, "channels.whatsapp_intake");
+    res.json({enabled: featureEnabled, displayPhone: status.sender || null});
   });
 }
 

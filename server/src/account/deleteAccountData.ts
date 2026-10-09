@@ -31,6 +31,7 @@ const USER_SCOPED_COLLECTIONS = [
   "gmail_imports",
   "gmail_import_jobs",
   "document_processing_jobs",
+  "whatsapp_inbox",
   "drive_export_jobs",
   "calendar_links",
   "push_subscriptions",

@@ -19,7 +19,7 @@ export type ReviewReason =
 export type ReviewStatus = "pending" | "approved" | "dismissed";
 
 /** Imports nobody triggered one file at a time. A manual upload is already looked at by its owner. */
-export const AUTOMATIC_SOURCES = new Set(["gmail", "email", "drive"]);
+export const AUTOMATIC_SOURCES = new Set(["gmail", "email", "drive", "whatsapp"]);
 
 export function isAutomaticSource(source: unknown): boolean {
   return AUTOMATIC_SOURCES.has(String(source ?? "").trim().toLowerCase());

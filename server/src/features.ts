@@ -2,7 +2,7 @@ import {ObjectId} from "mongodb";
 import {col} from "./db/db";
 import {applyPlanFeatureOverlay} from "./plans/planFeatures";
 
-export type FeatureScope = "pages" | "dashboard";
+export type FeatureScope = "pages" | "dashboard" | "channels";
 
 export interface FeatureDefinition {
   key: string;
@@ -50,6 +50,7 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
   {key: "dashboard.recent_documents", scope: "dashboard", label_he: "מסמכים אחרונים", label_en: "Recent documents", description_he: "הצגת רשימת מסמכים אחרונים.", default_enabled: true, sort_order: 290},
   {key: "dashboard.upcoming_reminders", scope: "dashboard", label_he: "תזכורות קרובות", label_en: "Upcoming reminders", description_he: "הצגת רשימת תזכורות קרובות.", default_enabled: true, sort_order: 300},
   {key: "dashboard.calendar_filters", scope: "dashboard", label_he: "פילטרי לוח שנה", label_en: "Calendar filters", description_he: "הצגת כפתורי סינון בלוח התזכורות.", default_enabled: true, sort_order: 310},
+  {key: "channels.whatsapp_intake", scope: "channels", label_he: "קבלת מסמכים בוואטסאפ", label_en: "WhatsApp document intake", description_he: "קבלת מסמכים ותמונות דרך WhatsApp לעיבוד אוטומטי.", default_enabled: true, sort_order: 410},
 ];
 
 // Flat dotted-key map — used internally for lookups.

@@ -4,6 +4,7 @@ import {getPrimaryDb} from "../db/db";
 import {logger} from "../logger";
 import {sendWhatsAppTemplate, WhatsAppApiError, whatsappConfigStatus} from "./cloudApi";
 import {isProcessPaused} from "../ops/processControl";
+import {initializeWhatsAppIntake, processWhatsAppIntakeOnce} from "./intake";
 
 export const whatsappCollections = () => {
   const db = getPrimaryDb();
@@ -13,6 +14,7 @@ export const whatsappCollections = () => {
 export async function initializeWhatsAppQueue() {
   const {contacts, campaigns, messages, control} = whatsappCollections();
   await Promise.all([
+    initializeWhatsAppIntake(),
     contacts.createIndex({phone: 1}, {unique: true}),
     campaigns.createIndex({requestId: 1}, {unique: true}),
     messages.createIndex({campaignId: 1, phone: 1}, {unique: true}),
@@ -74,7 +76,14 @@ export async function processWhatsAppQueueOnce() {
 
 export function startWhatsAppWorker(): () => Promise<void> {
   let pending: Promise<void> | null = null;
+  let intakePending: Promise<void> | null = null;
   const timer = setInterval(() => {
+    if (!intakePending) {
+      intakePending = isProcessPaused("whatsapp")
+        .then(paused => paused ? undefined : processWhatsAppIntakeOnce())
+        .catch(() => logger.error("whatsapp_intake_worker_failed", {}))
+        .finally(() => { intakePending = null; });
+    }
     if (pending) return;
     // isProcessPaused caches for a few seconds, so this ticking once a second
     // does not mean a Mongo read per second.
@@ -84,7 +93,7 @@ export function startWhatsAppWorker(): () => Promise<void> {
       .finally(() => { pending = null; });
   }, 1000);
   timer.unref();
-  return async () => { clearInterval(timer); await pending; };
+  return async () => { clearInterval(timer); await Promise.all([pending, intakePending]); };
 }
 
 export function whatsappObjectId(value: unknown): ObjectId | null {

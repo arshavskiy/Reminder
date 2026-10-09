@@ -157,7 +157,7 @@ export interface UserSettings extends PipelineFlags {
 export interface FeatureDefinition {
   id: string;
   key: string;
-  scope: "pages" | "dashboard";
+  scope: "pages" | "dashboard" | "channels";
   label_he: string;
   label_en: string;
   description_he: string;

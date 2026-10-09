@@ -16,7 +16,7 @@ export function whatsappConfigStatus() {
     && /^\d+$/.test(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "");
   const validVersion = /^v\d+\.\d+$/.test(process.env.WHATSAPP_API_VERSION || "");
   const configured = !missing.length && validIds && validVersion;
-  return {configured, enabled: configured && process.env.WHATSAPP_ENABLED === "true", missing,
+  return {configured, enabled: configured, missing,
     sender: process.env.WHATSAPP_DISPLAY_PHONE || "", webhookPath: "/api/webhooks/whatsapp"};
 }
 
@@ -60,6 +60,7 @@ export function supportedTemplate(raw: any): WhatsAppTemplate | null {
 
 export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
   const templates: WhatsAppTemplate[] = [];
+  const cursors = new Set<string>();
   let after: string | undefined;
   do {
     const query = new URLSearchParams({fields: "name,language,status,components", limit: "100", ...(after ? {after} : {})});
@@ -69,6 +70,12 @@ export async function listWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
       if (template) templates.push(template);
     }
     after = result.paging?.next ? result.paging?.cursors?.after : undefined;
+    if (result.paging?.next) {
+      if (typeof after !== "string" || !after || cursors.has(after) || cursors.size >= 99) {
+        throw new WhatsAppApiError("template_pagination_invalid");
+      }
+      cursors.add(after);
+    }
   } while (after && templates.length < 1000);
   return templates;
 }
@@ -105,10 +112,19 @@ export async function sendWhatsAppText(to: string, text: string): Promise<void> 
 }
 
 export async function downloadWhatsAppMedia(mediaId: string): Promise<{buffer: Buffer; mimeType: string; filename: string}> {
-  const meta = await graph(mediaId);
+  if (typeof mediaId !== "string" || !/^\d{1,64}$/.test(mediaId)) throw new WhatsAppApiError("invalid_media_id");
+  const meta = await graph(`${mediaId}?phone_number_id=${process.env.WHATSAPP_PHONE_NUMBER_ID}`);
   const url: string = meta.url;
   const mimeType: string = meta.mime_type ?? "application/octet-stream";
   if (!url) throw new WhatsAppApiError("missing_media_url");
+  const extMap: Record<string, string> = {
+    "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png",
+    "image/webp": ".webp", "image/tiff": ".tif",
+  };
+  const ext = extMap[mimeType];
+  if (!ext) throw new WhatsAppApiError("unsupported_media_type");
+  const maxBytes = 25 * 1024 * 1024;
+  if (Number(meta.file_size) > maxBytes) throw new WhatsAppApiError("media_too_large");
   let response: Response;
   try {
     response = await fetch(url, {
@@ -117,15 +133,27 @@ export async function downloadWhatsAppMedia(mediaId: string): Promise<{buffer: B
     });
   } catch { throw new WhatsAppApiError("network_outcome_unknown", false, false); }
   if (!response.ok) throw new WhatsAppApiError(`meta_${response.status}`);
-  const arrayBuffer = await response.arrayBuffer();
-  const extMap: Record<string, string> = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/tiff": ".tif",
-  };
-  const ext = extMap[mimeType] ?? ".bin";
+  if (Number(response.headers.get("content-length")) > maxBytes) {
+    await response.body?.cancel();
+    throw new WhatsAppApiError("media_too_large");
+  }
+  if (!response.body) throw new WhatsAppApiError("empty_media");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        throw new WhatsAppApiError("media_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  if (!size) throw new WhatsAppApiError("empty_media");
   const filename = `wa_${mediaId}${ext}`;
-  return {buffer: Buffer.from(arrayBuffer), mimeType, filename};
+  return {buffer: Buffer.concat(chunks, size), mimeType, filename};
 }
