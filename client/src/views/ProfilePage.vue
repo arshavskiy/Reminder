@@ -923,6 +923,37 @@
               </div>
             </div>
 
+            <!-- WhatsApp document intake -->
+            <div v-if="waIntakeConfig" class="settings-group">
+              <div class="settings-group__head">
+                <span class="settings-group__icon" aria-hidden="true">
+                  <n-icon :component="LogoWhatsapp" :size="18" />
+                </span>
+                <div>
+                  <h3 class="settings-group__title">{{ l.profileSettings.waIntakeTitle }}</h3>
+                  <p class="settings-group__desc">{{ l.profileSettings.waIntakeDesc }}</p>
+                </div>
+              </div>
+              <div class="settings-rows">
+                <div class="settings-row">
+                  <div class="settings-row__text">
+                    <span class="settings-row__title">{{ l.profileSettings.waIntakeToggle }}</span>
+                    <span v-if="waIntakeConfig.displayPhone" class="settings-row__desc">
+                      {{ l.profileSettings.waIntakeNumber }}: <strong dir="ltr">+{{ waIntakeConfig.displayPhone }}</strong>
+                    </span>
+                  </div>
+                  <div class="settings-row__actions">
+                    <n-switch
+                      :value="user?.wa_intake_enabled ?? false"
+                      :loading="savingWaIntake"
+                      :disabled="!waIntakeConfig.enabled"
+                      @update:value="toggleWaIntake"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="settings-group">
               <div class="settings-group__head">
                 <span class="settings-group__icon" aria-hidden="true">
@@ -1281,38 +1312,6 @@
             </div>
           </div>
 
-          <!-- WhatsApp document intake -->
-          <div v-if="waIntakeConfig" class="settings-stack" style="margin-top: 24px">
-            <div class="settings-group">
-              <div class="settings-group__head">
-                <span class="settings-group__icon" aria-hidden="true">
-                  <n-icon :component="LogoWhatsapp" :size="18" />
-                </span>
-                <div>
-                  <h3 class="settings-group__title">{{ l.profileSettings.waIntakeTitle }}</h3>
-                  <p class="settings-group__desc">{{ l.profileSettings.waIntakeDesc }}</p>
-                </div>
-              </div>
-              <div class="settings-rows">
-                <div class="settings-row">
-                  <div class="settings-row__text">
-                    <span class="settings-row__title">{{ l.profileSettings.waIntakeToggle }}</span>
-                    <span v-if="waIntakeConfig.displayPhone" class="settings-row__desc">
-                      {{ l.profileSettings.waIntakeNumber }}: <strong dir="ltr">+{{ waIntakeConfig.displayPhone }}</strong>
-                    </span>
-                  </div>
-                  <div class="settings-row__actions">
-                    <n-switch
-                      :value="user?.wa_intake_enabled ?? false"
-                      :loading="savingWaIntake"
-                      :disabled="!waIntakeConfig.enabled"
-                      @update:value="toggleWaIntake"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </section>
 
         <section v-if="activeSection === 'theme'">
