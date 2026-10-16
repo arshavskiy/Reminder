@@ -33,6 +33,16 @@ import {parseSignupIntent, signupIntentFields} from "../plans/signupIntent";
 import {deliverOneTimeBillingReminders, rememberOneTimeIntentAndRemind} from "../plans/billingReminders";
 
 export function registerAuthRoutes(app: express.Application) {
+  app.use(["/auth", "/api/auth"], (req, res, next) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.vary("Cookie");
+    // Ignore validators left by older cached login/session responses. Express
+    // otherwise converts an identical JSON response into a bodyless 304.
+    delete req.headers["if-none-match"];
+    delete req.headers["if-modified-since"];
+    next();
+  });
+
   // GET /auth/google — kick off OAuth flow
   app.get("/auth/google", async (req, res) => {
     const settings = getSettings();
