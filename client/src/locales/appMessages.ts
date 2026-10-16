@@ -197,7 +197,7 @@ const he = {
   },
   forbidden: {
     title: "אין הרשאה",
-    body: "הדף הזה מיועד למנהלי מערכת בלבד.",
+    body: "אין לך הרשאה לגשת לדף הזה במסגרת החשבון או המסלול שלך.",
     backHome: "חזרה לדף הבית",
   },
   dashboard: {
@@ -2692,7 +2692,7 @@ const en = {
   },
   forbidden: {
     title: "Access denied",
-    body: "This page is for administrators only.",
+    body: "Your account permissions or plan do not include access to this page.",
     backHome: "Back to home",
   },
   dashboard: {

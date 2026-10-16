@@ -178,7 +178,7 @@ export const ruCore: Record<string, string> = {
   "common.sender": "Отправитель",
 
   "forbidden.title": "Доступ запрещён",
-  "forbidden.body": "Эта страница только для администраторов.",
+  "forbidden.body": "Права вашей учётной записи или тариф не позволяют открыть эту страницу.",
   "forbidden.backHome": "На главную",
 
   "plans.expired": "Истёк",
