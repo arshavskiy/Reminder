@@ -702,9 +702,9 @@ function adminHeaders(extra?: HeadersInit, target: AdminDbTarget = getAdminDbTar
 }
 
 /**
- * Server responses carry `*_url` fields as `/api/...` paths. In production the
- * session cookie lives on the API host (VITE_API_BASE), so those paths must be
- * loaded from there, not from the app domain.
+ * Server responses carry `*_url` fields as `/api/...` paths. Vercel keeps
+ * these on the app host through its proxy so the session cookie is included.
+ * Deployments with an explicit API base load them from that configured host.
  */
 export function apiUrl(path: string | null | undefined): string {
   if (!path) return "";
