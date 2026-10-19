@@ -5,6 +5,13 @@ import {resolve} from "path";
 import {VitePWA} from "vite-plugin-pwa";
 
 export default defineConfig({
+  // Vercel proxies /api and /auth (vercel.json). Google returns to the app
+  // host and sets a host-only cookie there, so every API call must use that
+  // same host even when an old VITE_API_BASE remains in project settings.
+  define: process.env.VERCEL === "1" ? {
+    "import.meta.env.VITE_API_BASE": JSON.stringify(""),
+    "import.meta.env.VITE_ADMIN_API_BASE": JSON.stringify(""),
+  } : {},
   plugins: [
     vue(),
     tailwindcss(),

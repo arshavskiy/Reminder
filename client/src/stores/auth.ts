@@ -61,7 +61,7 @@ export const useAuthStore = defineStore("auth", () => {
   async function fetchMe() {
     loading.value = true;
     try {
-      const res = await fetch(`${SERVER}/api/auth/me`, { credentials: "include" });
+      const res = await fetch(`${SERVER}/api/auth/me`, { credentials: "include", cache: "no-store" });
       const data = await res.json() as { user: AuthUser | null; actingAs?: AuthUser | null };
       user.value = data.user;
       actingAs.value = data.actingAs ?? null;

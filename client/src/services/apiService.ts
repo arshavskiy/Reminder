@@ -702,9 +702,9 @@ function adminHeaders(extra?: HeadersInit, target: AdminDbTarget = getAdminDbTar
 }
 
 /**
- * Server responses carry `*_url` fields as `/api/...` paths. In production the
- * session cookie lives on the API host (VITE_API_BASE), so those paths must be
- * loaded from there, not from the app domain.
+ * Server responses carry `*_url` fields as `/api/...` paths. Vercel keeps
+ * these on the app host through its proxy so the session cookie is included.
+ * Deployments with an explicit API base load them from that configured host.
  */
 export function apiUrl(path: string | null | undefined): string {
   if (!path) return "";
@@ -1557,7 +1557,9 @@ export const api = {
     updateDiscovery: (id: string, status: "new" | "created" | "dismissed") => put<{ ok: boolean }>(`/gmail/obligation/saved/${encodeURIComponent(id)}`, { status }),
     discoveryPdfUrl: (id: string, fileId: string) => `${BASE}/gmail/obligation/saved/${encodeURIComponent(id)}/pdf/${encodeURIComponent(fileId)}`,
     status: () => get<{ connected: boolean; source: string | null; email: string | null }>("/gmail/status"),
-      authUrl: (returnTo?: string, purpose?: "gmail" | "drive" | "all") => get<{
+      // Return to the initiating page; the server's legacy Gmail inbox fallback
+      // requires Business even when the caller can connect Gmail on another plan.
+      authUrl: (returnTo = window.location.pathname, purpose?: "gmail" | "drive" | "all") => get<{
           url: string
       }>(`/gmail/auth-url${qs({returnTo, purpose})}`),
     searchProviders: () => get<{ providers: GmailSearchProvider[] }>("/gmail/search-providers"),

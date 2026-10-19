@@ -4,12 +4,10 @@ import {formatPlanPrice, getPricingPlanForLocale, planBillingTerms, planPurchase
 
 describe("shared pricing catalog", () => {
   it("keeps approved annual rates separate from monthly billing", () => {
-    const digital = getPricingPlanForLocale("digital", "he");
     const basic = getPricingPlanForLocale("basic", "he");
     const business = getPricingPlanForLocale("business", "he");
-    expect([digital.price, yearlyMonthly(digital), digital.yearlyPrice]).toEqual([49, 39, 468]);
     expect([basic.price, yearlyMonthly(basic), basic.yearlyPrice]).toEqual([97, 78, 936]);
-    expect([business.price, yearlyMonthly(business), business.yearlyPrice]).toEqual([249, 199, 2388]);
+    expect([business.price, yearlyMonthly(business), business.yearlyPrice]).toEqual([149, 119, 1428]);
     for (const locale of ["he", "en"] as const) {
       for (const plan of plansForLocale(locale).filter((item) => item.id !== "trial")) {
         expect(plan.price).toBeGreaterThan(0);
@@ -29,7 +27,7 @@ describe("shared pricing catalog", () => {
 
   it.each(["he", "en"] as const)("quotes the correct currency and billing alternatives in %s", (locale) => {
     const appPlans = plansForLocale(locale);
-    expect(appPlans.map((plan) => plan.id)).toEqual(["trial", "digital", "basic", "business"]);
+    expect(appPlans.map((plan) => plan.id)).toEqual(["trial", "basic", "business"]);
     for (const appPlan of appPlans.filter((plan) => plan.id !== "trial")) {
       const quote = new URL(planPurchaseUrl(appPlan, locale));
       expect(quote.hostname).toBe("wa.me");
