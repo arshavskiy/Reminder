@@ -9,7 +9,7 @@ describe("shared pricing catalog", () => {
     const business = getPricingPlanForLocale("business", "he");
     expect([digital.price, yearlyMonthly(digital), digital.yearlyPrice]).toEqual([49, 39, 468]);
     expect([basic.price, yearlyMonthly(basic), basic.yearlyPrice]).toEqual([97, 78, 936]);
-    expect([business.price, yearlyMonthly(business), business.yearlyPrice]).toEqual([249, 199, 2388]);
+    expect([business.price, yearlyMonthly(business), business.yearlyPrice]).toEqual([149, 119, 1428]);
     for (const locale of ["he", "en"] as const) {
       for (const plan of plansForLocale(locale).filter((item) => item.id !== "trial")) {
         expect(plan.price).toBeGreaterThan(0);

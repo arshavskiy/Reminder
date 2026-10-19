@@ -31,11 +31,11 @@ describe("Gmail query tier limits", () => {
     );
   });
 
-  it("limits trial invoice searches to one month", () => {
+  it("limits trial invoice searches to three months", () => {
     // Enough to demonstrate the import on recent receipts, without offering the
     // historical backfill that business pays for.
     expect(buildGmailQuery("has:attachment HOT", invoiceTemplate, "trial")).toBe(
-      "has:attachment HOT newer_than:1m",
+      "has:attachment HOT newer_than:3m",
     );
   });
 
@@ -59,7 +59,7 @@ describe("Gmail query tier limits", () => {
   it("replaces client-provided invoice history windows with the tier window", () => {
     // A client asking for 36 months gets its tier's window, not what it asked for.
     expect(buildGmailQuery("has:attachment HOT newer_than:36m", invoiceTemplate, "trial")).toBe(
-      "has:attachment HOT newer_than:1m",
+      "has:attachment HOT newer_than:3m",
     );
   });
 
