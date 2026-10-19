@@ -7,7 +7,7 @@ import YAML from "yaml";
 import {existsSync, readFileSync, watch} from "fs";
 import {dirname, join} from "path";
 import {fileURLToPath} from "url";
-import {closeDb, connectDb} from "./db/db";
+import {closeDb, col, connectDb} from "./db/db";
 import {getSettings, validateEnv} from "./settings";
 import {startScheduler} from "./reminders/scheduler";
 import {seedBuiltinTemplates} from "./templates/seedTemplates";
@@ -125,20 +125,21 @@ app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
   next();
 });
-// IP blocklist — comma-separated list in BLOCKED_IPS env var (e.g. "35.238.129.244,1.2.3.4")
-// Seed with known scanner IPs; add more without redeploy by updating the env var.
-const blockedIpSet = new Set<string>(
+// IP blocklist — checked against DB collection + BLOCKED_IPS env var.
+// DB entries are managed via admin UI; env var provides a seed / emergency override.
+const envBlockedIps = new Set<string>(
   (process.env.BLOCKED_IPS ?? "35.238.129.244")
     .split(",")
     .map((ip) => ip.trim())
     .filter(Boolean),
 );
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "";
-  if (blockedIpSet.has(ip)) {
-    res.status(403).end();
-    return;
-  }
+  if (envBlockedIps.has(ip)) { res.status(403).end(); return; }
+  try {
+    const row = await col("blocked_ips").findOne({ ip });
+    if (row) { res.status(403).end(); return; }
+  } catch { /* DB not yet ready on first requests — pass through */ }
   next();
 });
 

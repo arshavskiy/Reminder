@@ -1625,6 +1625,40 @@ export function registerAdminRoutes(app: express.Application) {
     })));
   });
 
+  // ── Blocked IPs ───────────────────────────────────────────────────────────
+  // GET /api/admin/blocked-ips
+  app.get("/api/admin/blocked-ips", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const rows = await col("blocked_ips").find({}).toArray() as any[];
+    const envIps = (process.env.BLOCKED_IPS ?? "")
+      .split(",").map((ip) => ip.trim()).filter(Boolean);
+    res.json({
+      db: rows.map((r: any) => ({ ip: r.ip, note: r.note ?? "", addedAt: r.addedAt })),
+      env: envIps,
+    });
+  });
+
+  // POST /api/admin/blocked-ips  { ip, note? }
+  app.post("/api/admin/blocked-ips", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = String(req.body?.ip ?? "").trim();
+    if (!ip) return void res.status(400).json({ error: "ip required" });
+    await col("blocked_ips").updateOne(
+      { ip },
+      { $set: { ip, note: req.body?.note ?? "", addedAt: new Date() } },
+      { upsert: true },
+    );
+    res.json({ ok: true });
+  });
+
+  // DELETE /api/admin/blocked-ips/:ip
+  app.delete("/api/admin/blocked-ips/:ip", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = decodeURIComponent(req.params.ip);
+    await col("blocked_ips").deleteOne({ ip });
+    res.json({ ok: true });
+  });
+
   // ── Admin settings ────────────────────────────────────────────────────────
   // GET /api/admin/settings  (replaces the stub)
   app.get("/api/admin/settings", async (req, res) => {
