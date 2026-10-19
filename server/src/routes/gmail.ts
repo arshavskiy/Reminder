@@ -420,8 +420,9 @@ export function registerGmailRoutes(app: express.Application) {
         }
       }
 
+      const handled = await findHandledInlineMessageIds(ctx.userId, allMessageIds);
       const candidates = await Promise.all(
-        allMessageIds.map((id) => fetchInvoiceLikeEmailMeta(listToken, id))
+        allMessageIds.filter((id) => !handled.has(id)).map((id) => fetchInvoiceLikeEmailMeta(listToken, id))
       );
       const linkOnlyEmails = candidates.filter(Boolean);
       logger.info("gmail_link_only_scan", {
@@ -1129,11 +1130,11 @@ export async function importInlineReceiptMessage(
   return { invoiceId, receipt, subject };
 }
 
-async function runInlineReceiptImportJob(job: GmailImportJob, messageIds: string[]) {
-  const diagnostics = createGmailDiagnostics(job.q, new Set(), messageIds.length);
+export async function findHandledInlineMessageIds(userId: string, messageIds: string[]): Promise<Set<string>> {
+  if (!messageIds.length) return new Set();
   const existing = await col("invoices").find(
     {
-      user_id: job.user_id,
+      user_id: userId,
       source: "gmail_inline",
       $or: [{ gmail_message_id: { $in: messageIds } }, { superseded_gmail_message_ids: { $in: messageIds } }],
     } as any,
@@ -1143,6 +1144,19 @@ async function runInlineReceiptImportJob(job: GmailImportJob, messageIds: string
     String(row.gmail_message_id ?? ""),
     ...((row.superseded_gmail_message_ids ?? []) as unknown[]).map(String),
   ]).filter(Boolean));
+  const history = await col<GmailImportHistoryRow>("gmail_imports").find(
+    {user_id: userId, message_id: {$in: messageIds}},
+    {projection: {message_id: 1, files: 1}},
+  ).toArray();
+  for (const row of history) {
+    if (row.files?.some((file) => file.error === "not_a_recognized_inline_receipt")) importedSet.add(String(row.message_id));
+  }
+  return importedSet;
+}
+
+async function runInlineReceiptImportJob(job: GmailImportJob, messageIds: string[]) {
+  const diagnostics = createGmailDiagnostics(job.q, new Set(), messageIds.length);
+  const importedSet = await findHandledInlineMessageIds(job.user_id, messageIds);
 
   for (let index = job.cursor ?? 0; index < messageIds.length; index += 1) {
     const id = messageIds[index];
@@ -1173,6 +1187,11 @@ async function runInlineReceiptImportJob(job: GmailImportJob, messageIds: string
       const message = err instanceof Error ? err.message : String(err);
       if (message === "not_a_recognized_inline_receipt") {
         fileResult = { messageId: id, filename: id, error: message, import_status: "rejected", retryable: false };
+        await col("gmail_imports").updateOne(
+          {user_id: job.user_id, message_id: id},
+          {$setOnInsert: {user_id: job.user_id, message_id: id, imported_at: new Date()}, $set: {files: [{filename: id, error: message}]}},
+          {upsert: true},
+        );
       } else {
         fileResult = { messageId: id, filename: id, error: message, import_status: "failed", retryable: true };
       }
@@ -1375,7 +1394,7 @@ async function initializeGmailImportJob(job: GmailImportJob, accessToken: string
   return { job: updated ?? job, messageIds, importedSet, diagnostics };
 }
 
-async function findSuccessfullyImportedMessageIds(userId: string, messageIds: string[]): Promise<Set<string>> {
+export async function findSuccessfullyImportedMessageIds(userId: string, messageIds: string[]): Promise<Set<string>> {
   if (!messageIds.length) return new Set();
   const imports = await col("gmail_imports").find(
     { user_id: userId, message_id: { $in: messageIds } },
@@ -1461,15 +1480,17 @@ function gmailImportHasSuccessfulDocument(
   documentMap: Map<string, any>,
   rejectedInvoiceDocumentIds: Set<string>,
 ): boolean {
-  return (row.files ?? []).some((file) => {
-    if (file.error) return false;
+  const files = row.files ?? [];
+  return files.length > 0 && files.every((file) => {
     const documentId = String(file.document_id ?? "").trim();
     if (!ObjectId.isValid(documentId)) return false;
-    if (rejectedInvoiceDocumentIds.has(documentId)) return false;
     const doc = documentMap.get(documentId);
     if (!doc) return false;
+    // A completed rejection is not new mail. Explicit retry mode still
+    // bypasses this filter, so it can reprocess rejected documents on demand.
+    if (doc.invoice_rejected === true || rejectedInvoiceDocumentIds.has(documentId)) return true;
+    if (file.error) return false;
     if (doc.processing_status === "error") return false;
-    if (doc.invoice_rejected === true) return false;
     return true;
   });
 }
