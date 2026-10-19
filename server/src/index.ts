@@ -125,6 +125,23 @@ app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
   next();
 });
+// IP blocklist — comma-separated list in BLOCKED_IPS env var (e.g. "35.238.129.244,1.2.3.4")
+// Seed with known scanner IPs; add more without redeploy by updating the env var.
+const blockedIpSet = new Set<string>(
+  (process.env.BLOCKED_IPS ?? "35.238.129.244")
+    .split(",")
+    .map((ip) => ip.trim())
+    .filter(Boolean),
+);
+app.use((req, res, next) => {
+  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "";
+  if (blockedIpSet.has(ip)) {
+    res.status(403).end();
+    return;
+  }
+  next();
+});
+
 app.use(requestLogger);
 app.use(metricsMiddleware);
 
