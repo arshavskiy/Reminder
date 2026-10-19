@@ -58,7 +58,7 @@ export const TIER_FEATURE_FLAGS: Record<PlanId, TierFeatureFlags> = {
   // historical backfill that business pays for.
   trial: {
     gmailInspectionHistoryMonths: 16,
-    gmailInvoiceHistoryMonths: 1,
+    gmailInvoiceHistoryMonths: 3,
     googleDriveSync: true,
     googleCalendarSync: true,
 
