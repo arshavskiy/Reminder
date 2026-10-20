@@ -1625,6 +1625,45 @@ export function registerAdminRoutes(app: express.Application) {
     })));
   });
 
+  // ── IP Candidates (suggested blocks) ─────────────────────────────────────
+  // GET /api/admin/blocked-ips/candidates
+  app.get("/api/admin/blocked-ips/candidates", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const threshold = Number(req.query.threshold ?? 5);
+    const candidates = await col("ip_candidates")
+      .find({ dismissed: { $ne: true }, hits: { $gte: threshold } })
+      .sort({ hits: -1 })
+      .limit(100)
+      .toArray() as any[];
+    const blockedSet = new Set(
+      (await col("blocked_ips").find({}, { projection: { ip: 1 } }).toArray() as any[]).map((r: any) => r.ip),
+    );
+    res.json(candidates.map((c: any) => ({
+      ip: c.ip,
+      hits: c.hits,
+      paths: c.paths ?? [],
+      firstSeen: c.firstSeen,
+      lastSeen: c.lastSeen,
+      alreadyBlocked: blockedSet.has(c.ip),
+    })));
+  });
+
+  // POST /api/admin/blocked-ips/candidates/:ip/dismiss
+  app.post("/api/admin/blocked-ips/candidates/:ip/dismiss", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = decodeURIComponent(req.params.ip);
+    await col("ip_candidates").updateOne({ ip }, { $set: { dismissed: true } });
+    res.json({ ok: true });
+  });
+
+  // DELETE /api/admin/blocked-ips/candidates/:ip  (reset / re-surface)
+  app.delete("/api/admin/blocked-ips/candidates/:ip", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = decodeURIComponent(req.params.ip);
+    await col("ip_candidates").deleteOne({ ip });
+    res.json({ ok: true });
+  });
+
   // ── Blocked IPs ───────────────────────────────────────────────────────────
   // GET /api/admin/blocked-ips
   app.get("/api/admin/blocked-ips", async (req, res) => {

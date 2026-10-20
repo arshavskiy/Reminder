@@ -143,6 +143,31 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// Suspicious IP tracker — records repeated 404s per IP into `ip_candidates`
+// collection so the admin can review and block with one click.
+// Ignores the /health endpoint and already-blocked IPs.
+const CANDIDATE_404_THRESHOLD = 5; // hits before surfacing as candidate
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    if (res.statusCode !== 404) return;
+    const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "";
+    if (!ip || envBlockedIps.has(ip)) return;
+    const path = req.path;
+    // Fire-and-forget; don't await so it never slows a response.
+    col("ip_candidates").updateOne(
+      { ip },
+      {
+        $inc: { hits: 1 },
+        $set: { lastSeen: new Date() },
+        $setOnInsert: { firstSeen: new Date(), dismissed: false },
+        $push: { paths: { $each: [path], $slice: -20 } } as any,
+      },
+      { upsert: true },
+    ).catch(() => { /* non-critical */ });
+  });
+  next();
+});
+
 app.use(requestLogger);
 app.use(metricsMiddleware);
 
