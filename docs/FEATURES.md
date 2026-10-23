@@ -1017,9 +1017,9 @@ Real-time document processing updates pushed to the client:
 
 |------|------|---------|
 
-| Local | `DO_SPACES_KEY` not set | `data/documents/<sha256>.<ext>` |
+| Local | `AWS_ACCESS_KEY_ID` not set | `data/documents/<sha256>.<ext>` |
 
-| Spaces | `DO_SPACES_KEY` set | `@aws-sdk/client-s3` upload; presigned URLs (1-hour) |
+| Spaces | `AWS_ACCESS_KEY_ID` set | `@aws-sdk/client-s3` upload; presigned URLs (1-hour) |
 
 
 

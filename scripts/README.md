@@ -73,13 +73,13 @@ All S3 scripts read credentials from env vars. The simplest way is to pass `--en
 node --env-file=server/.env scripts/test_s3.mjs
 ```
 
-Required env vars: `ENDPOINT`, `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`. Optional: `REGION` (default `auto`).
+Required env vars: `ENDPOINT`, `BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Optional: `REGION` (default `auto`).
 
 ### `scripts/test_s3.mjs`
 Full connectivity test: PUT a small object, GET it, generate a presigned URL, then DELETE it. Prints pass/fail for each step.
 
 ### `scripts/test_s3_debug.mjs`
-Prints raw credential values (lengths, first/last chars, hex bytes) to diagnose authentication failures — e.g. hidden whitespace or encoding issues in `SECRET_ACCESS_KEY`.
+Prints raw credential values (lengths, first/last chars, hex bytes) to diagnose authentication failures — e.g. hidden whitespace or encoding issues in `AWS_SECRET_ACCESS_KEY`.
 
 ### `scripts/test_s3_pathstyle.mjs`
 Same as `test_s3.mjs` but forces path-style URLs (`endpoint/bucket/key`) instead of virtual-hosted style. Use when the S3 provider doesn't support virtual hosting.

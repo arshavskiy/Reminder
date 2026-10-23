@@ -20,6 +20,9 @@ const HOUR_MS = 3_600_000;
 /** Hourly request totals live in Mongo so the 7-day / 1-month graphs survive deploys. */
 const HOURLY_COLLECTION = "server_metrics_hourly";
 const HOURLY_RETENTION_MS = 35 * 24 * HOUR_MS;
+/** 404 path counts persisted per-hour so top404 survives server restarts. */
+const PATHS404_COLLECTION = "server_404_paths";
+const PATHS404_RETENTION_MS = 7 * 24 * HOUR_MS;
 const REPLICA = process.env.RAILWAY_REPLICA_ID ?? os.hostname();
 const DETAIL_MINUTES = 15;
 const MAX_DURATIONS_PER_MINUTE = 2_000;
@@ -107,6 +110,22 @@ function persistMinute(bucket: MinuteBucket) {
       {upsert: true},
     ).catch((err) => logger.warn("server_metrics_persist_failed", {error: String(err)}));
   } catch { /* no database yet (startup, tests) */ }
+
+  // Persist per-path 404 counts so top404 survives restarts.
+  if (bucket.paths404.size === 0) return;
+  const expiresAt = new Date(hour + PATHS404_RETENTION_MS);
+  for (const [path, count] of bucket.paths404) {
+    try {
+      void col<any>(PATHS404_COLLECTION).updateOne(
+        { path, hour },
+        {
+          $inc: { count },
+          $setOnInsert: { expires_at: expiresAt },
+        },
+        { upsert: true },
+      ).catch(() => { /* non-critical */ });
+    } catch { /* no database yet */ }
+  }
 }
 
 function compactOldBuckets(now: number) {
@@ -573,6 +592,15 @@ export async function liveSnapshot(range: GraphRange = "1h") {
       slow.set(k, agg);
     }
   }
+  // Merge DB-persisted 404 paths (last 24 h) so the list survives restarts.
+  try {
+    const since = new Date(Date.now() - 24 * HOUR_MS);
+    const dbRows = await col<any>(PATHS404_COLLECTION).aggregate([
+      { $match: { expires_at: { $gt: since } } },
+      { $group: { _id: "$path", total: { $sum: "$count" } } },
+    ]).toArray();
+    for (const row of dbRows) paths404.set(row._id, (paths404.get(row._id) ?? 0) + row.total);
+  } catch { /* DB unavailable — in-memory only */ }
   const alerts = await col("server_alerts").find({}).sort({created_at: -1}).limit(20).toArray().catch(() => []);
   const [ranged, latest, deployment] = await Promise.all([
     railwayMetrics(range),
@@ -599,7 +627,7 @@ export async function liveSnapshot(range: GraphRange = "1h") {
       http: await httpSeries(range),
       system: systemSeries(range),
     },
-    top404: topEntries(paths404, (v) => v, 8).map(([path, count]) => ({path, count})),
+    top404: topEntries(paths404, (v) => v, 20).map(([path, count]) => ({path, count})),
     slowest: topEntries(slow, (v) => v.totalMs / v.count, 8).map(([route, v]) => ({route, count: v.count, avgMs: Math.round(v.totalMs / v.count), maxMs: v.maxMs})),
     alerts: {
       enabled: alertsEnabled(),

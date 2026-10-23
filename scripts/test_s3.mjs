@@ -8,12 +8,12 @@ import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 // ── Read config from env ──────────────────────────────────────────────────────
 const endpoint  = process.env.S3_ENDPOINT        ?? process.env.ENDPOINT;
 const bucket    = process.env.S3_BUCKET_NAME     ?? process.env.BUCKET;
-const accessKey = process.env.S3_ACCESS_KEY_ID   ?? process.env.ACCESS_KEY_ID;
-const secret    = process.env.S3_SECRET_ACCESS_KEY ?? process.env.SECRET_ACCESS_KEY;
+const accessKey = process.env.AWS_ACCESS_KEY_ID;
+const secret    = process.env.AWS_SECRET_ACCESS_KEY;
 const region    = process.env.S3_REGION          ?? process.env.REGION ?? "auto";
 
 if (!endpoint || !bucket || !accessKey || !secret) {
-  console.error("❌  Missing env vars. Need: ENDPOINT, BUCKET, ACCESS_KEY_ID, SECRET_ACCESS_KEY");
+  console.error("❌  Missing env vars. Need: ENDPOINT, BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY");
   process.exit(1);
 }
 

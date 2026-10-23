@@ -7,7 +7,7 @@ import YAML from "yaml";
 import {existsSync, readFileSync, watch} from "fs";
 import {dirname, join} from "path";
 import {fileURLToPath} from "url";
-import {closeDb, connectDb} from "./db/db";
+import {closeDb, col, connectDb} from "./db/db";
 import {getSettings, validateEnv} from "./settings";
 import {startScheduler} from "./reminders/scheduler";
 import {seedBuiltinTemplates} from "./templates/seedTemplates";
@@ -125,6 +125,49 @@ app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
   next();
 });
+// IP blocklist — checked against DB collection + BLOCKED_IPS env var.
+// DB entries are managed via admin UI; env var provides a seed / emergency override.
+const envBlockedIps = new Set<string>(
+  (process.env.BLOCKED_IPS ?? "35.238.129.244")
+    .split(",")
+    .map((ip) => ip.trim())
+    .filter(Boolean),
+);
+app.use(async (req, res, next) => {
+  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "";
+  if (envBlockedIps.has(ip)) { res.status(403).end(); return; }
+  try {
+    const row = await col("blocked_ips").findOne({ ip });
+    if (row) { res.status(403).end(); return; }
+  } catch { /* DB not yet ready on first requests — pass through */ }
+  next();
+});
+
+// Suspicious IP tracker — records repeated 404s per IP into `ip_candidates`
+// collection so the admin can review and block with one click.
+// Ignores the /health endpoint and already-blocked IPs.
+const CANDIDATE_404_THRESHOLD = 5; // hits before surfacing as candidate
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    if (res.statusCode !== 404) return;
+    const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "";
+    if (!ip || envBlockedIps.has(ip)) return;
+    const path = req.path;
+    // Fire-and-forget; don't await so it never slows a response.
+    col("ip_candidates").updateOne(
+      { ip },
+      {
+        $inc: { hits: 1 },
+        $set: { lastSeen: new Date() },
+        $setOnInsert: { firstSeen: new Date(), dismissed: false },
+        $push: { paths: { $each: [path], $slice: -20 } } as any,
+      },
+      { upsert: true },
+    ).catch(() => { /* non-critical */ });
+  });
+  next();
+});
+
 app.use(requestLogger);
 app.use(metricsMiddleware);
 

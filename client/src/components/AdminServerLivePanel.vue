@@ -134,7 +134,7 @@
         <n-data-table :columns="slowColumns" :data="data.slowest" size="small" :bordered="false" :pagination="false" />
       </div>
       <div class="monitor-block">
-        <div class="monitor-block__title">Top 404 paths <span class="title-note">(15 min)</span></div>
+        <div class="monitor-block__title">Top 404 paths <span class="title-note">(24 h)</span></div>
         <n-data-table :columns="notFoundColumns" :data="data.top404" size="small" :bordered="false" :pagination="false" />
       </div>
     </div>

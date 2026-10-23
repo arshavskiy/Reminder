@@ -2,8 +2,8 @@ import {PutObjectCommand, S3Client} from "@aws-sdk/client-s3";
 
 const ep = process.env.ENDPOINT ?? "";
 const bucket = process.env.BUCKET ?? "";
-const accessKey = process.env.ACCESS_KEY_ID ?? "";
-const secret = process.env.SECRET_ACCESS_KEY ?? "";
+const accessKey = process.env.AWS_ACCESS_KEY_ID ?? "";
+const secret = process.env.AWS_SECRET_ACCESS_KEY ?? "";
 
 for (const forcePathStyle of [false, true]) {
   const client = new S3Client({

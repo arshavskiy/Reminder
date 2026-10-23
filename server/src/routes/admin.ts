@@ -1625,6 +1625,79 @@ export function registerAdminRoutes(app: express.Application) {
     })));
   });
 
+  // ── IP Candidates (suggested blocks) ─────────────────────────────────────
+  // GET /api/admin/blocked-ips/candidates
+  app.get("/api/admin/blocked-ips/candidates", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const threshold = Number(req.query.threshold ?? 5);
+    const candidates = await col("ip_candidates")
+      .find({ dismissed: { $ne: true }, hits: { $gte: threshold } })
+      .sort({ hits: -1 })
+      .limit(100)
+      .toArray() as any[];
+    const blockedSet = new Set(
+      (await col("blocked_ips").find({}, { projection: { ip: 1 } }).toArray() as any[]).map((r: any) => r.ip),
+    );
+    res.json(candidates.map((c: any) => ({
+      ip: c.ip,
+      hits: c.hits,
+      paths: c.paths ?? [],
+      firstSeen: c.firstSeen,
+      lastSeen: c.lastSeen,
+      alreadyBlocked: blockedSet.has(c.ip),
+    })));
+  });
+
+  // POST /api/admin/blocked-ips/candidates/:ip/dismiss
+  app.post("/api/admin/blocked-ips/candidates/:ip/dismiss", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = decodeURIComponent(req.params.ip);
+    await col("ip_candidates").updateOne({ ip }, { $set: { dismissed: true } });
+    res.json({ ok: true });
+  });
+
+  // DELETE /api/admin/blocked-ips/candidates/:ip  (reset / re-surface)
+  app.delete("/api/admin/blocked-ips/candidates/:ip", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = decodeURIComponent(req.params.ip);
+    await col("ip_candidates").deleteOne({ ip });
+    res.json({ ok: true });
+  });
+
+  // ── Blocked IPs ───────────────────────────────────────────────────────────
+  // GET /api/admin/blocked-ips
+  app.get("/api/admin/blocked-ips", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const rows = await col("blocked_ips").find({}).toArray() as any[];
+    const envIps = (process.env.BLOCKED_IPS ?? "")
+      .split(",").map((ip) => ip.trim()).filter(Boolean);
+    res.json({
+      db: rows.map((r: any) => ({ ip: r.ip, note: r.note ?? "", addedAt: r.addedAt })),
+      env: envIps,
+    });
+  });
+
+  // POST /api/admin/blocked-ips  { ip, note? }
+  app.post("/api/admin/blocked-ips", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = String(req.body?.ip ?? "").trim();
+    if (!ip) return void res.status(400).json({ error: "ip required" });
+    await col("blocked_ips").updateOne(
+      { ip },
+      { $set: { ip, note: req.body?.note ?? "", addedAt: new Date() } },
+      { upsert: true },
+    );
+    res.json({ ok: true });
+  });
+
+  // DELETE /api/admin/blocked-ips/:ip
+  app.delete("/api/admin/blocked-ips/:ip", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    const ip = decodeURIComponent(req.params.ip);
+    await col("blocked_ips").deleteOne({ ip });
+    res.json({ ok: true });
+  });
+
   // ── Admin settings ────────────────────────────────────────────────────────
   // GET /api/admin/settings  (replaces the stub)
   app.get("/api/admin/settings", async (req, res) => {

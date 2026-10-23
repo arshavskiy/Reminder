@@ -874,6 +874,17 @@ async function adminPost<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function adminDelete(path: string): Promise<void> {
+  const res = await fetch(ADMIN_BASE + path, {
+    method: "DELETE",
+    headers: adminHeaders(),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `DELETE ${path} failed: ${res.status}`);
+  }
+}
 
 /**
  * Serialize an object to a querystring while dropping undefined/null/empty
@@ -1386,6 +1397,11 @@ export const api = {
     monitorPipelineGaps: () => adminGet<any>("/admin/monitor/pipeline-gaps"),
     monitorContractAdvances: () => adminGet<any>("/admin/monitor/contract-advances"),
     monitorBadEmails: () => adminGet<any>("/admin/monitor/bad-emails"),
+    getBlockedIps: () => adminGet<{ db: { ip: string; note: string; addedAt: string }[]; env: string[] }>("/admin/blocked-ips"),
+    addBlockedIp: (ip: string, note?: string) => adminPost<{ ok: boolean }>("/admin/blocked-ips", { ip, note }),
+    removeBlockedIp: (ip: string) => adminDelete(`/admin/blocked-ips/${encodeURIComponent(ip)}`),
+    getIpCandidates: (threshold?: number) => adminGet<{ ip: string; hits: number; paths: string[]; firstSeen: string; lastSeen: string; alreadyBlocked: boolean }[]>(`/admin/blocked-ips/candidates${threshold != null ? `?threshold=${threshold}` : ""}`),
+    dismissIpCandidate: (ip: string) => adminPost<{ ok: boolean }>(`/admin/blocked-ips/candidates/${encodeURIComponent(ip)}/dismiss`, {}),
     monitorSystemHealth: () => adminGet<any>("/admin/monitor/system-health"),
     monitorServerLive: (range = "1h") => adminGet<any>(`/admin/monitor/server-live?range=${encodeURIComponent(range)}`),
     sendTestServerAlert: () => adminPost<{ ok: true }>("/admin/monitor/test-alert", {}),

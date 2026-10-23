@@ -18,8 +18,8 @@ const KEY_PATTERNS: Array<{ name: string; regex: RegExp; settingKey: string }> =
   // MongoDB
   { name: "MongoDB URI",   regex: /MONGODB_URI\s*=\s*(.+)/i, settingKey: "_mongoUri" },
   // DO Spaces
-  { name: "DO Spaces Key",    regex: /DO_SPACES_KEY\s*=\s*(.+)/i, settingKey: "doSpacesKey" },
-  { name: "DO Spaces Secret", regex: /DO_SPACES_SECRET\s*=\s*(.+)/i, settingKey: "doSpacesSecret" },
+  { name: "S3 Access Key",    regex: /^AWS_ACCESS_KEY_ID\s*=\s*(.+)/im, settingKey: "doSpacesKey" },
+  { name: "S3 Secret Key", regex: /^AWS_SECRET_ACCESS_KEY\s*=\s*(.+)/im, settingKey: "doSpacesSecret" },
   { name: "DO Spaces Bucket", regex: /DO_SPACES_BUCKET\s*=\s*(.+)/i, settingKey: "doSpacesBucket" },
   { name: "DO Spaces Endpoint", regex: /DO_SPACES_ENDPOINT\s*=\s*(.+)/i, settingKey: "doSpacesEndpoint" },
 ];
@@ -79,8 +79,8 @@ export function applyScannedKeys(results: ScanResult[]): number {
         emailFrom:       "EMAIL_FROM",
         googleClientId:  "GOOGLE_CLIENT_ID",
         googleClientSecret: "GOOGLE_CLIENT_SECRET",
-        doSpacesKey:     "ACCESS_KEY_ID",
-        doSpacesSecret:  "SECRET_ACCESS_KEY",
+        doSpacesKey:     "AWS_ACCESS_KEY_ID",
+        doSpacesSecret:  "AWS_SECRET_ACCESS_KEY",
         doSpacesBucket:  "BUCKET",
         doSpacesEndpoint:"ENDPOINT",
       };

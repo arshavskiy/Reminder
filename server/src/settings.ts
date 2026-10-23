@@ -71,8 +71,8 @@ function buildSettings(): AppSettings {
       ? process.env.ALLOWED_EMAILS.split(",").map((e) => e.trim()).filter(Boolean)
       : [],
 
-    doSpacesKey: process.env.ACCESS_KEY_ID ?? process.env.DO_SPACES_KEY ?? "",
-    doSpacesSecret: process.env.SECRET_ACCESS_KEY ?? process.env.DO_SPACES_SECRET ?? "",
+    doSpacesKey: process.env.AWS_ACCESS_KEY_ID ?? "",
+    doSpacesSecret: process.env.AWS_SECRET_ACCESS_KEY ?? "",
     doSpacesEndpoint: process.env.ENDPOINT ?? process.env.DO_SPACES_ENDPOINT ?? "",
     doSpacesBucket: process.env.BUCKET ?? process.env.DO_SPACES_BUCKET ?? "",
     doSpacesRegion: process.env.REGION ?? process.env.DO_SPACES_REGION ?? "",

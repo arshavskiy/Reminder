@@ -1501,6 +1501,74 @@
         </template>
       </section>
 
+      <!-- ── Blocked IPs ── -->
+      <section v-if="activeSection === 'blocked_ips'" class="admin-section">
+        <n-spin v-if="sectionLoading" style="display:flex;justify-content:center;padding:40px" />
+        <template v-else-if="blockedIpsData">
+          <n-tabs :value="pageTab" type="line" animated class="admin-page-tabs" @update:value="onPageTab">
+
+            <!-- ── Suggested tab ── -->
+            <n-tab-pane name="suggested" :tab="`Suggested (${ipCandidates.filter(c => !c.alreadyBlocked).length})`">
+              <div v-if="!ipCandidates.filter(c => !c.alreadyBlocked).length" class="admin-tab-empty">No suspicious IPs detected yet</div>
+              <n-data-table
+                v-else
+                :columns="ipCandidateColumns"
+                :data="ipCandidates.filter(c => !c.alreadyBlocked)"
+                :bordered="false"
+                :pagination="{ pageSize: 20 }"
+                size="small"
+                style="margin-top:10px"
+              />
+            </n-tab-pane>
+
+            <!-- ── Blocked tab ── -->
+            <n-tab-pane name="blocked" :tab="`Blocked (${blockedIpsData.db.length + blockedIpsData.env.length})`">
+              <!-- Add new IP form -->
+              <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap">
+                <n-input v-model:value="newBlockedIp" placeholder="IP address" style="width:180px" />
+                <n-input v-model:value="newBlockedIpNote" placeholder="Note (optional)" style="width:220px" />
+                <n-button
+                  type="primary"
+                  :loading="blockIpLoading"
+                  :disabled="!newBlockedIp.trim()"
+                  @click="addBlockedIp"
+                >
+                  <template #icon><n-icon :component="AddOutline" /></template>
+                  Block IP
+                </n-button>
+              </div>
+
+              <!-- DB-managed blocked IPs -->
+              <div class="monitor-block" style="margin-bottom:16px">
+                <div class="monitor-block__title">
+                  Blocked via DB
+                  <n-tag :type="blockedIpsData.db.length ? 'error' : 'success'" size="small" round style="margin-left:8px">{{ blockedIpsData.db.length }}</n-tag>
+                </div>
+                <div v-if="!blockedIpsData.db.length" class="admin-tab-empty">No IPs blocked via DB</div>
+                <n-data-table
+                  v-else
+                  :columns="blockedIpColumns"
+                  :data="blockedIpsData.db"
+                  :bordered="false"
+                  size="small"
+                  style="margin-top:10px"
+                />
+              </div>
+
+              <!-- Env-var blocked IPs (read-only) -->
+              <div class="monitor-block">
+                <div class="monitor-block__title">Blocked via BLOCKED_IPS env var (read-only)</div>
+                <div v-if="!blockedIpsData.env.length" class="admin-tab-empty">No IPs in BLOCKED_IPS env var</div>
+                <div v-else style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+                  <n-tag v-for="ip in blockedIpsData.env" :key="ip" type="error" size="small">{{ ip }}</n-tag>
+                </div>
+              </div>
+            </n-tab-pane>
+
+          </n-tabs>
+        </template>
+      </section>
+
       <!-- ── System Health ── -->
       <!-- ── Invoices ── -->
 <!--      <section v-if="activeSection === 'invoices'" class="admin-section">-->
@@ -1821,6 +1889,8 @@ import {
   SendOutline,
   SettingsOutline,
   TrashOutline,
+  BanOutline,
+  AddOutline,
 } from "@vicons/ionicons5";
 import {api, getAdminDbTarget, setAdminDbTarget, type AdminDbTarget, type InspectorLead, type InspectorLeadStatus, type InspectorLeadsResponse} from "../services/apiService.js";
 import DocumentDetailPage from "./DocumentDetailPage.vue";
@@ -1939,6 +2009,7 @@ const adminSections: { key: string; label: string; icon: any; group?: AdminGroup
   { key: "magic_links",        label: "Magic Links",            icon: KeyOutline,           group: "users" },
   { key: "monthly",            label: "Monthly Reports",        icon: CalendarOutline,      group: "users" },
   { key: "bad_emails",         label: "Bad Emails",             icon: MailOutline,          group: "users" },
+  { key: "blocked_ips",        label: "Blocked IPs",            icon: BanOutline,           group: "ops" },
   { key: "reminders",          label: "Reminders",              icon: NotificationsOutline, group: "users" },
   // SEED — leads and outreach. "inspector_leads" keeps its key so old links still work.
   { key: "inspector_leads",    label: "Leads",                  icon: SearchOutline,        group: "seed" },
@@ -1989,6 +2060,7 @@ const PAGE_TABS: Record<string, readonly string[]> = {
   processes: ["workers", "work", "jobs", "cron", "monthly"],
   monthly: ["config", "failures"],
   bad_emails: ["clients", "reminders", "extracted", "bounced"],
+  blocked_ips: ["suggested", "blocked"],
   system_health: ["live", "process", "database"],
   settings: ["push", "config", "reports"],
 };
@@ -3143,6 +3215,99 @@ const pipelineGaps = ref<any>(null);
 
 // ── Bad emails monitor ────────────────────────────────────────────────────
 const badEmailsData = ref<any>(null);
+const blockedIpsData = ref<{ db: { ip: string; note: string; addedAt: string }[]; env: string[] } | null>(null);
+const ipCandidates = ref<{ ip: string; hits: number; paths: string[]; firstSeen: string; lastSeen: string; alreadyBlocked: boolean }[]>([]);
+const newBlockedIp = ref("");
+const newBlockedIpNote = ref("");
+const blockIpLoading = ref(false);
+
+async function addBlockedIp() {
+  const ip = newBlockedIp.value.trim();
+  if (!ip) return;
+  blockIpLoading.value = true;
+  try {
+    await api.admin.addBlockedIp(ip, newBlockedIpNote.value.trim() || undefined);
+    newBlockedIp.value = "";
+    newBlockedIpNote.value = "";
+    [blockedIpsData.value, ipCandidates.value] = await Promise.all([
+      api.admin.getBlockedIps(),
+      api.admin.getIpCandidates(),
+    ]);
+  } catch (e: any) {
+    message.error(e.message);
+  } finally {
+    blockIpLoading.value = false;
+  }
+}
+
+const ipCandidateColumns = [
+  { title: "IP", key: "ip", width: 160 },
+  { title: "Hits", key: "hits", width: 70 },
+  { title: "Last seen", key: "lastSeen", width: 160, render: (row: any) => new Date(row.lastSeen).toLocaleString() },
+  {
+    title: "Sample paths",
+    key: "paths",
+    render: (row: any) => {
+      const sample = (row.paths as string[]).slice(-3);
+      return h("span", { style: "font-size:11px;color:var(--text-secondary)" }, sample.join("  ·  "));
+    },
+  },
+  {
+    title: "",
+    key: "actions",
+    width: 150,
+    render: (row: any) => h("div", { style: "display:flex;gap:6px" }, [
+      h(NButton, {
+        size: "small",
+        type: "error",
+        onClick: async () => {
+          try {
+            await api.admin.addBlockedIp(row.ip, "auto-suggested");
+            [blockedIpsData.value, ipCandidates.value] = await Promise.all([
+              api.admin.getBlockedIps(),
+              api.admin.getIpCandidates(),
+            ]);
+          } catch (e: any) { message.error(e.message); }
+        },
+      }, { default: () => "Block" }),
+      h(NButton, {
+        size: "small",
+        ghost: true,
+        onClick: async () => {
+          try {
+            await api.admin.dismissIpCandidate(row.ip);
+            ipCandidates.value = await api.admin.getIpCandidates();
+          } catch (e: any) { message.error(e.message); }
+        },
+      }, { default: () => "Dismiss" }),
+    ]),
+  },
+];
+
+const blockedIpColumns = [
+  { title: "IP", key: "ip", width: 160 },
+  { title: "Note", key: "note" },
+  { title: "Added", key: "addedAt", width: 180, render: (row: any) => new Date(row.addedAt).toLocaleString() },
+  {
+    title: "",
+    key: "actions",
+    width: 60,
+    render: (row: any) => h(NButton, {
+      size: "small",
+      type: "error",
+      ghost: true,
+      onClick: async () => {
+        try {
+          await api.admin.removeBlockedIp(row.ip);
+          [blockedIpsData.value, ipCandidates.value] = await Promise.all([
+            api.admin.getBlockedIps(),
+            api.admin.getIpCandidates(),
+          ]);
+        } catch (e: any) { message.error(e.message); }
+      },
+    }, { icon: () => h(NIcon, { component: TrashOutline, size: 14 }) }),
+  },
+];
 
 // ── System health ─────────────────────────────────────────────────────────
 const systemHealth = ref<any>(null);
@@ -3689,6 +3854,11 @@ async function loadSectionData(key: string) {
       contractAdvances.value = advances;
     } else if (key === "monthly") {
       monthlyMonitor.value = await api.admin.monitorMonthlyReports();
+    } else if (key === "blocked_ips") {
+      [blockedIpsData.value, ipCandidates.value] = await Promise.all([
+        api.admin.getBlockedIps(),
+        api.admin.getIpCandidates(),
+      ]);
     } else if (key === "bad_emails") {
       badEmailsData.value = await api.admin.monitorBadEmails();
     } else if (key === "invoices") {

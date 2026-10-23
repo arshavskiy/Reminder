@@ -30,8 +30,8 @@ function normaliseEndpoint(endpoint: string): string {
 function getStorageConfig(): StorageConfig | null {
   const railwayEndpoint = process.env.BUCKET_ENDPOINT ?? process.env.ENDPOINT;
   const railwayBucket = process.env.BUCKET_NAME ?? process.env.BUCKET;
-  const railwayKey = process.env.BUCKET_ACCESS_KEY_ID ?? process.env.ACCESS_KEY_ID;
-  const railwaySecret = process.env.BUCKET_SECRET_ACCESS_KEY ?? process.env.SECRET_ACCESS_KEY;
+  const railwayKey = process.env.AWS_ACCESS_KEY_ID;
+  const railwaySecret = process.env.AWS_SECRET_ACCESS_KEY;
   const railwayRegion = process.env.BUCKET_REGION ?? process.env.REGION ?? "auto";
 
   if (railwayEndpoint && railwayBucket && railwayKey && railwaySecret) {
@@ -48,8 +48,8 @@ function getStorageConfig(): StorageConfig | null {
 
   const endpoint = process.env.DO_SPACES_ENDPOINT;
   const region = process.env.DO_SPACES_REGION ?? "fra1";
-  const key = process.env.DO_SPACES_KEY;
-  const secret = process.env.DO_SPACES_SECRET;
+  const key = process.env.AWS_ACCESS_KEY_ID;
+  const secret = process.env.AWS_SECRET_ACCESS_KEY;
   const bucket = process.env.DO_SPACES_BUCKET;
 
   if (!endpoint || !key || !secret || !bucket) return null;

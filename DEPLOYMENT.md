@@ -116,8 +116,8 @@ EMAIL_FROM_NAME= ReminderOCR
 OPENAI_API_KEY=sk-proj-...
 
 # DigitalOcean Spaces
-DO_SPACES_KEY=<access key from step 1>
-DO_SPACES_SECRET=<secret key from step 1>
+AWS_ACCESS_KEY_ID=<access key from step 1>
+AWS_SECRET_ACCESS_KEY=<secret key from step 1>
 DO_SPACES_ENDPOINT=fra1.digitaloceanspaces.com
 DO_SPACES_BUCKET=reminder-files
 DO_SPACES_REGION=fra1
@@ -189,7 +189,7 @@ cd client && npm run dev
 
 ## 6. File storage behaviour
 
-| Environment | DO_SPACES_KEY set? | Files stored in |
+| Environment | AWS_ACCESS_KEY_ID set? | Files stored in |
 |-------------|-------------------|-----------------|
 | Local dev   | No                | `server/data/documents/` (local disk) |
 | Production  | Yes               | DigitalOcean Spaces (`reminder-files` bucket) |

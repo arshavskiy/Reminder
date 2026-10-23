@@ -125,8 +125,8 @@ Open **http://localhost:4173**. Vite proxies `/api`, `/auth`, and `/ws` to the s
 | `ALLOWED_ORIGINS` | | `http://localhost:4173` | CORS origins (comma-separated) |
 | `SERVER_URL` | | — | Public URL for email verification links |
 | `DATA_DIR` | | `./data` | Local data directory |
-| `DO_SPACES_KEY` | | — | DigitalOcean Spaces access key |
-| `DO_SPACES_SECRET` | | — | DigitalOcean Spaces secret |
+| `AWS_ACCESS_KEY_ID` | | — | DigitalOcean Spaces access key |
+| `AWS_SECRET_ACCESS_KEY` | | — | DigitalOcean Spaces secret |
 | `DO_SPACES_ENDPOINT` | | — | e.g. `fra1.digitaloceanspaces.com` |
 | `DO_SPACES_BUCKET` | | — | Bucket name |
 | `DO_SPACES_REGION` | | — | e.g. `fra1` |
