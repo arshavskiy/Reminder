@@ -30,7 +30,7 @@ const limit = readNumberArg("--limit");
 const userId = readArg("--user-id");
 
 if (!spacesEnabled()) {
-  console.error("Object storage is not configured — check .env.local (ENDPOINT / BUCKET / ACCESS_KEY_ID / SECRET_ACCESS_KEY).");
+  console.error("Object storage is not configured — check .env.local (ENDPOINT / BUCKET / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).");
   process.exit(1);
 }
 

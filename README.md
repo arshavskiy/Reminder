@@ -152,8 +152,8 @@ All configuration is env-only — no `settings.json` file is used. Settings are 
 |----------|-------------|
 | `S3_ENDPOINT` | e.g. `https://storage.railway.app` |
 | `S3_BUCKET_NAME` | Bucket identifier (use `.BUCKET` reference, not `.RAILWAY_BUCKET_NAME`) |
-| `S3_ACCESS_KEY_ID` | Bucket access key |
-| `S3_SECRET_ACCESS_KEY` | Bucket secret key |
+| `AWS_ACCESS_KEY_ID` | Bucket access key |
+| `AWS_SECRET_ACCESS_KEY` | Bucket secret key |
 | `S3_REGION` | Usually `auto` |
 
 **Generic S3-compatible** (storageapi.dev, MinIO, etc.):
@@ -162,8 +162,8 @@ All configuration is env-only — no `settings.json` file is used. Settings are 
 |----------|-------------|
 | `ENDPOINT` | e.g. `https://t3.storageapi.dev` |
 | `BUCKET` | Bucket name |
-| `ACCESS_KEY_ID` | Access key |
-| `SECRET_ACCESS_KEY` | Secret key |
+| `AWS_ACCESS_KEY_ID` | Access key |
+| `AWS_SECRET_ACCESS_KEY` | Secret key |
 | `REGION` | e.g. `auto` |
 | `BUCKET_FORCE_PATH_STYLE` | `true` for non-Railway providers |
 
@@ -171,8 +171,8 @@ All configuration is env-only — no `settings.json` file is used. Settings are 
 
 | Variable | Description |
 |----------|-------------|
-| `DO_SPACES_KEY` | Spaces access key |
-| `DO_SPACES_SECRET` | Spaces secret |
+| `AWS_ACCESS_KEY_ID` | Spaces access key |
+| `AWS_SECRET_ACCESS_KEY` | Spaces secret |
 | `DO_SPACES_ENDPOINT` | e.g. `fra1.digitaloceanspaces.com` |
 | `DO_SPACES_BUCKET` | Bucket name |
 | `DO_SPACES_REGION` | e.g. `fra1` |
@@ -437,7 +437,7 @@ Background scheduler (every REMINDER_CHECK_INTERVAL_MS, default 60s)
 The server supports three S3 variable sets in priority order:
 
 1. **`S3_*`** — Railway Bucket (virtual-hosted style, `forcePathStyle: false`)
-2. **`ENDPOINT` / `BUCKET` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY`** — generic providers like storageapi.dev (path-style auto-detected)
+2. **`ENDPOINT` / `BUCKET` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`** — generic providers like storageapi.dev (path-style auto-detected)
 3. **`DO_SPACES_*`** — legacy DigitalOcean Spaces
 
 When `spacesEnabled()` returns true and `PROCESS_ONLY=false` and `ocrOnly=false`, documents are uploaded after local copy. Download links use presigned URLs (1-hour expiry) via `GET /api/documents/:id/download`.

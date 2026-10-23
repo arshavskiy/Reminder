@@ -126,8 +126,8 @@ describe("scanFileForKeys", () => {
 
   it("detects DO Spaces credentials", () => {
     const content = [
-      "DO_SPACES_KEY=DOKEY123456",
-      "DO_SPACES_SECRET=DOSECRET_abcdef",
+      "AWS_ACCESS_KEY_ID=DOKEY123456",
+      "AWS_SECRET_ACCESS_KEY=DOSECRET_abcdef",
       "DO_SPACES_BUCKET=my-bucket",
       "DO_SPACES_ENDPOINT=fra1.digitaloceanspaces.com",
     ].join("\n");

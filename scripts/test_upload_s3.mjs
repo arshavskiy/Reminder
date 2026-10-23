@@ -92,8 +92,8 @@ const s3 = new S3Client({
   endpoint: process.env.ENDPOINT,
   region: process.env.REGION ?? "auto",
   credentials: {
-    accessKeyId: process.env.ACCESS_KEY_ID,
-    secretAccessKey: process.env.SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
   forcePathStyle: true,
 });

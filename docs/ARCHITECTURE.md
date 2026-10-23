@@ -119,7 +119,7 @@ Per-user defaults are read from `user_settings` (`pipeline_ocr`, `pipeline_ai`, 
 
 1. Compute SHA-256 of the file — skip if hash already exists in `documents` for this user
 2. Copy file to `data/documents/<hash>.<ext>` (managed path); delete the staging `uploads/` file immediately after copy
-3. Upload to DigitalOcean Spaces / S3-compatible storage if `DO_SPACES_KEY` is set and `opts.s3` is true; store `spaces_key` and `spaces_url`
+3. Upload to DigitalOcean Spaces / S3-compatible storage if `AWS_ACCESS_KEY_ID` is set and `opts.s3` is true; store `spaces_key` and `spaces_url`
 4. Insert document record with `processing_status: "queued"`
 5. Call `processDocument()` asynchronously (does not block the HTTP response)
 
@@ -256,8 +256,8 @@ Built-in templates (seeded on first run):
 
 | Mode | Condition | Behaviour |
 |------|-----------|-----------|
-| Local | `DO_SPACES_KEY` not set | Files stored at `data/documents/<hash>.<ext>` |
-| Spaces | `DO_SPACES_KEY` set | Files uploaded to `<bucket>/documents/<hash>.<ext>` via `@aws-sdk/client-s3`; `spaces_url` stored on document record |
+| Local | `AWS_ACCESS_KEY_ID` not set | Files stored at `data/documents/<hash>.<ext>` |
+| Spaces | `AWS_ACCESS_KEY_ID` set | Files uploaded to `<bucket>/documents/<hash>.<ext>` via `@aws-sdk/client-s3`; `spaces_url` stored on document record |
 
 Spaces URLs are public or pre-signed (1-hour expiry) depending on bucket ACL. The `spaces_key` is used to regenerate URLs without re-uploading.
 
