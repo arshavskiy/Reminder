@@ -736,7 +736,7 @@ export function registerDocumentRoutes(app: express.Application) {
       return;
     }
 
-    // Prefer S3 signed URL — use cached one if still fresh, otherwise regenerate
+    // Sign with the current credentials; cached links can break after key rotation.
     const wantDownload = req.query.dl === "1";
     const wantRaw = req.query.raw === "1";
     if (doc.spaces_key) {
@@ -755,16 +755,11 @@ export function registerDocumentRoutes(app: express.Application) {
           return;
         }
 
-        const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
-        const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
-        let url: string = doc.download_url ?? "";
-        if (needsRefresh) {
-          url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
-          const newExpiry = new Date(Date.now() + SIGNED_URL_TTL * 1000);
-          await col("documents").updateOne(idFilter(req.params.id), {
-            $set: { download_url: url, signed_url_expires_at: newExpiry, updated_at: new Date() },
-          });
-        }
+        const url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
+        const newExpiry = new Date(Date.now() + SIGNED_URL_TTL * 1000);
+        await col("documents").updateOne(idFilter(req.params.id), {
+          $set: { download_url: url, signed_url_expires_at: newExpiry, updated_at: new Date() },
+        });
         res.json({ url, source: "s3" });
         return;
       } catch (err) {

@@ -1061,16 +1061,11 @@ export function registerAdminRoutes(app: express.Application) {
     try {
       const { getSpacesSignedUrl } = await import("../storage/spaces.js");
       const SIGNED_URL_TTL = 7 * 24 * 3600;
-      const expiresAt: Date | null = doc.signed_url_expires_at ? new Date(doc.signed_url_expires_at) : null;
-      const needsRefresh = !doc.download_url || !expiresAt || expiresAt.getTime() - Date.now() < 3600_000;
-      let url: string = doc.download_url ?? "";
-       if (needsRefresh) {
-        url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
-        const { ObjectId } = await import("mongodb");
-        await col("documents").updateOne({ _id: new ObjectId(req.params.id) }, {
-          $set: { download_url: url, signed_url_expires_at: new Date(Date.now() + SIGNED_URL_TTL * 1000), updated_at: new Date() },
-        });
-      }
+      // Stored links may have been signed before the storage credentials changed.
+      const url = await getSpacesSignedUrl(doc.spaces_key, SIGNED_URL_TTL, doc.file_name ?? undefined);
+      await col("documents").updateOne(filter, {
+        $set: { download_url: url, signed_url_expires_at: new Date(Date.now() + SIGNED_URL_TTL * 1000), updated_at: new Date() },
+      });
       res.json({ url, source: "s3" });
     } catch {
       res.status(500).json({ error: "Failed to generate signed URL" });
