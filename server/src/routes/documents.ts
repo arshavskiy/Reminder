@@ -48,6 +48,16 @@ function readNonNegativeIntEnv(name: string, fallback: number, max = 60_000): nu
 const RESCAN_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_RESCAN_START_STAGGER_MS", 250);
 const UPLOAD_START_STAGGER_MS = readNonNegativeIntEnv("DOCUMENT_UPLOAD_START_STAGGER_MS", 0);
 
+// Retry markers left by a failed run. Requeueing must drop them, otherwise a
+// successful re-run keeps invoice_rejection_reason and stays hidden from the list.
+const CLEARED_RETRY_STATE = {
+  processing_retryable: null,
+  retry_reason: null,
+  retry_label: null,
+  invoice_rejection_reason: null,
+  invoice_rejection_label: null,
+};
+
 function documentQuotaPayload(
     userPlan: string,
     documentQuota: Awaited<ReturnType<typeof getDocumentImportQuota>>,
@@ -110,11 +120,6 @@ export function registerDocumentRoutes(app: express.Application) {
       // Matches both the legacy `gmail/invoices/...` layout and the tenant-first
       // `{user_id}/invoices/...` one, so this guard survives the key migration.
       spaces_key: { $not: /(^gmail\/invoices\/|^[^/]+\/invoices\/)/ },
-      $or: [
-        { invoice_rejection_reason: { $exists: false } },
-        { invoice_rejection_reason: null },
-        { invoice_rejection_reason: "" },
-      ],
     };
     const filter: Record<string, any> = { ...baseFilter };
     if (status) filter.processing_status = status;
@@ -983,6 +988,7 @@ export function registerDocumentRoutes(app: express.Application) {
           template_id: null,
           document_type: null,
           document_number: null,
+          ...CLEARED_RETRY_STATE,
           updated_at: new Date(),
         },
       });
@@ -1256,6 +1262,7 @@ export function registerDocumentRoutes(app: express.Application) {
         raw_text: null,
         document_type: null,
         document_number: null,
+        ...CLEARED_RETRY_STATE,
         updated_at: new Date(),
       },
     });
