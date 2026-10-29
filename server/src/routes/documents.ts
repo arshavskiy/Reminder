@@ -1164,6 +1164,8 @@ export function registerDocumentRoutes(app: express.Application) {
           template_id: template.id,
           document_type: typeLabel,
           document_kind: typeLabel,
+          // A successful re-extract resolves an earlier failed run.
+          ...(run.error ? {} : { processing_status: "done", error_message: null, ...CLEARED_RETRY_STATE }),
           updated_at: now,
         },
       });
