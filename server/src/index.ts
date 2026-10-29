@@ -43,6 +43,7 @@ import {registerProfileRoutes} from "./routes/profile";
 import {closeInspectorLeadsClient, registerAdminRoutes} from "./routes/admin";
 import {registerAdminCampaignRoutes} from "./routes/adminCampaigns";
 import {startUnsubscribeScanScheduler} from "./outreach/unsubscribeScan";
+import {startR2ReconcileScheduler} from "./storage/r2Reconcile";
 import {registerBillingRoutes} from "./routes/billing";
 import {registerAccountInviteRoutes} from "./routes/accountInvite";
 import {initPush} from "./push/pushService";
@@ -388,6 +389,7 @@ async function main() {
 
   startScheduler();
   startUnsubscribeScanScheduler();
+  startR2ReconcileScheduler();
   startServerMetrics();
   startWatchFolder();
 }

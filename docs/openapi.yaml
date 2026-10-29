@@ -2004,6 +2004,37 @@ paths:
           description: Not signed in
         "403":
           description: Admin access required
+  /api/admin/storage/r2-reconcile:
+    post:
+      summary: Copy document files missing from the R2 mirror
+      tags:
+        - Admin
+      description: Admin only. Copies document objects that exist in the primary bucket but not in R2, without overwriting. `full` scans every document; otherwise only the last 3 days.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full:
+                  type: boolean
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Not signed in
+        "403":
+          description: Admin access required
+        "409":
+          description: R2 mirror not configured
+        "502":
+          description: Reconcile failed
   /api/admin/push/vapid-key:
     get:
       summary: Public VAPID key for admin web push

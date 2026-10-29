@@ -28,6 +28,8 @@ import {
 } from "../ops/processControl";
 import {runTempFileSweep, tempDirUsage, tempSweeperState} from "../storage/tempFiles";
 import {runUnsubscribeScan, scanRunsCollection, unsubscribeScanUserId} from "../outreach/unsubscribeScan";
+import {runR2Reconcile} from "../storage/r2Reconcile";
+import {r2MirrorEnabled} from "../storage/r2Mirror";
 import {liveSnapshot, parseGraphRange} from "../ops/serverMetrics";
 import {closeSeedDb, requireSeedDb, seedCollection, seedDbStatus} from "../db/seedDb";
 
@@ -722,6 +724,20 @@ export function registerAdminRoutes(app: express.Application) {
       schedule: { enabled: scheduled, intervalMinutes },
       rows: rows.map(({ _id, ...row }) => ({ id: _id.toString(), ...row })),
     });
+  });
+
+  // POST /api/admin/storage/r2-reconcile — copy document files missing from R2 (body: { full?: boolean })
+  app.post("/api/admin/storage/r2-reconcile", async (req, res) => {
+    if (!await adminAuth(req, res)) return;
+    if (!r2MirrorEnabled()) {
+      res.status(409).json({ error: "R2 mirror not configured" });
+      return;
+    }
+    try {
+      res.json(await runR2Reconcile({ full: req.body?.full === true }));
+    } catch (err: any) {
+      res.status(502).json({ error: err?.message ?? String(err) });
+    }
   });
 
   // ── Web Push subscription (admin notifications) ───────────────────────────

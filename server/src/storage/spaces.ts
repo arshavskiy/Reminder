@@ -10,6 +10,7 @@ import {
 } from "@aws-sdk/client-s3";
 import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {readFileSync} from "fs";
+import {mirrorCopy, mirrorDelete, mirrorPut} from "./r2Mirror";
 
 interface StorageConfig {
   endpoint: string;
@@ -99,6 +100,7 @@ export async function uploadToSpaces(
       ContentType: contentType,
     })
   );
+  await mirrorPut(key, body, contentType);
 
   const endpointUrl = new URL(config.endpoint);
   return `${endpointUrl.protocol}//${config.bucket}.${endpointUrl.host}/${key}`;
@@ -122,6 +124,7 @@ export async function uploadBufferToSpaces(
       ACL: "public-read" as any,
     })
   );
+  await mirrorPut(key, buffer, contentType);
 
   if (config.cdnUrl) {
     return `${config.cdnUrl.replace(/\/$/, "")}/${key}`;
@@ -147,10 +150,28 @@ export async function copyWithinSpaces(sourceKey: string, targetKey: string): Pr
       CopySource: `${config.bucket}/${sourceKey}`,
       Key: targetKey,
     }));
-    return true;
   } catch (err: any) {
     const code = String(err?.name ?? err?.Code ?? "");
     if (code === "NoSuchKey" || code === "NotFound" || err?.$metadata?.httpStatusCode === 404) return false;
+    throw err;
+  }
+  await mirrorCopy(sourceKey, targetKey, () => readFromSpaces(targetKey));
+  return true;
+}
+
+/** Reads a whole object from the primary bucket; null when it does not exist. */
+export async function readFromSpaces(key: string): Promise<{body: Buffer; contentType: string} | null> {
+  const client = getClient();
+  const config = getStorageConfig();
+  if (!client || !config) throw new Error("Object storage not configured");
+
+  try {
+    const result = await client.send(new GetObjectCommand({Bucket: config.bucket, Key: key}));
+    const bytes = await result.Body!.transformToByteArray();
+    return {body: Buffer.from(bytes), contentType: result.ContentType ?? "application/octet-stream"};
+  } catch (err: any) {
+    const code = String(err?.name ?? err?.Code ?? "");
+    if (code === "NoSuchKey" || code === "NotFound" || err?.$metadata?.httpStatusCode === 404) return null;
     throw err;
   }
 }
@@ -161,6 +182,7 @@ export async function deleteFromSpaces(key: string): Promise<void> {
   if (!client || !config) return;
 
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+  await mirrorDelete([key]);
 }
 
 export interface S3FileEntry {
@@ -255,6 +277,8 @@ export async function deleteManyFromSpaces(
       errors.push({ key: String(err.Key), message: String(err.Message ?? err.Code ?? "unknown") });
     }
   }
+  const failed = new Set(errors.map((e) => e.key));
+  await mirrorDelete(keys.filter((key) => !failed.has(key)));
 
   return { deleted, errors };
 }
