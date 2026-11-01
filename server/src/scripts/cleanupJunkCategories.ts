@@ -2,13 +2,15 @@
  * One-off: remove equipment categories shorter than 2 characters.
  * Usage: npx tsx src/scripts/cleanupJunkCategories.ts [--dry-run]
  */
+import "./loadEnv";
 import { MongoClient } from "mongodb";
 
 const dryRun = process.argv.includes("--dry-run");
-const uri = "mongodb+srv://arshavskypasha_db_user:iN6tCGNDDXECSd4p@cluster10.zyzi9bi.mongodb.net/";
+const uri = process.env.CLEANUP_MONGODB_URI;
+if (!uri) throw new Error("CLEANUP_MONGODB_URI is required for category cleanup");
 const dbName = "reminder-app";
 
-console.log(`Connecting to ${uri.replace(/\/\/[^@]+@/, "//***@")} / ${dbName}`);
+console.log(`Connecting to database ${dbName}`);
 const mongo = new MongoClient(uri);
 await mongo.connect();
 const db = mongo.db(dbName);
